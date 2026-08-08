@@ -1,6 +1,6 @@
 # PrintMadeEasy Windows Print Agent
 
-Local Windows bridge between PrintMadeEasy and your printer.
+Local Windows bridge between  PrintMadeEasy and your printer.
 
 ## V1 features
 
