@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id             String      @id @default(uuid())
+  shopCode       String      @unique
+  shopName       String
+  phone          String
+  email          String?
+  address        String
+  logo           String?
+  isActive       Boolean     @default(true)
+  agentId        String?
+  agentTokenHash String?
+  agentLastSeen  DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  inventory      Inventory?
+  printJobs      PrintJob[]
+  printPrice     PrintPrice?
+  printers       Printer[]
+  settings       Settings?
+
+  @@index([agentId])
+}
+
+model PrintPrice {
+  id            String   @id @default(uuid())
+  shopId        String   @unique
+  bwSingle      Decimal  @db.Decimal(10, 2)
+  bwDouble      Decimal  @db.Decimal(10, 2)
+  colorSingle   Decimal  @db.Decimal(10, 2)
+  colorDouble   Decimal  @db.Decimal(10, 2)
+  minimumCharge Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model Printer {
+  id           String    @id @default(uuid())
+  shopId       String
+  printerName  String
+  printerModel String?
+  printerType  String?
+  isDefault    Boolean   @default(false)
+  status       String    @default("offline")
+  lastSeen     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  shop         Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, printerName])
+  @@index([shopId])
+}
+
+model Inventory {
+  id                String   @id @default(uuid())
+  shopId            String   @unique
+  paperAvailable    Int      @default(0)
+  estimatedInkLevel Int      @default(100)
+  updatedAt         DateTime @updatedAt
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model PrintJob {
+  id            String         @id @default(uuid())
+  shopId        String
+  jobNumber     String         @unique
+  copies        Int            @default(1)
+  totalPages    Int
+  printMode     PrintMode
+  printType     PrintType
+  totalPrice    Decimal        @db.Decimal(10, 2)
+  status        PrintStatus    @default(PENDING)
+  printAttempts Int            @default(0)
+  lastError     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  files         PrintJobFile[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([shopId])
+  @@index([shopId, status])
+}
+
+model PrintJobFile {
+  id               String    @id @default(uuid())
+  printJobId       String
+  originalFileName String
+  storedFileName   String
+  fileExtension    String
+  fileSize         Int
+  totalPages       Int
+  printedAt        DateTime?
+  fileDeletedAt    DateTime?
+  createdAt        DateTime  @default(now())
+  printJob         PrintJob  @relation(fields: [printJobId], references: [id], onDelete: Cascade)
+
+  @@index([printJobId])
+}
+
+model Settings {
+  id             String   @id @default(uuid())
+  shopId         String   @unique
+  currency       String   @default("INR")
+  timezone       String   @default("Asia/Kolkata")
+  autoDeleteDays Int      @default(7)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  shop           Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+enum PrintMode {
+  BW
+  COLOR
+}
+
+enum PrintType {
+  SINGLE
+  DOUBLE
+}
+
+enum PrintStatus {
+  PENDING
+  PRINTING
+  READY_FOR_PICKUP
+  DELIVERED
+  CANCELLED
+}

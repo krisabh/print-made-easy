@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PrintMadeEasy Agent</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --blue: #2563eb;
+        --green: #16a34a;
+        --amber: #d97706;
+        --red: #dc2626;
+        --border: #e2e8f0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Segoe UI, Tahoma, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      main {
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .sub {
+        margin: 4px 0 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .label {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
+      }
+
+      .value {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+
+      .dot.ok {
+        background: var(--green);
+      }
+
+      .dot.warn {
+        background: var(--amber);
+      }
+
+      .dot.bad {
+        background: var(--red);
+      }
+
+      select,
+      button {
+        width: 100%;
+        min-height: 42px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font: inherit;
+      }
+
+      select {
+        padding: 0 12px;
+        background: white;
+      }
+
+      button {
+        border: none;
+        background: var(--blue);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      button.secondary {
+        background: white;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .actions {
+        display: grid;
+        gap: 8px;
+      }
+
+      .message {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        display: none;
+      }
+
+      .message.show {
+        display: block;
+      }
+
+      .message.ok {
+        background: #ecfdf5;
+        color: #047857;
+      }
+
+      .message.err {
+        background: #fef2f2;
+        color: #b91c1c;
+      }
+
+      .meta {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        word-break: break-all;
+      }
+
+      .checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.35;
+      }
+
+      .checkbox input {
+        margin-top: 3px;
+        width: 16px;
+        height: 16px;
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PrintMadeEasy Agent</h1>
+      <p class="sub">Local printer bridge for your shop</p>
+
+      <section class="card">
+        <div class="label">Status</div>
+        <div class="status">
+          <span id="agentDot" class="dot ok"></span>
+          <span id="agentStatus">Agent Running</span>
+        </div>
+        <div class="meta" id="connectionMeta">Checking backend…</div>
+      </section>
+
+      <section class="card">
+        <div class="label">Printer</div>
+        <select id="printerSelect" aria-label="Select printer"></select>
+        <div class="meta" id="printerEmpty" style="display: none">
+          No printers detected. Install a Windows printer and refresh.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="label">Printer Status</div>
+        <div class="status">
+          <span id="printerDot" class="dot warn"></span>
+          <span id="printerStatus">Unknown</span>
+        </div>
+      </section>
+
+      <section class="card actions">
+        <button id="testPrintBtn" type="button">Test Print</button>
+        <button id="refreshBtn" class="secondary" type="button">Refresh</button>
+        <button id="dashboardBtn" class="secondary" type="button">
+          Open Dashboard
+        </button>
+        <label class="checkbox" for="openAtLogin">
+          <input id="openAtLogin" type="checkbox" />
+          <span>
+            <strong>Start with Windows</strong><br />
+            <span class="meta" style="margin-top: 2px">
+              Optional: launch this Agent automatically when your PC starts.
+            </span>
+          </span>
+        </label>
+        <div id="message" class="message"></div>
+      </section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

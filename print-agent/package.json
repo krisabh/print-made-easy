@@ -1,0 +1,49 @@
+{
+  "name": "print-made-easy-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PrintMadeEasy Windows Print Agent",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "tsc && node scripts/copy-ui.js",
+    "start": "electron .",
+    "pack": "npm run build && electron-builder --win --dir",
+    "dist": "npm run build && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.printmadeeasy.agent",
+    "productName": "PrintMadeEasy Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "PrintMadeEasy-Agent-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PrintMadeEasy Agent"
+    }
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdf-to-printer": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "electron": "^34.5.8",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.2"
+  }
+}
