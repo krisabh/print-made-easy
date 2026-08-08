@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Print Made Easy
 
 MVP skeleton for automating document printing at print shops, Xerox centers, cyber cafes, libraries, and CSC centers.
@@ -40,3 +41,5 @@ public/uploads/   # Uploaded files
 electron/         # Desktop shell (later)
 types/            # Shared TypeScript types
 ```
+=======
+
