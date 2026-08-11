@@ -27,6 +27,47 @@ async function main() {
           autoDeleteDays: 7,
         },
       },
+      inventory: {
+        create: {
+          paperAvailable: 0,
+          estimatedInkLevel: 100,
+        },
+      },
+    },
+  });
+
+  // Ensure related rows exist even if shop was created earlier without them.
+  await prisma.printPrice.upsert({
+    where: { shopId: shop.id },
+    update: {},
+    create: {
+      shopId: shop.id,
+      bwSingle: 2,
+      bwDouble: 1.5,
+      colorSingle: 10,
+      colorDouble: 8,
+      minimumCharge: 5,
+    },
+  });
+
+  await prisma.settings.upsert({
+    where: { shopId: shop.id },
+    update: {},
+    create: {
+      shopId: shop.id,
+      currency: "INR",
+      timezone: "Asia/Kolkata",
+      autoDeleteDays: 7,
+    },
+  });
+
+  await prisma.inventory.upsert({
+    where: { shopId: shop.id },
+    update: {},
+    create: {
+      shopId: shop.id,
+      paperAvailable: 0,
+      estimatedInkLevel: 100,
     },
   });
 

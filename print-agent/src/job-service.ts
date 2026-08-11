@@ -149,14 +149,15 @@ export async function processPendingJobs() {
       return { processed: 0, skipped: true };
     }
 
-    // Printer detection can time out; only skip when we know the printer is Offline.
+    // Only print when Windows reports the selected printer as Online.
+    // Installed-but-unplugged USB printers must not claim jobs.
     const printers = await detectPrinters().catch(() => []);
     const selected = printers.find(
       (printer) => printer.name === config.selectedPrinter,
     );
-    if (selected?.status === "Offline") {
+    if (!selected || selected.status !== "Online") {
       console.warn(
-        "Printer offline — skipping job poll until printer is ready.",
+        `Printer not ready (status: ${selected?.status ?? "missing"}) — skipping jobs.`,
       );
       return { processed: 0, skipped: true };
     }

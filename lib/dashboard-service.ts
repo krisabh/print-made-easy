@@ -120,9 +120,9 @@ export async function getShopJobs(params: JobListParams) {
   }
 
   if (params.search?.trim()) {
+    // MySQL utf8mb4 collation is typically case-insensitive; avoid PG-only mode.
     where.jobNumber = {
       contains: params.search.trim().toUpperCase(),
-      mode: "insensitive",
     };
   }
 

@@ -11,7 +11,8 @@ Local Windows bridge between  PrintMadeEasy and your printer.
 - Start with Windows (optional)
 - Temporary job folder cleanup on startup
 
-Cloud job printing is **not** included in V1.
+Cloud job printing is included: the Agent polls the Next.js APIs over HTTP.
+It does **not** connect to MySQL directly.
 
 ## Setup
 

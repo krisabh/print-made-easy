@@ -29,11 +29,17 @@ export default async function QrPage() {
         <p className="mt-1 text-sm text-slate-500">
           Permanent shop QR for customer document uploads.
         </p>
-        {uploadUrl.includes("localhost") && (
+        {uploadUrl.includes("localhost") || uploadUrl.includes("127.0.0.1") ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
             This QR uses localhost and will not work from a phone. Set
             NEXT_PUBLIC_APP_URL to your PC LAN IP (example:
-            http://192.168.1.10:3000) and restart the server.
+            http://192.168.1.8:3000) and restart the server.
+          </p>
+        ) : (
+          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Phone and PC must be on the same Wi‑Fi. If the QR fails, check that
+            NEXT_PUBLIC_APP_URL matches this PC&apos;s current IP and restart
+            Next.js.
           </p>
         )}
       </div>

@@ -3,21 +3,21 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 model Shop {
   id             String      @id @default(uuid())
-  shopCode       String      @unique
-  shopName       String
-  phone          String
-  email          String?
-  address        String
-  logo           String?
+  shopCode       String      @unique @db.VarChar(64)
+  shopName       String      @db.VarChar(255)
+  phone          String      @db.VarChar(32)
+  email          String?     @db.VarChar(255)
+  address        String      @db.Text
+  logo           String?     @db.Text
   isActive       Boolean     @default(true)
-  agentId        String?
-  agentTokenHash String?
+  agentId        String?     @db.VarChar(128)
+  agentTokenHash String?     @db.VarChar(128)
   agentLastSeen  DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -46,11 +46,11 @@ model PrintPrice {
 model Printer {
   id           String    @id @default(uuid())
   shopId       String
-  printerName  String
-  printerModel String?
-  printerType  String?
+  printerName  String    @db.VarChar(255)
+  printerModel String?   @db.VarChar(255)
+  printerType  String?   @db.VarChar(64)
   isDefault    Boolean   @default(false)
-  status       String    @default("offline")
+  status       String    @default("offline") @db.VarChar(64)
   lastSeen     DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -72,7 +72,7 @@ model Inventory {
 model PrintJob {
   id            String         @id @default(uuid())
   shopId        String
-  jobNumber     String         @unique
+  jobNumber     String         @unique @db.VarChar(64)
   copies        Int            @default(1)
   totalPages    Int
   printMode     PrintMode
@@ -80,7 +80,7 @@ model PrintJob {
   totalPrice    Decimal        @db.Decimal(10, 2)
   status        PrintStatus    @default(PENDING)
   printAttempts Int            @default(0)
-  lastError     String?
+  lastError     String?        @db.Text
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -95,9 +95,9 @@ model PrintJob {
 model PrintJobFile {
   id               String    @id @default(uuid())
   printJobId       String
-  originalFileName String
-  storedFileName   String
-  fileExtension    String
+  originalFileName String    @db.VarChar(500)
+  storedFileName   String    @db.VarChar(255)
+  fileExtension    String    @db.VarChar(32)
   fileSize         Int
   totalPages       Int
   printedAt        DateTime?
@@ -111,8 +111,8 @@ model PrintJobFile {
 model Settings {
   id             String   @id @default(uuid())
   shopId         String   @unique
-  currency       String   @default("INR")
-  timezone       String   @default("Asia/Kolkata")
+  currency       String   @default("INR") @db.VarChar(16)
+  timezone       String   @default("Asia/Kolkata") @db.VarChar(64)
   autoDeleteDays Int      @default(7)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

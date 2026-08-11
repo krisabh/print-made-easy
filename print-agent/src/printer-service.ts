@@ -17,8 +17,10 @@ export type DetectedPrinter = {
 
 type WindowsPrinterRow = {
   Name?: string;
-  PrinterStatus?: number | string;
   WorkOffline?: boolean | null;
+  PrinterStatus?: number | string;
+  PrinterState?: number | string;
+  PortName?: string;
 };
 
 async function withTimeout<T>(
@@ -44,15 +46,15 @@ async function withTimeout<T>(
 
 /**
  * Detect printers installed on Windows.
- * Prefer PowerShell first — pdf-to-printer getPrinters often times out on Windows.
+ * Prefer Win32_Printer (CIM) — Get-Printer often reports Idle even when USB is unplugged.
  */
 export async function detectPrinters(): Promise<DetectedPrinter[]> {
   if (process.platform === "win32") {
     try {
       const rows = await withTimeout(
-        detectPrintersViaPowerShell(),
+        detectPrintersViaCim(),
         8000,
-        "Get-Printer",
+        "Win32_Printer",
       );
       if (rows.length > 0) {
         const defaultName = await withTimeout(
@@ -68,7 +70,7 @@ export async function detectPrinters(): Promise<DetectedPrinter[]> {
         }));
       }
     } catch (error) {
-      console.warn("PowerShell printer detection failed:", error);
+      console.warn("CIM printer detection failed:", error);
     }
   }
 
@@ -94,9 +96,9 @@ export async function detectPrinters(): Promise<DetectedPrinter[]> {
   }));
 }
 
-async function detectPrintersViaPowerShell(): Promise<DetectedPrinter[]> {
+async function detectPrintersViaCim(): Promise<DetectedPrinter[]> {
   const command =
-    "Get-Printer | Select-Object Name, PrinterStatus, WorkOffline | ConvertTo-Json -Compress";
+    "Get-CimInstance Win32_Printer | Select-Object Name, WorkOffline, PrinterStatus, PrinterState, PortName | ConvertTo-Json -Compress";
 
   const { stdout } = await execFileAsync(
     "powershell.exe",
@@ -126,12 +128,34 @@ async function detectPrintersViaPowerShell(): Promise<DetectedPrinter[]> {
     }));
 }
 
+/**
+ * Win32_Printer.PrinterStatus: 1 Other, 2 Unknown, 3 Idle, 4 Printing, 5 Warmup,
+ * 6 Stopped Printing, 7 Offline.
+ * PrinterState bit 0x80 = Offline.
+ */
 function mapWindowsStatus(row: WindowsPrinterRow): DetectedPrinter["status"] {
   if (row.WorkOffline === true) return "Offline";
-  if (row.PrinterStatus === 0 || row.PrinterStatus === "Normal") return "Online";
-  if (typeof row.PrinterStatus === "number" && row.PrinterStatus > 0) {
-    return "Offline";
+
+  const state =
+    typeof row.PrinterState === "number"
+      ? row.PrinterState
+      : Number(row.PrinterState);
+  if (Number.isFinite(state) && (state & 0x80) === 0x80) return "Offline";
+
+  const status = row.PrinterStatus;
+  if (status === 7 || status === "Offline") return "Offline";
+  if (status === 2 || status === "Unknown") return "Offline";
+  if (
+    status === 3 ||
+    status === 4 ||
+    status === 5 ||
+    status === "Idle" ||
+    status === "Printing" ||
+    status === "Warmup"
+  ) {
+    return "Online";
   }
+
   return "Unknown";
 }
 
@@ -163,17 +187,13 @@ export async function printPdfFile(
     printer: printerName,
     silent: true,
     copies: options?.copies && options.copies > 0 ? options.copies : 1,
-    // Fit content to page — avoids oversized/blank output on many drivers
     scale: "fit",
   };
 
-  // Only request duplex when needed. Do not force simplex/monochrome.
   if (options?.printType === "DOUBLE") {
     printOptions.side = "duplex";
   }
 
   await printPdf(filePath, printOptions);
-
-  // Give the spooler time to read the file before callers delete it.
   await delay(3000);
 }
