@@ -3,6 +3,19 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Hostinger / production: never seed demo data unless explicitly opted in.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
+    console.error(
+      "Refusing to seed production. Demo seed is local-only. Set ALLOW_DEMO_SEED=true only if intentional.",
+    );
+    process.exit(1);
+  }
+
+  if (process.env.DISABLE_DEMO_SEED === "true") {
+    console.log("Seed skipped (DISABLE_DEMO_SEED=true).");
+    return;
+  }
+
   const shop = await prisma.shop.upsert({
     where: { shopCode: "PME001" },
     update: {},
@@ -36,7 +49,6 @@ async function main() {
     },
   });
 
-  // Ensure related rows exist even if shop was created earlier without them.
   await prisma.printPrice.upsert({
     where: { shopId: shop.id },
     update: {},
@@ -71,7 +83,8 @@ async function main() {
     },
   });
 
-  console.log("Seeded shop:", shop.shopCode, shop.shopName);
+  console.log("Seeded local demo shop:", shop.shopCode, shop.shopName);
+  console.log("Do not run this seed against production Hostinger databases.");
 }
 
 main()

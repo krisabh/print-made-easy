@@ -3,7 +3,9 @@
 import { PrintMode, PrintType } from "@prisma/client";
 import { z } from "zod";
 
+import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { createPrintJob } from "@/lib/job-service";
+import { logError, logInfo } from "@/lib/log";
 import {
   calculatePrintCost,
   getShopWithPricing,
@@ -13,8 +15,13 @@ import { saveUploadFiles, validateUploadFiles } from "@/lib/upload-service";
 import type { ApiResponse, UploadSuccessData } from "@/types";
 
 const submitSchema = z.object({
-  shopCode: z.string().min(1),
-  copies: z.coerce.number().int().min(1, "Copies must be at least 1."),
+  shopCode: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/, "Invalid shop code."),
+  copies: z.coerce.number().int().min(1, "Copies must be at least 1.").max(100),
   printMode: z.nativeEnum(PrintMode),
   printType: z.nativeEnum(PrintType),
 });
@@ -100,6 +107,9 @@ export async function submitPrintJobAction(
       files: savedFiles,
     });
 
+    logInfo("job_created", `${job.jobNumber} shop=${shop.shopCode}`);
+    void runDocumentCleanupIfDue();
+
     return {
       success: true,
       data: {
@@ -110,7 +120,7 @@ export async function submitPrintJobAction(
       },
     };
   } catch (error) {
-    console.error("submitPrintJobAction failed:", error);
+    logError("job_create_failed", error);
     return {
       success: false,
       error: "Something went wrong while uploading. Please try again.",

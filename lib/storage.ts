@@ -4,11 +4,24 @@ export function getUploadDir() {
   return path.join(process.cwd(), process.env.UPLOAD_DIR ?? "storage/uploads");
 }
 
+/**
+ * Resolve a stored upload filename safely (basename only — no path traversal).
+ */
 export function getStoredFilePath(storedFileName: string) {
-  const uploadDir = getUploadDir();
-  const resolved = path.resolve(uploadDir, path.basename(storedFileName));
+  const uploadDir = path.resolve(getUploadDir());
+  const safeName = path.basename(storedFileName);
+  if (!safeName || safeName === "." || safeName === "..") {
+    throw new Error("Invalid file path.");
+  }
 
-  if (!resolved.startsWith(path.resolve(uploadDir))) {
+  const resolved = path.resolve(uploadDir, safeName);
+  const relative = path.relative(uploadDir, resolved);
+
+  if (
+    relative.startsWith("..") ||
+    path.isAbsolute(relative) ||
+    relative.includes("..")
+  ) {
     throw new Error("Invalid file path.");
   }
 

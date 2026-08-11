@@ -8,7 +8,6 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",

@@ -57,20 +57,38 @@ async function parseJson(response: Response) {
   return data;
 }
 
+function setupSecretHeaders(): Record<string, string> {
+  const secret =
+    process.env.AGENT_SETUP_SECRET ||
+    process.env.PRINT_AGENT_SECRET ||
+    "";
+  if (!secret) return {};
+  return { "X-Agent-Setup-Secret": secret };
+}
+
 export async function registerAgent(input: {
   selectedPrinter?: string | null;
   printerStatus?: string;
 }) {
   return withAuthLock(async () => {
     const config = loadConfig();
+    const secret =
+      process.env.AGENT_SETUP_SECRET ||
+      process.env.PRINT_AGENT_SECRET ||
+      undefined;
+
     const response = await fetch(`${baseUrl()}/api/print-agent/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...setupSecretHeaders(),
+      },
       body: JSON.stringify({
         shopCode: config.shopCode,
         agentId: config.agentId,
         selectedPrinter: input.selectedPrinter || undefined,
         printerStatus: input.printerStatus || undefined,
+        setupSecret: secret,
       }),
     });
 
@@ -141,14 +159,22 @@ export async function ensureAgentAuthenticated(input: {
     }
 
     const latest = loadConfig();
+    const secret =
+      process.env.AGENT_SETUP_SECRET ||
+      process.env.PRINT_AGENT_SECRET ||
+      undefined;
     const response = await fetch(`${baseUrl()}/api/print-agent/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...setupSecretHeaders(),
+      },
       body: JSON.stringify({
         shopCode: latest.shopCode,
         agentId: latest.agentId,
         selectedPrinter: input.selectedPrinter || undefined,
         printerStatus: input.printerStatus || undefined,
+        setupSecret: secret,
       }),
     });
     const data = await parseJson(response);

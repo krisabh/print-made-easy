@@ -47,7 +47,10 @@ export const JOBS_DIR = path.join(APP_DIR, "jobs");
 
 function getDefaultConfig(): AgentConfig {
   return {
-    apiUrl: process.env.API_URL || "http://localhost:3000",
+    apiUrl:
+      process.env.PRINTMADEEASY_API_URL ||
+      process.env.API_URL ||
+      "http://localhost:3000",
     shopCode: process.env.SHOP_CODE || "PME001",
     agentId: process.env.AGENT_ID || "agent-local-001",
     authToken: null,
@@ -76,9 +79,12 @@ export function loadConfig(): AgentConfig {
     return {
       ...defaults,
       ...parsed,
-      // Prefer .env API_URL so local Agent keeps using localhost even if
-      // an older LAN URL was saved in agent-config.json.
-      apiUrl: process.env.API_URL || parsed.apiUrl || defaults.apiUrl,
+      // Prefer env API URL (PRINTMADEEASY_API_URL or API_URL) over saved config.
+      apiUrl:
+        process.env.PRINTMADEEASY_API_URL ||
+        process.env.API_URL ||
+        parsed.apiUrl ||
+        defaults.apiUrl,
       shopCode: process.env.SHOP_CODE || parsed.shopCode || defaults.shopCode,
       agentId: process.env.AGENT_ID || parsed.agentId || defaults.agentId,
       authToken: parsed.authToken ?? null,

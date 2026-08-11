@@ -10,6 +10,7 @@ import {
   type DateFilter,
   type StatusFilter,
 } from "@/lib/dashboard-service";
+import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
 
 export async function GET(request: NextRequest) {
@@ -59,6 +60,8 @@ export async function GET(request: NextRequest) {
       getDashboardSummary(shop.id),
       getShopAgentStatus(shop.id),
     ]);
+
+    void runDocumentCleanupIfDue();
 
     return Response.json({
       shopCode: DEMO_SHOP_CODE,

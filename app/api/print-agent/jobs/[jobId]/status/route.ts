@@ -9,6 +9,7 @@ import {
   markJobReady,
   releaseJobToPending,
 } from "@/lib/print-agent-service";
+import { logError, logInfo } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -58,6 +59,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
           { status: 409 },
         );
       }
+
+      logInfo("job_claimed", `${claimed.jobNumber} shop=${shop.shopCode}`);
 
       return Response.json({
         ok: true,
@@ -121,6 +124,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         return Response.json({ error: "Unable to complete job." }, { status: 409 });
       }
 
+      logInfo("job_ready", `${job.jobNumber} shop=${shop.shopCode}`);
+
       return Response.json({
         ok: true,
         job: {
@@ -160,7 +165,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    console.error("Agent job status update failed:", error);
+    logError("agent_job_status_failed", error);
     return Response.json(
       { error: "Unable to update job status." },
       { status: 500 },

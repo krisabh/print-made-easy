@@ -23,6 +23,12 @@ function getExtension(fileName: string) {
   return path.extname(fileName).replace(".", "").toLowerCase();
 }
 
+/** Keep display name only — strip any path segments from client filenames. */
+function sanitizeOriginalFileName(fileName: string) {
+  const base = path.basename(fileName).replace(/[\u0000-\u001f]/g, "").trim();
+  return base.slice(0, 200) || "document";
+}
+
 export function validateUploadFiles(files: File[]) {
   if (files.length === 0) {
     return "Please upload at least one document.";
@@ -78,7 +84,7 @@ export async function saveUploadFiles(files: File[]): Promise<SavedUploadFile[]>
     await writeFile(destination, buffer);
 
     savedFiles.push({
-      originalFileName: file.name,
+      originalFileName: sanitizeOriginalFileName(file.name),
       storedFileName,
       fileExtension,
       fileSize: file.size,
