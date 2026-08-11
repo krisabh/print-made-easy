@@ -36,7 +36,7 @@ CREATE DATABASE printmadeeasy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ### Setup
 
-1. Copy `.env.example` → `.env` and set values (see below).
+1. Copy `.env.example` → `.env` and set values (see below steps).
 2. `npm install`
 3. `npx prisma migrate deploy`
 4. `npx prisma generate`
