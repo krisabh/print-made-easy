@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --hostname 0.0.0.0 --port 3000",
-    "build": "prisma generate && next build",
+    "build": "prisma migrate deploy && prisma generate && next build",
     "start": "prisma migrate deploy; next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
     "db:generate": "prisma generate",
