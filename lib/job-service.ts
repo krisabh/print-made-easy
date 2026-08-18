@@ -18,40 +18,50 @@ export type CreatePrintJobInput = {
   files: SavedUploadFile[];
 };
 
-async function generateJobNumber(tx: Prisma.TransactionClient) {
-  const lastJob = await tx.printJob.findFirst({
-    where: {
-      jobNumber: {
-        startsWith: "PME-",
-      },
-    },
-    orderBy: {
-      jobNumber: "desc",
-    },
-    select: {
-      jobNumber: true,
-    },
-  });
+function formatJobNumber(sequence: number) {
+  return `PME-${String(sequence).padStart(6, "0")}`;
+}
 
-  let nextNumber = 1;
+/**
+ * Allocate next shop-local sequence under a row lock on Shop.
+ * Concurrent uploads for the same shop serialize on SELECT ... FOR UPDATE.
+ */
+async function allocateShopJobSequence(
+  tx: Prisma.TransactionClient,
+  shopId: string,
+) {
+  const locked = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT \`id\` FROM \`Shop\` WHERE \`id\` = ${shopId} FOR UPDATE
+  `;
 
-  if (lastJob?.jobNumber) {
-    const parsed = Number.parseInt(lastJob.jobNumber.replace("PME-", ""), 10);
-    if (!Number.isNaN(parsed)) {
-      nextNumber = parsed + 1;
-    }
+  if (!locked.length) {
+    throw new Error("Shop not found.");
   }
 
-  return `PME-${String(nextNumber).padStart(6, "0")}`;
+  const lastJob = await tx.printJob.findFirst({
+    where: { shopId },
+    orderBy: { jobSequence: "desc" },
+    select: { jobSequence: true },
+  });
+
+  const nextSequence = (lastJob?.jobSequence ?? 0) + 1;
+  return {
+    jobSequence: nextSequence,
+    jobNumber: formatJobNumber(nextSequence),
+  };
 }
 
 export async function createPrintJob(input: CreatePrintJobInput) {
   return prisma.$transaction(async (tx) => {
-    const jobNumber = await generateJobNumber(tx);
+    const { jobSequence, jobNumber } = await allocateShopJobSequence(
+      tx,
+      input.shopId,
+    );
 
     const printJob = await tx.printJob.create({
       data: {
         shopId: input.shopId,
+        jobSequence,
         jobNumber,
         copies: input.copies,
         totalPages: input.totalPages,

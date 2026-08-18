@@ -84,7 +84,8 @@ model Inventory {
 model PrintJob {
   id            String         @id @default(uuid())
   shopId        String
-  jobNumber     String         @unique @db.VarChar(64)
+  jobSequence   Int
+  jobNumber     String         @db.VarChar(64)
   copies        Int            @default(1)
   totalPages    Int
   printMode     PrintMode
@@ -98,6 +99,8 @@ model PrintJob {
   shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   files         PrintJobFile[]
 
+  @@unique([shopId, jobSequence])
+  @@unique([shopId, jobNumber])
   @@index([status])
   @@index([createdAt])
   @@index([shopId])
