@@ -3,7 +3,26 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+/** Production API used by packaged Windows installs (no repo .env required). */
+const PACKAGED_DEFAULT_API_URL = "https://clauras.com";
+
+const DEVICE_AGENT_ID_RE = /^PMEA-WINDOWS-[0-9A-F]{8}$/i;
+
+/**
+ * True when running the installed/packaged Electron binary.
+ * Development `electron .` sets process.defaultApp = true.
+ */
+function isPackagedApp() {
+  return (
+    typeof process.versions.electron === "string" &&
+    process.defaultApp !== true
+  );
+}
+
 function loadDotEnv() {
+  // Packaged installs must not depend on a repository .env file.
+  if (isPackagedApp()) return;
+
   const candidates = [
     path.join(process.cwd(), ".env"),
     path.join(__dirname, "..", ".env"),
@@ -47,22 +66,79 @@ const APP_DIR =
 export const CONFIG_PATH = path.join(APP_DIR, "agent-config.json");
 export const JOBS_DIR = path.join(APP_DIR, "jobs");
 
-function createStableAgentId() {
-  const host = (os.hostname() || "windows")
-    .replace(/[^A-Za-z0-9_-]/g, "")
-    .slice(0, 24);
-  return `WIN-${host || "PC"}-${randomBytes(3).toString("hex")}`.slice(0, 128);
+export function createDeviceAgentId() {
+  return `PMEA-WINDOWS-${randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
-function getDefaultConfig(): AgentConfig {
+export function isDeviceAgentId(agentId: string) {
+  return DEVICE_AGENT_ID_RE.test(agentId.trim());
+}
+
+/**
+ * Shop-tied IDs such as PME2SRN2X-WINDOWS-01 must not survive re-pairing.
+ */
+export function isShopDerivedAgentId(
+  agentId: string,
+  shopCode?: string | null,
+) {
+  const id = agentId.trim();
+  if (!id) return false;
+  if (isDeviceAgentId(id)) return false;
+
+  const shop = (shopCode || "").trim();
+  if (shop && id.toUpperCase().startsWith(`${shop.toUpperCase()}-`)) {
+    return true;
+  }
+
+  // Legacy .env pattern: {SHOP_CODE}-WINDOWS-...
+  if (/^[A-Z0-9]+-WINDOWS-/i.test(id)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function resolveDeviceAgentId(input: {
+  existingAgentId?: string | null;
+  shopCode?: string | null;
+  envAgentId?: string | null;
+  packaged: boolean;
+}): { agentId: string; generated: boolean } {
+  const existing = (input.existingAgentId || "").trim();
+  if (existing && !isShopDerivedAgentId(existing, input.shopCode)) {
+    return { agentId: existing, generated: false };
+  }
+
+  // Development-only override: used only when no persisted device identity exists.
+  if (!input.packaged) {
+    const envId = (input.envAgentId || "").trim();
+    if (
+      envId &&
+      !isShopDerivedAgentId(envId, input.shopCode) &&
+      !existing
+    ) {
+      return { agentId: envId, generated: true };
+    }
+  }
+
+  return { agentId: createDeviceAgentId(), generated: true };
+}
+
+function resolveDefaultApiUrl() {
+  if (process.env.PRINTMADEEASY_API_URL) return process.env.PRINTMADEEASY_API_URL;
+  if (process.env.API_URL) return process.env.API_URL;
+  if (isPackagedApp()) return PACKAGED_DEFAULT_API_URL;
+  return "http://localhost:3000";
+}
+
+function getDefaultConfig(agentId: string): AgentConfig {
+  const packaged = isPackagedApp();
+
   return {
-    apiUrl:
-      process.env.PRINTMADEEASY_API_URL ||
-      process.env.API_URL ||
-      "http://localhost:3000",
-    shopCode: process.env.SHOP_CODE || "PME001",
+    apiUrl: resolveDefaultApiUrl(),
+    shopCode: packaged ? "" : process.env.SHOP_CODE || "",
     shopName: null,
-    agentId: process.env.AGENT_ID || createStableAgentId(),
+    agentId,
     authToken: null,
     selectedPrinter: null,
     openAtLogin: false,
@@ -74,52 +150,96 @@ function ensureAppDirs() {
   fs.mkdirSync(JOBS_DIR, { recursive: true });
 }
 
+function persistIfNeeded(config: AgentConfig, shouldWrite: boolean) {
+  if (shouldWrite) {
+    saveConfig(config);
+  }
+}
+
 export function loadConfig(): AgentConfig {
   ensureAppDirs();
-  const defaults = getDefaultConfig();
+
+  const identityInput = {
+    packaged: isPackagedApp(),
+    envAgentId: process.env.AGENT_ID || null,
+  };
 
   if (!fs.existsSync(CONFIG_PATH)) {
-    saveConfig(defaults);
-    return { ...defaults };
+    const identity = resolveDeviceAgentId({
+      ...identityInput,
+      existingAgentId: null,
+      shopCode: identityInput.packaged ? "" : process.env.SHOP_CODE || "",
+    });
+    const created = getDefaultConfig(identity.agentId);
+    saveConfig(created);
+    return { ...created };
   }
 
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf8");
     const parsed = JSON.parse(raw) as Partial<AgentConfig>;
     const paired = Boolean(parsed.authToken);
+    const identity = resolveDeviceAgentId({
+      ...identityInput,
+      existingAgentId: parsed.agentId,
+      shopCode: parsed.shopCode,
+    });
 
-    // Once paired, persisted JSON wins over .env SHOP_CODE / AGENT_ID so local
-    // leftovers like PME001 cannot hijack the Agent.
+    let config: AgentConfig;
+
     if (paired) {
-      return {
-        ...defaults,
+      config = {
+        ...getDefaultConfig(identity.agentId),
         ...parsed,
-        apiUrl: parsed.apiUrl || defaults.apiUrl,
-        shopCode: parsed.shopCode || defaults.shopCode,
+        apiUrl: parsed.apiUrl || resolveDefaultApiUrl(),
+        shopCode: parsed.shopCode || "",
         shopName: parsed.shopName ?? null,
-        agentId: parsed.agentId || defaults.agentId,
+        agentId: identity.agentId,
         authToken: parsed.authToken ?? null,
+        selectedPrinter: parsed.selectedPrinter ?? null,
+        openAtLogin: Boolean(parsed.openAtLogin),
+      };
+    } else if (isPackagedApp()) {
+      config = {
+        ...getDefaultConfig(identity.agentId),
+        ...parsed,
+        apiUrl: parsed.apiUrl || resolveDefaultApiUrl(),
+        shopCode: parsed.shopCode || "",
+        shopName: parsed.shopName ?? null,
+        agentId: identity.agentId,
+        authToken: null,
+        selectedPrinter: parsed.selectedPrinter ?? null,
+        openAtLogin: Boolean(parsed.openAtLogin),
+      };
+    } else {
+      config = {
+        ...getDefaultConfig(identity.agentId),
+        ...parsed,
+        apiUrl:
+          process.env.PRINTMADEEASY_API_URL ||
+          process.env.API_URL ||
+          parsed.apiUrl ||
+          resolveDefaultApiUrl(),
+        shopCode: process.env.SHOP_CODE || parsed.shopCode || "",
+        shopName: parsed.shopName ?? null,
+        agentId: identity.agentId,
+        authToken: null,
         selectedPrinter: parsed.selectedPrinter ?? null,
         openAtLogin: Boolean(parsed.openAtLogin),
       };
     }
 
-    return {
-      ...defaults,
-      ...parsed,
-      apiUrl:
-        process.env.PRINTMADEEASY_API_URL ||
-        process.env.API_URL ||
-        parsed.apiUrl ||
-        defaults.apiUrl,
-      shopCode: process.env.SHOP_CODE || parsed.shopCode || defaults.shopCode,
-      shopName: parsed.shopName ?? null,
-      agentId: process.env.AGENT_ID || parsed.agentId || defaults.agentId,
-      authToken: null,
-    };
+    persistIfNeeded(config, identity.generated);
+    return config;
   } catch (error) {
     console.error("Failed to read agent config:", error);
-    return { ...defaults };
+    const identity = resolveDeviceAgentId({
+      ...identityInput,
+      existingAgentId: null,
+    });
+    const fallback = getDefaultConfig(identity.agentId);
+    saveConfig(fallback);
+    return fallback;
   }
 }
 
@@ -129,9 +249,12 @@ export function saveConfig(config: AgentConfig) {
 }
 
 export function updateConfig(patch: Partial<AgentConfig>): AgentConfig {
+  const current = loadConfig();
   const next = {
-    ...loadConfig(),
+    ...current,
     ...patch,
+    // Device identity is never replaced by pairing/shop updates.
+    agentId: current.agentId,
   };
   saveConfig(next);
   return next;

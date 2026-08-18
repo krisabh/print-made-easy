@@ -1,6 +1,7 @@
 import { Printer } from "lucide-react";
 
 import { ConnectPrintAgentCard } from "@/components/dashboard/connect-print-agent-card";
+import { DownloadWindowsAgentCard } from "@/components/dashboard/download-windows-agent-card";
 import { requireShop } from "@/lib/auth";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
@@ -25,6 +26,8 @@ export default async function PrintersPage() {
           Printers reported by the Windows Print Agent.
         </p>
       </div>
+
+      <DownloadWindowsAgentCard />
 
       <ConnectPrintAgentCard
         shopName={shop.shopName}

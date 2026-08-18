@@ -151,7 +151,6 @@ export async function connectWithPairingUrl(
       shopCode: result.shop.shopCode,
       shopName: result.shop.shopName,
       authToken: result.token,
-      agentId: loadConfig().agentId,
     });
 
     // Never return tokens to renderer

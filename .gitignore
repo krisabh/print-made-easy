@@ -40,6 +40,10 @@ yarn-error.log*
 /storage/uploads/*
 !/storage/uploads/.gitkeep
 
+# Windows Agent installer (static public download; do not commit the .exe)
+/public/downloads/*.exe
+!/public/downloads/.gitkeep
+
 # electron / print-agent
 /electron/dist
 /electron/out

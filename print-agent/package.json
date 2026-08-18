@@ -3,37 +3,48 @@
   "version": "1.0.0",
   "private": true,
   "description": "PrintMadeEasy Windows Print Agent",
+  "author": "PrintMadeEasy",
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build && electron .",
     "build": "tsc && node scripts/copy-ui.js",
     "start": "electron .",
+    "typecheck": "tsc --noEmit",
     "pack": "npm run build && electron-builder --win --dir",
     "dist": "npm run build && electron-builder --win nsis"
   },
   "build": {
     "appId": "com.printmadeeasy.agent",
     "productName": "PrintMadeEasy Agent",
+    "copyright": "Copyright © PrintMadeEasy",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
-      "assets/**/*",
-      "package.json"
+      "package.json",
+      "!**/.env",
+      "!**/.env.*"
     ],
+    "asar": true,
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "PrintMadeEasy-Agent-Setup-${version}.${ext}"
+      "artifactName": "PrintMadeEasy-Agent-Setup-${version}.${ext}",
+      "executableName": "PrintMadeEasy Agent",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PrintMadeEasy Agent"
+      "shortcutName": "PrintMadeEasy Agent",
+      "uninstallDisplayName": "PrintMadeEasy Agent",
+      "deleteAppDataOnUninstall": false
     }
   },
   "dependencies": {
