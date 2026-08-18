@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:;"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PrintMadeEasy Agent</title>
@@ -21,33 +21,16 @@
         --red: #dc2626;
         --border: #e2e8f0;
       }
-
-      * {
-        box-sizing: border-box;
-      }
-
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Segoe UI, Tahoma, sans-serif;
         background: var(--bg);
         color: var(--text);
       }
-
-      main {
-        padding: 20px;
-      }
-
-      h1 {
-        margin: 0;
-        font-size: 20px;
-      }
-
-      .sub {
-        margin: 4px 0 16px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
+      main { padding: 20px; }
+      h1 { margin: 0; font-size: 20px; }
+      .sub { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
       .card {
         background: var(--card);
         border: 1px solid var(--border);
@@ -55,14 +38,6 @@
         padding: 16px;
         margin-bottom: 12px;
       }
-
-      .row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
       .label {
         font-size: 12px;
         color: var(--muted);
@@ -70,12 +45,6 @@
         letter-spacing: 0.04em;
         margin-bottom: 6px;
       }
-
-      .value {
-        font-size: 14px;
-        font-weight: 600;
-      }
-
       .status {
         display: inline-flex;
         align-items: center;
@@ -83,40 +52,27 @@
         font-size: 14px;
         font-weight: 600;
       }
-
       .dot {
         width: 10px;
         height: 10px;
         border-radius: 999px;
         background: var(--muted);
       }
-
-      .dot.ok {
-        background: var(--green);
-      }
-
-      .dot.warn {
-        background: var(--amber);
-      }
-
-      .dot.bad {
-        background: var(--red);
-      }
-
-      select,
-      button {
+      .dot.ok { background: var(--green); }
+      .dot.warn { background: var(--amber); }
+      .dot.bad { background: var(--red); }
+      select, button, input[type="text"], textarea {
         width: 100%;
         min-height: 42px;
         border-radius: 10px;
         border: 1px solid var(--border);
         font: inherit;
       }
-
-      select {
-        padding: 0 12px;
+      select, input[type="text"], textarea {
+        padding: 8px 12px;
         background: white;
       }
-
+      textarea { min-height: 72px; resize: vertical; }
       button {
         border: none;
         background: var(--blue);
@@ -124,23 +80,13 @@
         font-weight: 600;
         cursor: pointer;
       }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
       button.secondary {
         background: white;
         color: var(--text);
         border: 1px solid var(--border);
       }
-
-      .actions {
-        display: grid;
-        gap: 8px;
-      }
-
+      .actions { display: grid; gap: 8px; }
       .message {
         margin-top: 10px;
         padding: 10px 12px;
@@ -148,28 +94,15 @@
         font-size: 13px;
         display: none;
       }
-
-      .message.show {
-        display: block;
-      }
-
-      .message.ok {
-        background: #ecfdf5;
-        color: #047857;
-      }
-
-      .message.err {
-        background: #fef2f2;
-        color: #b91c1c;
-      }
-
+      .message.show { display: block; }
+      .message.ok { background: #ecfdf5; color: #047857; }
+      .message.err { background: #fef2f2; color: #b91c1c; }
       .meta {
         margin-top: 8px;
         font-size: 12px;
         color: var(--muted);
         word-break: break-all;
       }
-
       .checkbox {
         display: flex;
         align-items: flex-start;
@@ -178,13 +111,30 @@
         color: var(--text);
         line-height: 1.35;
       }
-
       .checkbox input {
         margin-top: 3px;
         width: 16px;
         height: 16px;
         min-height: 16px;
       }
+      .hidden { display: none !important; }
+      #scannerPanel video {
+        width: 100%;
+        max-height: 240px;
+        border-radius: 12px;
+        background: #0f172a;
+        object-fit: cover;
+      }
+      #scannerPanel canvas { display: none; }
+      .success-box {
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 13px;
+        text-align: left;
+      }
+      .success-box strong { display: block; margin-bottom: 8px; }
     </style>
   </head>
   <body>
@@ -199,6 +149,46 @@
           <span id="agentStatus">Agent Running</span>
         </div>
         <div class="meta" id="connectionMeta">Checking backend…</div>
+      </section>
+
+      <section class="card" id="connectCard">
+        <div class="label">Connect Shop</div>
+        <p class="meta" style="margin-top: 0">
+          Scan the QR code from Dashboard → Printers, or paste the connection link.
+        </p>
+        <div class="actions" style="margin-top: 12px">
+          <button id="scanQrBtn" type="button">Scan QR Code</button>
+          <button id="manualLinkBtn" class="secondary" type="button">
+            Enter connection link manually
+          </button>
+        </div>
+
+        <div id="scannerPanel" class="hidden" style="margin-top: 12px">
+          <p class="meta" style="margin-top: 0">
+            Position the QR code inside the frame.
+          </p>
+          <video id="scannerVideo" playsinline muted></video>
+          <canvas id="scannerCanvas"></canvas>
+          <p class="meta" id="scannerHint">Starting camera…</p>
+          <div class="actions" style="margin-top: 8px">
+            <button id="cancelScanBtn" class="secondary" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <div id="manualPanel" class="hidden" style="margin-top: 12px">
+          <label class="label" for="pairingUrlInput">Connection link</label>
+          <textarea
+            id="pairingUrlInput"
+            placeholder="https://your-domain/agent/connect?t=..."
+          ></textarea>
+          <div class="actions" style="margin-top: 8px">
+            <button id="connectUrlBtn" type="button">Connect</button>
+            <button id="cancelManualBtn" class="secondary" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <div id="pairSuccess" class="success-box hidden" style="margin-top: 12px"></div>
+        <div id="connectMessage" class="message"></div>
       </section>
 
       <section class="card">
@@ -236,6 +226,7 @@
       </section>
     </main>
 
+    <script src="./jsQR.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>

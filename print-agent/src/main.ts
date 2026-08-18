@@ -14,7 +14,13 @@ import {
   ensureAgentAuthenticated,
   sendHeartbeat,
 } from "./api-client";
-import { loadConfig, updateConfig, getConfigPaths } from "./config";
+import {
+  loadConfig,
+  updateConfig,
+  getConfigPaths,
+  isAgentPaired,
+} from "./config";
+import { connectWithPairingUrl, PairingError } from "./pairing";
 import { processPendingJobs, runTestPrint } from "./job-service";
 import { detectPrinters } from "./printer-service";
 import { cleanStaleTempFiles, ensureJobsDirectory } from "./storage-service";
@@ -44,9 +50,9 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow({
-    width: 420,
-    height: 620,
-    resizable: false,
+    width: 440,
+    height: 720,
+    resizable: true,
     maximizable: false,
     title: "PrintMadeEasy Agent",
     show: false,
@@ -60,6 +66,14 @@ function createWindow() {
 
   mainWindow.loadFile(getUiPath());
   mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.on("hide", () => {
+    // Ensure webcam is released when the Agent window is hidden to tray.
+    mainWindow?.webContents
+      .executeJavaScript(
+        `(() => { if (window.__pmeStopCamera) window.__pmeStopCamera(); })()`,
+      )
+      .catch(() => undefined);
+  });
   mainWindow.on("close", (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -144,12 +158,14 @@ function startBackgroundLoops() {
   if (pollTimer) clearInterval(pollTimer);
 
   heartbeatTimer = setInterval(() => {
+    if (!isAgentPaired()) return;
     void syncWithCloud().catch((error) => {
       console.error("Cloud sync failed:", error);
     });
   }, 5000);
 
   pollTimer = setInterval(() => {
+    if (!isAgentPaired()) return;
     void processPendingJobs().catch((error) => {
       console.error("Job processing failed:", error);
     });
@@ -187,11 +203,18 @@ function registerIpc() {
       printers.find((printer) => printer.name === selected) ?? null;
 
     try {
-      await ensureRegistered(
-        selected,
-        selectedPrinterInfo?.status || "Unknown",
-      );
-      connection = await checkBackendReachable();
+      if (isAgentPaired()) {
+        await ensureRegistered(
+          selected,
+          selectedPrinterInfo?.status || "Unknown",
+        );
+        connection = await checkBackendReachable();
+      } else {
+        connection = {
+          status: "Disconnected",
+          message: "Not connected. Scan the dashboard QR to connect this Agent.",
+        };
+      }
     } catch (error) {
       console.error("Agent registration/connection failed:", error);
       connection = {
@@ -203,10 +226,16 @@ function registerIpc() {
       };
     }
 
+    const latest = loadConfig();
     return {
       config: {
-        ...loadConfig(),
+        apiUrl: latest.apiUrl,
+        shopCode: latest.shopCode,
+        shopName: latest.shopName,
+        agentId: latest.agentId,
         selectedPrinter: selected,
+        openAtLogin: latest.openAtLogin,
+        paired: Boolean(latest.authToken),
       },
       paths: getConfigPaths(),
       printers,
@@ -214,6 +243,7 @@ function registerIpc() {
       selectedPrinterStatus: selectedPrinterInfo?.status ?? "Unknown",
       agentRunning: true,
       printerCount: printers.length,
+      paired: Boolean(latest.authToken),
     };
   });
 
@@ -275,11 +305,66 @@ function registerIpc() {
     const config = loadConfig();
     await shell.openExternal(`${config.apiUrl.replace(/\/$/, "")}/dashboard`);
   });
+
+  ipcMain.handle(
+    "agent:connect-pairing-url",
+    async (_event, rawUrl: string) => {
+      if (!rawUrl || typeof rawUrl !== "string") {
+        throw new Error("Invalid PrintMadeEasy connection QR.");
+      }
+
+      const config = loadConfig();
+      try {
+        const result = await connectWithPairingUrl(rawUrl, {
+          selectedPrinter: config.selectedPrinter,
+          printerStatus: "Unknown",
+        });
+
+        try {
+          await syncWithCloud();
+        } catch (error) {
+          console.error("Post-pairing sync failed:", error);
+        }
+
+        return {
+          success: true,
+          shopName: result.shopName,
+          shopCode: result.shopCode,
+          agentId: result.agentId,
+        };
+      } catch (error) {
+        if (error instanceof PairingError) {
+          throw new Error(error.message);
+        }
+        throw new Error(
+          "Unable to connect to PrintMadeEasy. Check your internet connection.",
+        );
+      }
+    },
+  );
 }
 
 app.whenReady().then(async () => {
   ensureJobsDirectory();
   cleanStaleTempFiles();
+
+  // Allow webcam for QR scanning in the Agent window.
+  const { session } = await import("electron");
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      if (permission === "media" || permission === "mediaKeySystem") {
+        callback(true);
+        return;
+      }
+      callback(false);
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission) => {
+      return permission === "media" || permission === "mediaKeySystem";
+    },
+  );
+
   registerIpc();
   createTray();
   createWindow();
@@ -290,10 +375,12 @@ app.whenReady().then(async () => {
     path: process.execPath,
   });
 
-  try {
-    await syncWithCloud();
-  } catch (error) {
-    console.error("Initial cloud sync failed:", error);
+  if (isAgentPaired()) {
+    try {
+      await syncWithCloud();
+    } catch (error) {
+      console.error("Initial cloud sync failed:", error);
+    }
   }
 
   startBackgroundLoops();

@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -31,6 +32,7 @@ loadDotEnv();
 export type AgentConfig = {
   apiUrl: string;
   shopCode: string;
+  shopName: string | null;
   agentId: string;
   authToken: string | null;
   selectedPrinter: string | null;
@@ -45,6 +47,13 @@ const APP_DIR =
 export const CONFIG_PATH = path.join(APP_DIR, "agent-config.json");
 export const JOBS_DIR = path.join(APP_DIR, "jobs");
 
+function createStableAgentId() {
+  const host = (os.hostname() || "windows")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 24);
+  return `WIN-${host || "PC"}-${randomBytes(3).toString("hex")}`.slice(0, 128);
+}
+
 function getDefaultConfig(): AgentConfig {
   return {
     apiUrl:
@@ -52,7 +61,8 @@ function getDefaultConfig(): AgentConfig {
       process.env.API_URL ||
       "http://localhost:3000",
     shopCode: process.env.SHOP_CODE || "PME001",
-    agentId: process.env.AGENT_ID || "agent-local-001",
+    shopName: null,
+    agentId: process.env.AGENT_ID || createStableAgentId(),
     authToken: null,
     selectedPrinter: null,
     openAtLogin: false,
@@ -76,18 +86,36 @@ export function loadConfig(): AgentConfig {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf8");
     const parsed = JSON.parse(raw) as Partial<AgentConfig>;
+    const paired = Boolean(parsed.authToken);
+
+    // Once paired, persisted JSON wins over .env SHOP_CODE / AGENT_ID so local
+    // leftovers like PME001 cannot hijack the Agent.
+    if (paired) {
+      return {
+        ...defaults,
+        ...parsed,
+        apiUrl: parsed.apiUrl || defaults.apiUrl,
+        shopCode: parsed.shopCode || defaults.shopCode,
+        shopName: parsed.shopName ?? null,
+        agentId: parsed.agentId || defaults.agentId,
+        authToken: parsed.authToken ?? null,
+        selectedPrinter: parsed.selectedPrinter ?? null,
+        openAtLogin: Boolean(parsed.openAtLogin),
+      };
+    }
+
     return {
       ...defaults,
       ...parsed,
-      // Prefer env API URL (PRINTMADEEASY_API_URL or API_URL) over saved config.
       apiUrl:
         process.env.PRINTMADEEASY_API_URL ||
         process.env.API_URL ||
         parsed.apiUrl ||
         defaults.apiUrl,
       shopCode: process.env.SHOP_CODE || parsed.shopCode || defaults.shopCode,
+      shopName: parsed.shopName ?? null,
       agentId: process.env.AGENT_ID || parsed.agentId || defaults.agentId,
-      authToken: parsed.authToken ?? null,
+      authToken: null,
     };
   } catch (error) {
     console.error("Failed to read agent config:", error);
@@ -115,4 +143,8 @@ export function getConfigPaths() {
     configPath: CONFIG_PATH,
     jobsDir: JOBS_DIR,
   };
+}
+
+export function isAgentPaired() {
+  return Boolean(loadConfig().authToken);
 }

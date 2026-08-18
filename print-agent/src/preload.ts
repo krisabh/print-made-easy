@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("printAgent", {
   setOpenAtLogin: (enabled: boolean) =>
     ipcRenderer.invoke("agent:set-open-at-login", enabled),
   openDashboard: () => ipcRenderer.invoke("agent:open-dashboard"),
+  connectPairingUrl: (url: string) =>
+    ipcRenderer.invoke("agent:connect-pairing-url", url),
   onRefresh: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("refresh-requested", listener);

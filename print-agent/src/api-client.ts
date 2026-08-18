@@ -120,6 +120,46 @@ export async function sendHeartbeat(input: {
   });
 }
 
+export async function registerWithPairingToken(input: {
+  apiUrl: string;
+  pairingToken: string;
+  selectedPrinter?: string | null;
+  printerStatus?: string;
+}) {
+  return withAuthLock(async () => {
+    const config = loadConfig();
+    const apiUrl = input.apiUrl.replace(/\/$/, "");
+
+    let response: Response;
+    try {
+      response = await fetch(`${apiUrl}/api/print-agent/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pairingToken: input.pairingToken,
+          agentId: config.agentId,
+          selectedPrinter: input.selectedPrinter || undefined,
+          printerStatus: input.printerStatus || undefined,
+        }),
+      });
+    } catch {
+      throw new Error("network");
+    }
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `Request failed (${response.status})`);
+    }
+
+    return data as {
+      token: string;
+      shop: { id: string; shopCode: string; shopName: string };
+    };
+  });
+}
+
 export async function ensureAgentAuthenticated(input: {
   selectedPrinter?: string | null;
   printerStatus?: string;
@@ -148,10 +188,9 @@ export async function ensureAgentAuthenticated(input: {
           message.includes("(401)");
 
         if (isUnauthorized) {
-          console.warn("Heartbeat unauthorized, re-registering agent:", error);
+          console.warn("Heartbeat unauthorized, clearing auth token");
           updateConfig({ authToken: null });
         } else {
-          // Keep token on transient network errors (server restart, etc.).
           console.warn("Heartbeat failed (keeping auth token):", message);
           throw error;
         }
@@ -163,6 +202,15 @@ export async function ensureAgentAuthenticated(input: {
       process.env.AGENT_SETUP_SECRET ||
       process.env.PRINT_AGENT_SECRET ||
       undefined;
+
+    // Legacy .env registration — only when setup secret is configured.
+    if (!secret) {
+      return {
+        status: "Disconnected" as const,
+        message: "Not connected. Scan the dashboard QR to connect this Agent.",
+      };
+    }
+
     const response = await fetch(`${baseUrl()}/api/print-agent/register`, {
       method: "POST",
       headers: {
