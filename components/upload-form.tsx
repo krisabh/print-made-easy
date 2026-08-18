@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Check, FileText, Loader2, Minus, Plus, Upload, X } from "lucide-react";
 
 import { submitPrintJobAction } from "@/app/upload/[shopCode]/actions";
@@ -11,6 +11,12 @@ import type { ShopUploadContext, UploadSuccessData } from "@/types";
 
 type PrintMode = "BW" | "COLOR";
 type PrintType = "SINGLE" | "DOUBLE";
+type JobLiveStatus =
+  | "PENDING"
+  | "PRINTING"
+  | "READY_FOR_PICKUP"
+  | "DELIVERED"
+  | "CANCELLED";
 
 type SelectedFile = {
   id: string;
@@ -23,10 +29,45 @@ const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
 const MAX_FILES = 10;
 const MAX_FILE_SIZE_MB = 20;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const STATUS_POLL_MS = 3000;
 
 function getExtension(fileName: string) {
   const parts = fileName.split(".");
   return parts.length > 1 ? (parts.pop() as string).toLowerCase() : "";
+}
+
+function statusLabel(status: JobLiveStatus) {
+  switch (status) {
+    case "PENDING":
+      return "Pending";
+    case "PRINTING":
+      return "Printing";
+    case "READY_FOR_PICKUP":
+      return "Ready for pickup";
+    case "DELIVERED":
+      return "Delivered";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
+
+function statusHint(status: JobLiveStatus) {
+  switch (status) {
+    case "PENDING":
+      return "Waiting for the shop printer.";
+    case "PRINTING":
+      return "Your documents are printing now.";
+    case "READY_FOR_PICKUP":
+      return "Ready at the counter — show your job number.";
+    case "DELIVERED":
+      return "Marked as collected.";
+    case "CANCELLED":
+      return "This job was cancelled. Ask the shop if you need help.";
+    default:
+      return "";
+  }
 }
 
 function formatBytes(bytes: number) {
@@ -156,7 +197,40 @@ export function UploadForm({ shop }: UploadFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [success, setSuccess] = useState<UploadSuccessData | null>(null);
+  const [liveStatus, setLiveStatus] = useState<JobLiveStatus>("PENDING");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!success?.jobId) return;
+
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const response = await fetch(
+          `/api/customer/jobs/${success!.jobId}?shopCode=${encodeURIComponent(shop.shopCode)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          success?: boolean;
+          data?: { status?: JobLiveStatus };
+        };
+        if (!cancelled && payload.success && payload.data?.status) {
+          setLiveStatus(payload.data.status);
+        }
+      } catch {
+        // Keep last known status on transient network errors
+      }
+    }
+
+    void poll();
+    const timer = window.setInterval(poll, STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [success, shop.shopCode]);
 
   const totalPages = useMemo(
     () => files.reduce((sum, item) => sum + (item.status === "ready" ? item.pages : 0), 0),
@@ -244,6 +318,7 @@ export function UploadForm({ shop }: UploadFormProps) {
 
   function resetForm() {
     setSuccess(null);
+    setLiveStatus("PENDING");
     setFiles([]);
     setCopies(1);
     setPrintMode("BW");
@@ -280,20 +355,38 @@ export function UploadForm({ shop }: UploadFormProps) {
         return;
       }
       setSuccess(result.data);
+      setLiveStatus("PENDING");
     });
   }
 
   if (success) {
+    const isReady =
+      liveStatus === "READY_FOR_PICKUP" || liveStatus === "DELIVERED";
+    const isActive =
+      liveStatus === "PENDING" || liveStatus === "PRINTING";
+
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
           <div
-            className="flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"
+            className={`flex size-14 items-center justify-center rounded-full ${
+              isReady
+                ? "bg-emerald-50 text-emerald-600"
+                : liveStatus === "CANCELLED"
+                  ? "bg-red-50 text-red-500"
+                  : "bg-blue-50 text-blue-600"
+            }`}
             aria-hidden="true"
           >
-            <Check className="size-7" strokeWidth={2.5} />
+            {isActive ? (
+              <Loader2 className="size-7 animate-spin" strokeWidth={2.5} />
+            ) : (
+              <Check className="size-7" strokeWidth={2.5} />
+            )}
           </div>
-          <h2 className="mt-4 text-xl font-semibold text-slate-900">Print Job Submitted</h2>
+          <h2 className="mt-4 text-xl font-semibold text-slate-900">
+            {isReady ? "Ready for pickup" : "Print Job Submitted"}
+          </h2>
 
           <div className="mt-6 w-full rounded-2xl bg-slate-50 px-4 py-5">
             <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
@@ -302,6 +395,33 @@ export function UploadForm({ shop }: UploadFormProps) {
             <p className="mt-2 text-3xl font-semibold tracking-wide text-slate-900">
               {success.jobNumber}
             </p>
+          </div>
+
+          <div className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-4 text-left">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-slate-500">Live status</p>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  liveStatus === "PENDING"
+                    ? "bg-amber-50 text-amber-800"
+                    : liveStatus === "PRINTING"
+                      ? "bg-blue-50 text-blue-700"
+                      : liveStatus === "READY_FOR_PICKUP"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : liveStatus === "CANCELLED"
+                          ? "bg-red-50 text-red-600"
+                          : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {statusLabel(liveStatus)}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{statusHint(liveStatus)}</p>
+            {isActive ? (
+              <p className="mt-2 text-xs text-slate-400">
+                Updates automatically — keep this page open.
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-4">

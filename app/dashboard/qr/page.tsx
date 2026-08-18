@@ -32,14 +32,19 @@ export default async function QrPage() {
         {uploadUrl.includes("localhost") || uploadUrl.includes("127.0.0.1") ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
             This QR uses localhost and will not work from a phone. Set
-            NEXT_PUBLIC_APP_URL to your PC LAN IP (example:
-            http://192.168.1.8:3000) and restart the server.
+            NEXT_PUBLIC_APP_URL to your public site URL (example:
+            https://clauras.com) or your PC LAN IP for local testing, then
+            restart the server.
+          </p>
+        ) : uploadUrl.startsWith("https://") ? (
+          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Customers can scan this QR from any network. It opens your public
+            upload page at {uploadUrl}.
           </p>
         ) : (
           <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Phone and PC must be on the same Wi‑Fi. If the QR fails, check that
-            NEXT_PUBLIC_APP_URL matches this PC&apos;s current IP and restart
-            Next.js.
+            For local testing, phone and PC must be on the same Wi‑Fi. For
+            production, set NEXT_PUBLIC_APP_URL to your https domain.
           </p>
         )}
       </div>

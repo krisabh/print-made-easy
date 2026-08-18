@@ -18,6 +18,7 @@ export type ShopUploadContext = {
 };
 
 export type UploadSuccessData = {
+  jobId: string;
   jobNumber: string;
   totalPrice: number;
   totalPages: number;

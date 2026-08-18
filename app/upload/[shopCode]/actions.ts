@@ -113,6 +113,7 @@ export async function submitPrintJobAction(
     return {
       success: true,
       data: {
+        jobId: job.id,
         jobNumber: job.jobNumber,
         totalPrice: Number(job.totalPrice),
         totalPages,
