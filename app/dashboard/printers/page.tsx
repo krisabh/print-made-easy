@@ -1,16 +1,21 @@
 import { Printer } from "lucide-react";
 
+import { ConnectPrintAgentCard } from "@/components/dashboard/connect-print-agent-card";
 import { requireShop } from "@/lib/auth";
+import { getAppBaseUrl } from "@/lib/app-url";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
 import { prisma } from "@/lib/prisma";
 
 export default async function PrintersPage() {
   const { shop } = await requireShop();
-  const agentStatus = await getShopAgentStatus(shop.id);
-  const printers = await prisma.printer.findMany({
-    where: { shopId: shop.id },
-    orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
-  });
+  const [agentStatus, printers, appBaseUrl] = await Promise.all([
+    getShopAgentStatus(shop.id),
+    prisma.printer.findMany({
+      where: { shopId: shop.id },
+      orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
+    }),
+    getAppBaseUrl(),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -21,27 +26,27 @@ export default async function PrintersPage() {
         </p>
       </div>
 
+      <ConnectPrintAgentCard
+        shopName={shop.shopName}
+        shopCode={shop.shopCode}
+        appBaseUrl={appBaseUrl}
+        initialStatus={{
+          connected: agentStatus?.connected ?? false,
+          lastSeen: agentStatus?.lastSeen ?? null,
+          printerName: agentStatus?.printerName ?? null,
+          printerStatus: agentStatus?.printerStatus ?? null,
+          printerOffline: agentStatus?.printerOffline ?? false,
+        }}
+      />
+
       <section className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex size-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
           <Printer className="size-5" aria-hidden="true" />
         </div>
         <h3 className="mt-4 text-base font-semibold text-slate-900">
-          Printer Agent Status
+          Printer details
         </h3>
-        <p
-          className={`mt-1 text-sm font-medium ${
-            agentStatus?.connected ? "text-emerald-700" : "text-amber-700"
-          }`}
-        >
-          {agentStatus?.connected ? "Connected" : "Offline"}
-        </p>
         <p className="mt-2 text-sm text-slate-500">
-          Last seen:{" "}
-          {agentStatus?.lastSeen
-            ? new Date(agentStatus.lastSeen).toLocaleString()
-            : "Never"}
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
           Default printer: {agentStatus?.printerName || "Not selected"}
         </p>
         <p className="mt-1 text-sm text-slate-500">
@@ -59,7 +64,7 @@ export default async function PrintersPage() {
         <h3 className="text-sm font-semibold text-slate-900">Detected printers</h3>
         {printers.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">
-            No printers reported yet. Start the PrintMadeEasy Agent and select a
+            No printers reported yet. Connect the PrintMadeEasy Agent and select a
             printer.
           </p>
         ) : (
