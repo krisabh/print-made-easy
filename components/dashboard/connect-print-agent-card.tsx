@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import QRCode from "qrcode";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Check, Copy, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -22,8 +22,8 @@ type ConnectPrintAgentCardProps = {
 };
 
 type PairingState = {
-  pairingToken: string;
   expiresAt: string;
+  connectUrl: string;
   qrDataUrl: string;
 };
 
@@ -45,8 +45,18 @@ export function ConnectPrintAgentCard({
   const [expired, setExpired] = useState(false);
   const [remainingLabel, setRemainingLabel] = useState("10:00");
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
   const [refreshing, startRefresh] = useTransition();
+  const copiedResetRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedResetRef.current != null) {
+        window.clearTimeout(copiedResetRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!pairing) return;
@@ -57,6 +67,7 @@ export function ConnectPrintAgentCard({
         setExpired(true);
         setRemainingLabel("00:00");
         setPairing(null);
+        setCopied(false);
         return;
       }
       setExpired(false);
@@ -124,15 +135,33 @@ export function ConnectPrintAgentCard({
         });
 
         setExpired(false);
+        setCopied(false);
         setPairing({
-          pairingToken: data.pairingToken,
           expiresAt: data.expiresAt,
+          connectUrl,
           qrDataUrl,
         });
       } catch {
         setError("Unable to create a connection code. Please try again.");
       }
     });
+  }
+
+  async function copyConnectionLink() {
+    if (!pairing?.connectUrl) return;
+    try {
+      await navigator.clipboard.writeText(pairing.connectUrl);
+      setCopied(true);
+      if (copiedResetRef.current != null) {
+        window.clearTimeout(copiedResetRef.current);
+      }
+      copiedResetRef.current = window.setTimeout(() => {
+        setCopied(false);
+        copiedResetRef.current = null;
+      }, 2000);
+    } catch {
+      setError("Unable to copy the connection link. Please try again.");
+    }
   }
 
   return (
@@ -229,15 +258,35 @@ export function ConnectPrintAgentCard({
             Pairing code expires automatically. Generating a new code invalidates
             this one.
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 w-full"
-            onClick={generatePairing}
-            disabled={pending}
-          >
-            {pending ? "Generating…" : "Generate New Code"}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full"
+              onClick={copyConnectionLink}
+            >
+              {copied ? (
+                <>
+                  <Check className="size-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="size-4" />
+                  Copy Connection Link
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full"
+              onClick={generatePairing}
+              disabled={pending}
+            >
+              {pending ? "Generating…" : "Generate New Code"}
+            </Button>
+          </div>
         </div>
       ) : null}
     </section>
