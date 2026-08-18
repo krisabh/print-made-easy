@@ -1,12 +1,13 @@
 import { unlink } from "fs/promises";
 import { PrintStatus, type Prisma } from "@prisma/client";
 
+import type { AuthShop } from "@/lib/auth";
 import { MAX_PRINT_ATTEMPTS } from "@/lib/print-agent-auth";
 import { prisma } from "@/lib/prisma";
-import { toPricingRates } from "@/lib/pricing-service";
 import { getStoredFilePath } from "@/lib/storage";
 import type { DateFilter, StatusFilter } from "@/types";
 
+/** Retained for local demo/seed references only — not used for dashboard auth. */
 export const DEMO_SHOP_CODE = "PME001";
 export const JOBS_PAGE_SIZE = 50;
 
@@ -51,9 +52,9 @@ export function getDateRange(filter: DateFilter) {
   return null;
 }
 
-export async function getDemoShop() {
+export async function getShopByIdForDashboard(shopId: string) {
   return prisma.shop.findFirst({
-    where: { shopCode: DEMO_SHOP_CODE, isActive: true },
+    where: { id: shopId, isActive: true },
     include: {
       printPrice: true,
       settings: true,
@@ -69,7 +70,6 @@ export async function getDashboardSummary(shopId: string) {
       prisma.printJob.count({
         where: { shopId, createdAt: todayRange },
       }),
-      // Only count jobs the Agent can still print (have a live document).
       prisma.printJob.count({
         where: {
           shopId,
@@ -120,7 +120,6 @@ export async function getShopJobs(params: JobListParams) {
   }
 
   if (params.search?.trim()) {
-    // MySQL utf8mb4 collation is typically case-insensitive; avoid PG-only mode.
     where.jobNumber = {
       contains: params.search.trim().toUpperCase(),
     };
@@ -208,14 +207,15 @@ export async function getJobById(shopId: string, jobId: string) {
   };
 }
 
-export async function getFileForShopPreview(fileId: string, shopCode: string) {
+/** Preview scoped to authenticated shop id (never trust client shopCode alone). */
+export async function getFileForShopPreview(fileId: string, shopId: string) {
   return prisma.printJobFile.findFirst({
     where: {
       id: fileId,
       fileDeletedAt: null,
       printJob: {
+        shopId,
         shop: {
-          shopCode,
           isActive: true,
         },
       },
@@ -230,9 +230,7 @@ export async function getFileForShopPreview(fileId: string, shopCode: string) {
   });
 }
 
-export function serializeShopForDashboard(
-  shop: NonNullable<Awaited<ReturnType<typeof getDemoShop>>>,
-) {
+export function serializeShopForDashboard(shop: AuthShop) {
   return {
     id: shop.id,
     shopCode: shop.shopCode,
@@ -240,7 +238,15 @@ export function serializeShopForDashboard(
     phone: shop.phone,
     email: shop.email,
     address: shop.address,
-    pricing: shop.printPrice ? toPricingRates(shop.printPrice) : null,
+    pricing: shop.printPrice
+      ? {
+          bwSingle: Number(shop.printPrice.bwSingle),
+          bwDouble: Number(shop.printPrice.bwDouble),
+          colorSingle: Number(shop.printPrice.colorSingle),
+          colorDouble: Number(shop.printPrice.colorDouble),
+          minimumCharge: Number(shop.printPrice.minimumCharge),
+        }
+      : null,
     settings: shop.settings
       ? {
           currency: shop.settings.currency,

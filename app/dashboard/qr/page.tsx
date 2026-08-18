@@ -1,18 +1,14 @@
 import QRCode from "qrcode";
 
 import { QrCard } from "@/components/dashboard/qr-card";
+import { requireShop } from "@/lib/auth";
 import { getAppBaseUrl } from "@/lib/app-url";
-import { DEMO_SHOP_CODE, getDemoShop } from "@/lib/dashboard-service";
 
 export default async function QrPage() {
-  const shop = await getDemoShop();
-
-  if (!shop) {
-    return <p className="text-sm text-slate-500">Unable to load QR code.</p>;
-  }
+  const { shop } = await requireShop();
 
   const appUrl = await getAppBaseUrl();
-  const uploadUrl = `${appUrl}/upload/${shop.shopCode || DEMO_SHOP_CODE}`;
+  const uploadUrl = `${appUrl}/upload/${shop.shopCode}`;
   const qrDataUrl = await QRCode.toDataURL(uploadUrl, {
     margin: 2,
     width: 512,

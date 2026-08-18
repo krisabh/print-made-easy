@@ -1,18 +1,16 @@
 import { Printer } from "lucide-react";
 
-import { getDemoShop } from "@/lib/dashboard-service";
+import { requireShop } from "@/lib/auth";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
 import { prisma } from "@/lib/prisma";
 
 export default async function PrintersPage() {
-  const shop = await getDemoShop();
-  const agentStatus = shop ? await getShopAgentStatus(shop.id) : null;
-  const printers = shop
-    ? await prisma.printer.findMany({
-        where: { shopId: shop.id },
-        orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
-      })
-    : [];
+  const { shop } = await requireShop();
+  const agentStatus = await getShopAgentStatus(shop.id);
+  const printers = await prisma.printer.findMany({
+    where: { shopId: shop.id },
+    orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
+  });
 
   return (
     <div className="space-y-5">

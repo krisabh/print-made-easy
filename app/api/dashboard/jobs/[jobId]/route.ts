@@ -1,8 +1,5 @@
-import {
-  DEMO_SHOP_CODE,
-  deleteShopJob,
-  getDemoShop,
-} from "@/lib/dashboard-service";
+import { requireShopApi } from "@/lib/auth";
+import { deleteShopJob } from "@/lib/dashboard-service";
 
 type RouteContext = {
   params: Promise<{ jobId: string }>;
@@ -10,13 +7,9 @@ type RouteContext = {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const shop = await getDemoShop();
-    if (!shop) {
-      return Response.json(
-        { error: `Shop ${DEMO_SHOP_CODE} is not available.` },
-        { status: 404 },
-      );
-    }
+    const session = await requireShopApi();
+    if (session instanceof Response) return session;
+    const { shop } = session;
 
     const { jobId } = await context.params;
     if (!jobId) {
@@ -33,7 +26,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       jobNumber: deleted.jobNumber,
     });
   } catch (error) {
-    console.error("Delete job failed:", error);
+    console.error("Delete job failed");
     return Response.json(
       { error: "Unable to delete this job." },
       { status: 500 },

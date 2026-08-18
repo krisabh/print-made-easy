@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String   @id @default(uuid())
+  name         String   @db.VarChar(255)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shop         Shop?
+}
+
 model Shop {
   id             String      @id @default(uuid())
   shopCode       String      @unique @db.VarChar(64)
@@ -16,11 +26,13 @@ model Shop {
   address        String      @db.Text
   logo           String?     @db.Text
   isActive       Boolean     @default(true)
+  ownerId        String?     @unique
   agentId        String?     @db.VarChar(128)
   agentTokenHash String?     @db.VarChar(128)
   agentLastSeen  DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+  owner          User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   inventory      Inventory?
   printJobs      PrintJob[]
   printPrice     PrintPrice?

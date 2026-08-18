@@ -1,18 +1,12 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { requireShop } from "@/lib/auth";
 import {
   getDashboardSummary,
-  getDemoShop,
   getShopJobs,
 } from "@/lib/dashboard-service";
 
 export default async function JobsPage() {
-  const shop = await getDemoShop();
-
-  if (!shop) {
-    return (
-      <p className="text-sm text-slate-500">Unable to load jobs.</p>
-    );
-  }
+  const { shop } = await requireShop();
 
   const [summary, jobs] = await Promise.all([
     getDashboardSummary(shop.id),

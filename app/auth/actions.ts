@@ -1,0 +1,159 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { z } from "zod";
+
+import {
+  clearAuthCookie,
+  hashPassword,
+  setAuthCookie,
+  signAuthToken,
+  verifyPassword,
+} from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { allocateUniqueShopCode } from "@/lib/shop-code";
+import type { ApiResponse } from "@/types";
+
+const signupSchema = z
+  .object({
+    name: z.string().trim().min(2, "Name is required.").max(100),
+    email: z.string().trim().email("Enter a valid email.").max(255),
+    password: z.string().min(8, "Password must be at least 8 characters.").max(128),
+    confirmPassword: z.string().min(1, "Confirm your password."),
+    shopName: z.string().trim().min(2, "Shop name is required.").max(255),
+    phone: z.string().trim().min(7, "Phone is required.").max(32),
+    address: z.string().trim().min(3, "Address is required.").max(1000),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+const loginSchema = z.object({
+  email: z.string().trim().email("Enter a valid email."),
+  password: z.string().min(1, "Password is required."),
+});
+
+const DEFAULT_PRICING = {
+  bwSingle: 2,
+  bwDouble: 1.5,
+  colorSingle: 10,
+  colorDouble: 8,
+  minimumCharge: 5,
+};
+
+export async function signupAction(
+  input: z.infer<typeof signupSchema>,
+): Promise<ApiResponse<{ shopCode: string }>> {
+  try {
+    const parsed = signupSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Please check the form.",
+      };
+    }
+
+    const email = parsed.data.email.toLowerCase();
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      return { success: false, error: "An account with this email already exists." };
+    }
+
+    const passwordHash = await hashPassword(parsed.data.password);
+    const shopCode = await allocateUniqueShopCode();
+
+    const user = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          name: parsed.data.name,
+          email,
+          passwordHash,
+        },
+      });
+
+      await tx.shop.create({
+        data: {
+          shopCode,
+          shopName: parsed.data.shopName,
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          email,
+          ownerId: createdUser.id,
+          printPrice: { create: DEFAULT_PRICING },
+          settings: {
+            create: {
+              currency: "INR",
+              timezone: "Asia/Kolkata",
+              autoDeleteDays: 7,
+            },
+          },
+          inventory: {
+            create: {
+              paperAvailable: 0,
+              estimatedInkLevel: 100,
+            },
+          },
+        },
+      });
+
+      return createdUser;
+    });
+
+    const token = signAuthToken({ sub: user.id, email: user.email });
+    await setAuthCookie(token);
+
+    return { success: true, data: { shopCode } };
+  } catch (error) {
+    console.error("signupAction failed");
+    return {
+      success: false,
+      error: "Unable to create your shop right now. Please try again.",
+    };
+  }
+}
+
+export async function loginAction(
+  input: z.infer<typeof loginSchema>,
+): Promise<ApiResponse> {
+  try {
+    const parsed = loginSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const email = parsed.data.email.toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        shop: { select: { id: true, isActive: true } },
+      },
+    });
+
+    if (!user?.shop?.isActive) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const ok = await verifyPassword(parsed.data.password, user.passwordHash);
+    if (!ok) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const token = signAuthToken({ sub: user.id, email: user.email });
+    await setAuthCookie(token);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Invalid email or password" };
+  }
+}
+
+export async function logoutAction() {
+  await clearAuthCookie();
+  redirect("/login");
+}

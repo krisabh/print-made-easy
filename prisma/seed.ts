@@ -1,9 +1,15 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+/**
+ * Local / intentional demo seed.
+ * Preserves PME001. Optionally claims it for a shopkeeper when:
+ *   CLAIM_DEMO_SHOP_EMAIL + CLAIM_DEMO_SHOP_PASSWORD are set
+ * Never hardcodes a production password.
+ */
 async function main() {
-  // Hostinger / production: never seed demo data unless explicitly opted in.
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
     console.error(
       "Refusing to seed production. Demo seed is local-only. Set ALLOW_DEMO_SEED=true only if intentional.",
@@ -83,8 +89,46 @@ async function main() {
     },
   });
 
+  const claimEmail = process.env.CLAIM_DEMO_SHOP_EMAIL?.trim().toLowerCase();
+  const claimPassword = process.env.CLAIM_DEMO_SHOP_PASSWORD;
+
+  if (claimEmail && claimPassword && claimPassword.length >= 8) {
+    const existingOwner = await prisma.shop.findUnique({
+      where: { id: shop.id },
+      select: { ownerId: true },
+    });
+
+    if (!existingOwner?.ownerId) {
+      const passwordHash = await bcrypt.hash(claimPassword, 12);
+      const user = await prisma.user.upsert({
+        where: { email: claimEmail },
+        update: {
+          name: "Demo Shopkeeper",
+          passwordHash,
+        },
+        create: {
+          name: "Demo Shopkeeper",
+          email: claimEmail,
+          passwordHash,
+        },
+      });
+
+      await prisma.shop.update({
+        where: { id: shop.id },
+        data: { ownerId: user.id, email: claimEmail },
+      });
+
+      console.log("Linked PME001 to user:", claimEmail);
+    } else {
+      console.log("PME001 already has an owner; claim skipped.");
+    }
+  } else {
+    console.log(
+      "PME001 seeded without owner. To claim later, set CLAIM_DEMO_SHOP_EMAIL and CLAIM_DEMO_SHOP_PASSWORD then re-run seed.",
+    );
+  }
+
   console.log("Seeded local demo shop:", shop.shopCode, shop.shopName);
-  console.log("Do not run this seed against production Hostinger databases.");
 }
 
 main()

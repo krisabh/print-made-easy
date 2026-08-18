@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   ListOrdered,
+  LogOut,
   Menu,
   Printer,
   QrCode,
@@ -14,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 
+import { logoutAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { AgentStatusBadge } from "@/components/dashboard/agent-status-badge";
 import { cn } from "@/lib/utils";
@@ -68,6 +70,15 @@ export function DashboardShell({
           </Link>
         );
       })}
+      <form action={logoutAction} className="pt-2">
+        <button
+          type="submit"
+          className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+        >
+          <LogOut className="size-4 shrink-0" aria-hidden="true" />
+          Logout
+        </button>
+      </form>
     </nav>
   );
 

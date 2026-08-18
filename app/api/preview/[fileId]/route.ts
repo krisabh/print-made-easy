@@ -2,7 +2,8 @@ import { createReadStream } from "fs";
 import { access } from "fs/promises";
 import { Readable } from "stream";
 
-import { DEMO_SHOP_CODE, getFileForShopPreview } from "@/lib/dashboard-service";
+import { requireShopApi } from "@/lib/auth";
+import { getFileForShopPreview } from "@/lib/dashboard-service";
 import {
   canPreviewInBrowser,
   getContentType,
@@ -15,8 +16,12 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
+    const session = await requireShopApi();
+    if (session instanceof Response) return session;
+    const { shop } = session;
+
     const { fileId } = await context.params;
-    const file = await getFileForShopPreview(fileId, DEMO_SHOP_CODE);
+    const file = await getFileForShopPreview(fileId, shop.id);
 
     if (!file) {
       return Response.json({ error: "Document not found." }, { status: 404 });
@@ -52,7 +57,7 @@ export async function GET(_request: Request, context: RouteContext) {
       },
     });
   } catch (error) {
-    console.error("Preview failed:", error);
+    console.error("Preview failed");
     return Response.json(
       { error: "Unable to preview this document." },
       { status: 500 },

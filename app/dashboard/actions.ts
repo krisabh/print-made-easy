@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { DEMO_SHOP_CODE, getDemoShop } from "@/lib/dashboard-service";
+import { requireShop } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { ApiResponse } from "@/types";
 
@@ -25,6 +25,8 @@ const settingsSchema = z.object({
 export async function updatePricingAction(
   input: z.infer<typeof pricingSchema>,
 ): Promise<ApiResponse> {
+  const { shop } = await requireShop();
+
   try {
     const parsed = pricingSchema.safeParse(input);
     if (!parsed.success) {
@@ -34,8 +36,7 @@ export async function updatePricingAction(
       };
     }
 
-    const shop = await getDemoShop();
-    if (!shop?.printPrice) {
+    if (!shop.printPrice) {
       return { success: false, error: "Pricing configuration not found." };
     }
 
@@ -45,8 +46,8 @@ export async function updatePricingAction(
     });
 
     return { success: true };
-  } catch (error) {
-    console.error("updatePricingAction failed:", error);
+  } catch {
+    console.error("updatePricingAction failed");
     return {
       success: false,
       error: "Unable to update pricing. Please try again.",
@@ -57,20 +58,14 @@ export async function updatePricingAction(
 export async function updateShopSettingsAction(
   input: z.infer<typeof settingsSchema>,
 ): Promise<ApiResponse> {
+  const { shop } = await requireShop();
+
   try {
     const parsed = settingsSchema.safeParse(input);
     if (!parsed.success) {
       return {
         success: false,
         error: parsed.error.issues[0]?.message ?? "Invalid settings.",
-      };
-    }
-
-    const shop = await getDemoShop();
-    if (!shop) {
-      return {
-        success: false,
-        error: `Shop ${DEMO_SHOP_CODE} is not available.`,
       };
     }
 
@@ -99,8 +94,8 @@ export async function updateShopSettingsAction(
     ]);
 
     return { success: true };
-  } catch (error) {
-    console.error("updateShopSettingsAction failed:", error);
+  } catch {
+    console.error("updateShopSettingsAction failed");
     return {
       success: false,
       error: "Unable to save settings. Please try again.",

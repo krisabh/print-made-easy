@@ -1,13 +1,9 @@
 import { SettingsForm } from "@/components/dashboard/settings-form";
-import { getDemoShop, serializeShopForDashboard } from "@/lib/dashboard-service";
+import { requireShop } from "@/lib/auth";
+import { serializeShopForDashboard } from "@/lib/dashboard-service";
 
 export default async function SettingsPage() {
-  const shop = await getDemoShop();
-
-  if (!shop) {
-    return <p className="text-sm text-slate-500">Unable to load settings.</p>;
-  }
-
+  const { shop } = await requireShop();
   const serialized = serializeShopForDashboard(shop);
 
   return (

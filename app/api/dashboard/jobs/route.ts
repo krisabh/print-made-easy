@@ -1,11 +1,10 @@
 import { NextRequest } from "next/server";
 import { PrintStatus } from "@prisma/client";
 
+import { requireShopApi } from "@/lib/auth";
 import {
-  DEMO_SHOP_CODE,
   getDashboardSummary,
   getDateRange,
-  getDemoShop,
   getShopJobs,
   type DateFilter,
   type StatusFilter,
@@ -15,13 +14,9 @@ import { getShopAgentStatus } from "@/lib/print-agent-service";
 
 export async function GET(request: NextRequest) {
   try {
-    const shop = await getDemoShop();
-    if (!shop) {
-      return Response.json(
-        { error: "Demo shop is not available." },
-        { status: 404 },
-      );
-    }
+    const session = await requireShopApi();
+    if (session instanceof Response) return session;
+    const { shop } = session;
 
     const params = request.nextUrl.searchParams;
     const statusParam = params.get("status") ?? "ALL";
@@ -64,14 +59,14 @@ export async function GET(request: NextRequest) {
     void runDocumentCleanupIfDue();
 
     return Response.json({
-      shopCode: DEMO_SHOP_CODE,
+      shopCode: shop.shopCode,
       jobs,
       summary,
       agentStatus,
       dateRange: getDateRange(date),
     });
   } catch (error) {
-    console.error("Dashboard jobs fetch failed:", error);
+    console.error("Dashboard jobs fetch failed");
     return Response.json(
       { error: "Unable to load jobs right now." },
       { status: 500 },
