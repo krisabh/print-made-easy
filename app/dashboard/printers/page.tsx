@@ -2,13 +2,14 @@ import { Printer } from "lucide-react";
 
 import { ConnectPrintAgentCard } from "@/components/dashboard/connect-print-agent-card";
 import { DownloadWindowsAgentCard } from "@/components/dashboard/download-windows-agent-card";
-import { requireShop } from "@/lib/auth";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
 import { prisma } from "@/lib/prisma";
+import { requireProductAccess } from "@/lib/require-product-access";
 
 export default async function PrintersPage() {
-  const { shop } = await requireShop();
+  const { session } = await requireProductAccess();
+  const { shop } = session;
   const [agentStatus, printers, appBaseUrl] = await Promise.all([
     getShopAgentStatus(shop.id),
     prisma.printer.findMany({

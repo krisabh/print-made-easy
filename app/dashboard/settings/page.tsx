@@ -1,10 +1,11 @@
 import { PricingForm } from "@/components/dashboard/pricing-form";
 import { SettingsForm } from "@/components/dashboard/settings-form";
-import { requireShop } from "@/lib/auth";
 import { serializeShopForDashboard } from "@/lib/dashboard-service";
+import { requireProductAccess } from "@/lib/require-product-access";
 
 export default async function SettingsPage() {
-  const { shop } = await requireShop();
+  const { session } = await requireProductAccess();
+  const { shop } = session;
   const serialized = serializeShopForDashboard(shop);
 
   return (

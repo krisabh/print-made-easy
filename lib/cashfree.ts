@@ -248,6 +248,55 @@ export async function createCashfreeSubscription(input: {
   };
 }
 
+/**
+ * Cancel a Cashfree subscription (stops future charges).
+ * Docs: POST /pg/subscriptions/{subscription_id}/manage with action CANCEL.
+ * Uses the merchant subscription_id that was used at create time.
+ */
+export async function cancelCashfreeSubscription(input: {
+  config?: CashfreeClientConfig;
+  /** Merchant subscription_id used when the subscription was created. */
+  subscriptionId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ subscriptionId: string; subscriptionStatus: string }> {
+  const config = input.config || getCashfreeConfig();
+  const fetchImpl = input.fetchImpl || fetch;
+  const subscriptionId = input.subscriptionId.trim();
+  if (!subscriptionId) {
+    throw new Error("Cashfree subscription id is required to cancel.");
+  }
+
+  const response = await fetchImpl(
+    `${getBaseUrl(config.environment)}/subscriptions/${encodeURIComponent(subscriptionId)}/manage`,
+    {
+      method: "POST",
+      headers: authHeaders(config),
+      body: JSON.stringify({
+        subscription_id: subscriptionId,
+        action: "CANCEL",
+      }),
+    },
+  );
+
+  const data = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+
+  if (!response.ok) {
+    const message =
+      (typeof data.message === "string" && data.message) ||
+      (typeof data.error === "string" && data.error) ||
+      `Cashfree subscription cancel failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return {
+    subscriptionId: String(data.subscription_id || subscriptionId),
+    subscriptionStatus: String(data.subscription_status || "CANCELLED"),
+  };
+}
+
 export function addMonths(from: Date, months: number) {
   const next = new Date(from.getTime());
   next.setUTCMonth(next.getUTCMonth() + months);

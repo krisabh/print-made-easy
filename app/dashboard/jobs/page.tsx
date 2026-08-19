@@ -1,12 +1,13 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
-import { requireShop } from "@/lib/auth";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
+import { requireProductAccess } from "@/lib/require-product-access";
 
 export default async function JobsPage() {
-  const { shop } = await requireShop();
+  const { session } = await requireProductAccess();
+  const { shop } = session;
 
   const [summary, jobs] = await Promise.all([
     getDashboardSummary(shop.id),

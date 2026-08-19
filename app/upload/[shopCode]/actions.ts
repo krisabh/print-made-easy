@@ -11,6 +11,7 @@ import {
   getShopWithPricing,
   toPricingRates,
 } from "@/lib/pricing-service";
+import { hasSubscriptionAccess } from "@/lib/subscription";
 import { saveUploadFiles, validateUploadFiles } from "@/lib/upload-service";
 import type { ApiResponse, UploadSuccessData } from "@/types";
 
@@ -81,6 +82,14 @@ export async function submitPrintJobAction(
       return {
         success: false,
         error: "Sorry, this print shop link is no longer available.",
+      };
+    }
+
+    const shopHasAccess = await hasSubscriptionAccess(shop.id);
+    if (!shopHasAccess) {
+      return {
+        success: false,
+        error: "This print shop is temporarily unavailable. Please try again later.",
       };
     }
 

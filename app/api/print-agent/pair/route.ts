@@ -3,9 +3,9 @@ import {
   generatePairingToken,
   hashPairingToken,
 } from "@/lib/print-agent-auth";
-import { requireShopApi } from "@/lib/auth";
 import { logError, logInfo } from "@/lib/log";
 import { prisma } from "@/lib/prisma";
+import { requireProductAccessApi } from "@/lib/require-product-access";
 
 /**
  * POST /api/print-agent/pair
@@ -14,9 +14,9 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST() {
   try {
-    const session = await requireShopApi();
-    if (session instanceof Response) return session;
-    const { shop } = session;
+    const gated = await requireProductAccessApi();
+    if (gated instanceof Response) return gated;
+    const { shop } = gated.session;
 
     const pairingToken = generatePairingToken();
     const expiresAt = new Date(Date.now() + AGENT_PAIRING_TTL_MS);

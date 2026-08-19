@@ -76,6 +76,20 @@ function loadCashfreeSdk() {
   });
 }
 
+function reasonMessage(reason: string | null) {
+  switch (reason) {
+    case "trial_expired":
+      return "Your free trial has ended. Subscribe to restore access.";
+    case "expired":
+    case "cancelled":
+    case "past_due_expired":
+    case "missing":
+      return "Your subscription has expired. Subscribe again to restore access.";
+    default:
+      return null;
+  }
+}
+
 export function SaasPricingPlans({
   subscription: initialSubscription,
   cashfreeJsMode,
@@ -84,6 +98,7 @@ export function SaasPricingPlans({
   const searchParams = useSearchParams();
   const [subscription, setSubscription] = useState(initialSubscription);
   const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -91,6 +106,12 @@ export function SaasPricingPlans({
   useEffect(() => {
     setSubscription(initialSubscription);
   }, [initialSubscription]);
+
+  useEffect(() => {
+    const reason = searchParams.get("reason");
+    const msg = reasonMessage(reason);
+    if (msg) setNotice(msg);
+  }, [searchParams]);
 
   useEffect(() => {
     const payment = searchParams.get("payment");
@@ -113,16 +134,16 @@ export function SaasPricingPlans({
         if (data.status === "ACTIVE" && data.plan === "PREMIUM") {
           setNotice("Premium is active.");
         } else if (payment === "failed") {
-          setNotice("Payment was not completed. You can try again.");
+          setNotice("Checkout was not completed. You can try again.");
         } else {
           setNotice(
-            "Payment received. Your subscription status is being confirmed.",
+            "Returned from checkout. Status updates after Cashfree confirms payment.",
           );
         }
       } catch {
         if (!cancelled) {
           setNotice(
-            "Payment received. Your subscription status is being confirmed.",
+            "Returned from checkout. Status updates after Cashfree confirms payment.",
           );
         }
       } finally {
@@ -142,8 +163,21 @@ export function SaasPricingPlans({
   const trialEnded =
     subscription?.status === "TRIALING" && !subscription.hasAccess;
   const premiumActive =
-    subscription?.status === "ACTIVE" && subscription.plan === "PREMIUM";
-  const pastDue = subscription?.status === "PAST_DUE";
+    subscription?.status === "ACTIVE" &&
+    subscription.plan === "PREMIUM" &&
+    subscription.hasAccess &&
+    !subscription.cancelAtPeriodEnd;
+  const cancelAtPeriodEnd =
+    Boolean(subscription?.cancelAtPeriodEnd) &&
+    subscription?.status === "ACTIVE" &&
+    subscription.hasAccess;
+  const cancelledUntilPeriodEnd =
+    subscription?.status === "CANCELLED" && subscription.hasAccess;
+  const pastDue =
+    subscription?.status === "PAST_DUE" && subscription.hasAccess;
+  const expired = Boolean(subscription && !subscription.hasAccess);
+  const canSubscribe = Boolean(subscription?.canSubscribe);
+  const canCancel = Boolean(subscription?.canCancel);
 
   async function startPremiumCheckout() {
     setBusy(true);
@@ -193,6 +227,48 @@ export function SaasPricingPlans({
     }
   }
 
+  async function cancelSubscription() {
+    setCancelling(true);
+    setError(null);
+    setNotice("Cancelling subscription…");
+
+    try {
+      const res = await fetch("/api/subscription/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        subscription?: PublicSubscriptionView;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to cancel subscription.");
+      }
+
+      if (data.subscription) {
+        setSubscription(data.subscription);
+      } else {
+        const refresh = await fetch("/api/subscription", { cache: "no-store" });
+        if (refresh.ok) {
+          setSubscription((await refresh.json()) as PublicSubscriptionView);
+        }
+      }
+      setNotice(
+        data.message ||
+          "Subscription cancelled. Access continues until the end of the billing period.",
+      );
+    } catch (err) {
+      setNotice(null);
+      setError(
+        err instanceof Error ? err.message : "Unable to cancel subscription.",
+      );
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <header className="mx-auto max-w-2xl text-center">
@@ -210,7 +286,7 @@ export function SaasPricingPlans({
       {subscription ? (
         <div
           className={`mx-auto mt-8 max-w-xl rounded-2xl border px-4 py-4 text-center ${
-            pastDue
+            pastDue || expired
               ? "border-amber-200 bg-amber-50"
               : subscription.hasAccess
                 ? trialActive
@@ -226,8 +302,25 @@ export function SaasPricingPlans({
             {subscription.label}
           </p>
           <p className="mt-1 text-sm text-slate-600">{subscription.detail}</p>
+          {trialActive ? (
+            <p className="mt-2 text-sm font-medium text-emerald-700">
+              Trial is active
+            </p>
+          ) : null}
           {confirming ? (
-            <p className="mt-2 text-sm text-slate-500">Confirming payment status…</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Checking subscription status…
+            </p>
+          ) : null}
+          {canCancel ? (
+            <button
+              type="button"
+              disabled={cancelling || busy}
+              className="mt-4 text-sm font-medium text-slate-700 underline underline-offset-2 disabled:opacity-60"
+              onClick={() => void cancelSubscription()}
+            >
+              {cancelling ? "Cancelling…" : "Cancel subscription"}
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -257,7 +350,9 @@ export function SaasPricingPlans({
           </p>
           {trialActive ? (
             <p className="mt-2 text-sm font-medium text-emerald-700">
-              {subscription?.detail}
+              {subscription?.daysRemaining === 1
+                ? "1 day remaining"
+                : `${subscription?.daysRemaining ?? 0} days remaining`}
             </p>
           ) : trialEnded ? (
             <p className="mt-2 text-sm font-medium text-amber-700">
@@ -321,9 +416,17 @@ export function SaasPricingPlans({
             <p className="mt-2 text-sm font-medium text-blue-700">
               {subscription?.detail}
             </p>
+          ) : cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
+            <p className="mt-2 text-sm font-medium text-amber-800">
+              {subscription?.detail}
+            </p>
           ) : pastDue ? (
             <p className="mt-2 text-sm font-medium text-amber-700">
               {subscription?.detail}
+            </p>
+          ) : expired ? (
+            <p className="mt-2 text-sm font-medium text-amber-700">
+              Subscribe again to restore access.
             </p>
           ) : (
             <p className="mt-2 text-sm text-slate-500">Billed monthly. Cancel anytime.</p>
@@ -345,10 +448,18 @@ export function SaasPricingPlans({
               <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-50 text-sm font-semibold text-blue-800">
                 Already Premium
               </div>
+            ) : cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
+              <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-700">
+                Access until period end
+              </div>
+            ) : pastDue ? (
+              <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-amber-50 text-sm font-semibold text-amber-800">
+                Payment issue — grace period active
+              </div>
             ) : (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !canSubscribe}
                 className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 onClick={() => void startPremiumCheckout()}
               >

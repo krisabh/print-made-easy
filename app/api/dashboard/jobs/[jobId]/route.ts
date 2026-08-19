@@ -1,5 +1,5 @@
-import { requireShopApi } from "@/lib/auth";
 import { deleteShopJob } from "@/lib/dashboard-service";
+import { requireProductAccessApi } from "@/lib/require-product-access";
 
 type RouteContext = {
   params: Promise<{ jobId: string }>;
@@ -7,9 +7,9 @@ type RouteContext = {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const session = await requireShopApi();
-    if (session instanceof Response) return session;
-    const { shop } = session;
+    const gated = await requireProductAccessApi();
+    if (gated instanceof Response) return gated;
+    const { shop } = gated.session;
 
     const { jobId } = await context.params;
     if (!jobId) {

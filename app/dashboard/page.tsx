@@ -1,17 +1,18 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
 import { SubscriptionStatusCard } from "@/components/dashboard/subscription-status-card";
-import { requireShop } from "@/lib/auth";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
+import { requireProductAccess } from "@/lib/require-product-access";
 import {
   getShopSubscription,
   toPublicSubscriptionView,
 } from "@/lib/subscription";
 
 export default async function DashboardPage() {
-  const { shop } = await requireShop();
+  const { session, access } = await requireProductAccess();
+  const { shop } = session;
 
   const [summary, jobs, subscription] = await Promise.all([
     getDashboardSummary(shop.id),
@@ -29,6 +30,7 @@ export default async function DashboardPage() {
       </div>
       <SubscriptionStatusCard
         subscription={toPublicSubscriptionView(subscription)}
+        showGraceWarning={access.isGracePeriod}
       />
       <JobsBoard
         initialJobs={jobs}

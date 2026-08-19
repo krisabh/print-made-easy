@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { PrintStatus } from "@prisma/client";
 
-import { requireShopApi } from "@/lib/auth";
 import {
   getDashboardSummary,
   getDateRange,
@@ -11,12 +10,13 @@ import {
 } from "@/lib/dashboard-service";
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
+import { requireProductAccessApi } from "@/lib/require-product-access";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireShopApi();
-    if (session instanceof Response) return session;
-    const { shop } = session;
+    const gated = await requireProductAccessApi();
+    if (gated instanceof Response) return gated;
+    const { shop } = gated.session;
 
     const params = request.nextUrl.searchParams;
     const statusParam = params.get("status") ?? "ALL";

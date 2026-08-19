@@ -1,11 +1,12 @@
 import QRCode from "qrcode";
 
 import { QrCard } from "@/components/dashboard/qr-card";
-import { requireShop } from "@/lib/auth";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { requireProductAccess } from "@/lib/require-product-access";
 
 export default async function QrPage() {
-  const { shop } = await requireShop();
+  const { session } = await requireProductAccess();
+  const { shop } = session;
 
   const appUrl = await getAppBaseUrl();
   const uploadUrl = `${appUrl}/upload/${shop.shopCode}`;

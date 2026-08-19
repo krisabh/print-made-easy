@@ -65,11 +65,14 @@ export async function POST() {
     }
 
     // Persist provider references only — do NOT activate Premium here.
+    // Prefer merchant subscription_id (required by Cashfree manage/cancel API).
+    // Webhook lookup still matches via subscription_id / cf_subscription_id lists.
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
         provider: CASHFREE_PROVIDER,
-        providerSubscriptionId: created.cfSubscriptionId || created.subscriptionId,
+        providerSubscriptionId:
+          created.subscriptionId || created.cfSubscriptionId,
         providerCustomerId: created.customerId,
         providerPlanId: created.planId || String(PREMIUM_PLAN.internalKey),
       },

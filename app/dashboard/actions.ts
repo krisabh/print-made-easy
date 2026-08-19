@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireShop } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasSubscriptionAccess } from "@/lib/subscription";
 import type { ApiResponse } from "@/types";
 
 const pricingSchema = z.object({
@@ -22,10 +23,23 @@ const settingsSchema = z.object({
   timezone: z.string().trim().min(1, "Timezone is required."),
 });
 
+async function assertProductAccess(shopId: string): Promise<ApiResponse | null> {
+  const ok = await hasSubscriptionAccess(shopId);
+  if (!ok) {
+    return {
+      success: false,
+      error: "Subscription required. Visit Pricing to renew access.",
+    };
+  }
+  return null;
+}
+
 export async function updatePricingAction(
   input: z.infer<typeof pricingSchema>,
 ): Promise<ApiResponse> {
   const { shop } = await requireShop();
+  const denied = await assertProductAccess(shop.id);
+  if (denied) return denied;
 
   try {
     const parsed = pricingSchema.safeParse(input);
@@ -59,6 +73,8 @@ export async function updateShopSettingsAction(
   input: z.infer<typeof settingsSchema>,
 ): Promise<ApiResponse> {
   const { shop } = await requireShop();
+  const denied = await assertProductAccess(shop.id);
+  if (denied) return denied;
 
   try {
     const parsed = settingsSchema.safeParse(input);

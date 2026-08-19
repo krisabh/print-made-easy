@@ -2,8 +2,8 @@ import { createReadStream } from "fs";
 import { access } from "fs/promises";
 import { Readable } from "stream";
 
-import { requireShopApi } from "@/lib/auth";
 import { getFileForShopPreview } from "@/lib/dashboard-service";
+import { requireProductAccessApi } from "@/lib/require-product-access";
 import {
   canPreviewInBrowser,
   getContentType,
@@ -16,9 +16,9 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const session = await requireShopApi();
-    if (session instanceof Response) return session;
-    const { shop } = session;
+    const gated = await requireProductAccessApi();
+    if (gated instanceof Response) return gated;
+    const { shop } = gated.session;
 
     const { fileId } = await context.params;
     const file = await getFileForShopPreview(fileId, shop.id);

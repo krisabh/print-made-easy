@@ -1,33 +1,30 @@
 import Link from "next/link";
 
-import type { PublicSubscriptionView } from "@/lib/subscription";
+import {
+  getDashboardSubscriptionSummary,
+  type PublicSubscriptionView,
+} from "@/lib/subscription";
 
 type SubscriptionStatusCardProps = {
   subscription: PublicSubscriptionView | null;
+  showGraceWarning?: boolean;
 };
 
 export function SubscriptionStatusCard({
   subscription,
+  showGraceWarning = false,
 }: SubscriptionStatusCardProps) {
-  if (!subscription) {
-    return (
-      <section className="max-w-xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
-        <p className="text-sm font-semibold text-amber-900">Subscription</p>
-        <p className="mt-1 text-sm text-amber-800">
-          No subscription found.{" "}
-          <Link href="/dashboard/pricing" className="font-medium underline">
-            View plans
-          </Link>
-        </p>
-      </section>
-    );
-  }
+  const summary = getDashboardSubscriptionSummary(subscription);
 
-  const tone = subscription.hasAccess
-    ? subscription.status === "TRIALING"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-      : "border-blue-200 bg-blue-50 text-blue-900"
-    : "border-amber-200 bg-amber-50 text-amber-900";
+  const tone = !subscription
+    ? "border-amber-200 bg-amber-50 text-amber-900"
+    : showGraceWarning || subscription.status === "PAST_DUE"
+      ? "border-amber-200 bg-amber-50 text-amber-900"
+      : subscription.hasAccess
+        ? subscription.status === "TRIALING"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+          : "border-blue-200 bg-blue-50 text-blue-900"
+        : "border-amber-200 bg-amber-50 text-amber-900";
 
   return (
     <section className={`max-w-xl rounded-2xl border px-4 py-4 ${tone}`}>
@@ -36,14 +33,22 @@ export function SubscriptionStatusCard({
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">
             Subscription
           </p>
-          <p className="mt-1 text-sm font-semibold">{subscription.label}</p>
-          <p className="mt-1 text-sm opacity-90">{subscription.detail}</p>
+          <p className="mt-1 text-sm font-semibold">
+            {summary.title}
+            {summary.subtitle ? ` — ${summary.subtitle}` : null}
+          </p>
+          {showGraceWarning ? (
+            <p className="mt-1 text-sm opacity-90">
+              Payment needs attention. You still have access during the grace
+              period.
+            </p>
+          ) : null}
         </div>
         <Link
           href="/dashboard/pricing"
           className="text-sm font-medium underline underline-offset-2"
         >
-          Manage plan
+          Manage Subscription
         </Link>
       </div>
     </section>
