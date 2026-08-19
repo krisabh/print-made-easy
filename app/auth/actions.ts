@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { allocateUniqueShopCode } from "@/lib/shop-code";
+import { createNestedTrialSubscription } from "@/lib/subscription";
 import type { ApiResponse } from "@/types";
 
 const signupSchema = z
@@ -96,6 +97,9 @@ export async function signupAction(
               paperAvailable: 0,
               estimatedInkLevel: 100,
             },
+          },
+          subscription: {
+            create: createNestedTrialSubscription(),
           },
         },
       });

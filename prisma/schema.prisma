@@ -18,29 +18,30 @@ model User {
 }
 
 model Shop {
-  id                     String      @id @default(uuid())
-  shopCode               String      @unique @db.VarChar(64)
-  shopName               String      @db.VarChar(255)
-  phone                  String      @db.VarChar(32)
-  email                  String?     @db.VarChar(255)
-  address                String      @db.Text
-  logo                   String?     @db.Text
-  isActive               Boolean     @default(true)
-  ownerId                String?     @unique
-  agentId                String?     @db.VarChar(128)
-  agentTokenHash         String?     @db.VarChar(128)
+  id                     String        @id @default(uuid())
+  shopCode               String        @unique @db.VarChar(64)
+  shopName               String        @db.VarChar(255)
+  phone                  String        @db.VarChar(32)
+  email                  String?       @db.VarChar(255)
+  address                String        @db.Text
+  logo                   String?       @db.Text
+  isActive               Boolean       @default(true)
+  ownerId                String?       @unique
+  agentId                String?       @db.VarChar(128)
+  agentTokenHash         String?       @db.VarChar(128)
   agentLastSeen          DateTime?
-  agentPairingTokenHash  String?     @db.VarChar(128)
+  agentPairingTokenHash  String?       @db.VarChar(128)
   agentPairingExpiresAt  DateTime?
   agentPairingUsedAt     DateTime?
-  createdAt              DateTime    @default(now())
-  updatedAt              DateTime    @updatedAt
-  owner                  User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  owner                  User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   inventory              Inventory?
   printJobs              PrintJob[]
   printPrice             PrintPrice?
   printers               Printer[]
   settings               Settings?
+  subscription           Subscription?
 
   @@index([agentId])
   @@index([agentPairingTokenHash])
@@ -138,6 +139,52 @@ model Settings {
   shop           Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
+/**
+ * Shop SaaS subscription (source of truth for access).
+ * Cashfree is the external provider; provider IDs are set in Phase 4C.
+ */
+model Subscription {
+  id                     String             @id @default(uuid())
+  shopId                 String             @unique
+  plan                   SubscriptionPlan   @default(TRIAL)
+  status                 SubscriptionStatus @default(TRIALING)
+  trialStartAt           DateTime?
+  trialEndAt             DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  cancelledAt            DateTime?
+  pastDueSince           DateTime?
+  provider               String?            @db.VarChar(64)
+  providerCustomerId     String?            @db.VarChar(128)
+  providerSubscriptionId String?            @db.VarChar(128)
+  providerPlanId         String?            @db.VarChar(128)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  shop                   Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([trialEndAt])
+  @@index([providerSubscriptionId])
+}
+
+/**
+ * Idempotent Cashfree (and future provider) webhook receipts.
+ * Unique on (provider, eventId) so duplicate deliveries are ignored.
+ */
+model PaymentWebhookEvent {
+  id          String    @id @default(uuid())
+  provider    String    @db.VarChar(64)
+  eventId     String    @db.VarChar(191)
+  eventType   String    @db.VarChar(128)
+  payloadHash String    @db.VarChar(128)
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, eventId])
+  @@index([eventType])
+}
+
 enum PrintMode {
   BW
   COLOR
@@ -154,4 +201,17 @@ enum PrintStatus {
   READY_FOR_PICKUP
   DELIVERED
   CANCELLED
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
 }

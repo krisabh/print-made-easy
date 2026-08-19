@@ -1,16 +1,22 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { SubscriptionStatusCard } from "@/components/dashboard/subscription-status-card";
 import { requireShop } from "@/lib/auth";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
+import {
+  getShopSubscription,
+  toPublicSubscriptionView,
+} from "@/lib/subscription";
 
 export default async function DashboardPage() {
   const { shop } = await requireShop();
 
-  const [summary, jobs] = await Promise.all([
+  const [summary, jobs, subscription] = await Promise.all([
     getDashboardSummary(shop.id),
     getShopJobs({ shopId: shop.id, date: "today", status: "ALL" }),
+    getShopSubscription(shop.id),
   ]);
 
   return (
@@ -21,6 +27,9 @@ export default async function DashboardPage() {
           Overview of today&apos;s print activity for your shop.
         </p>
       </div>
+      <SubscriptionStatusCard
+        subscription={toPublicSubscriptionView(subscription)}
+      />
       <JobsBoard
         initialJobs={jobs}
         initialSummary={summary}

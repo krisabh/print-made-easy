@@ -1,28 +1,32 @@
-import { PricingForm } from "@/components/dashboard/pricing-form";
+import { Suspense } from "react";
+
+import { SaasPricingPlans } from "@/components/dashboard/saas-pricing-plans";
 import { requireShop } from "@/lib/auth";
-import { serializeShopForDashboard } from "@/lib/dashboard-service";
+import { getCashfreeJsMode } from "@/lib/cashfree";
+import {
+  getShopSubscription,
+  toPublicSubscriptionView,
+} from "@/lib/subscription";
 
 export default async function PricingPage() {
   const { shop } = await requireShop();
-  const serialized = serializeShopForDashboard(shop);
+  const subscription = await getShopSubscription(shop.id);
 
-  if (!serialized.pricing) {
-    return (
-      <p className="text-sm text-slate-500">
-        Pricing configuration is missing for this shop.
-      </p>
-    );
+  let cashfreeJsMode: "sandbox" | "production" = "sandbox";
+  try {
+    cashfreeJsMode = getCashfreeJsMode();
+  } catch {
+    cashfreeJsMode = "sandbox";
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900">Pricing</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Manage per-page rates and minimum charge for customer uploads.
-        </p>
-      </div>
-      <PricingForm initialPricing={serialized.pricing} />
+    <div className="pb-6">
+      <Suspense fallback={<p className="text-sm text-slate-500">Loading plans…</p>}>
+        <SaasPricingPlans
+          subscription={toPublicSubscriptionView(subscription)}
+          cashfreeJsMode={cashfreeJsMode}
+        />
+      </Suspense>
     </div>
   );
 }
