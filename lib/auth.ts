@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { UserRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -10,6 +11,15 @@ export const AUTH_COOKIE_NAME = "pme_session";
 export type AuthTokenPayload = {
   sub: string;
   email: string;
+  /** Informational only — authorization always uses DB role. */
+  role?: UserRole;
+};
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
 };
 
 export type AuthShop = {
@@ -34,13 +44,20 @@ export type AuthShop = {
   } | null;
 };
 
+/** Shopkeeper session — always has an active shop. */
 export type AuthSession = {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
+  user: AuthUser;
   shop: AuthShop;
+};
+
+/** Admin session — shop is not required. */
+export type AdminSession = {
+  user: AuthUser;
+};
+
+export type AuthenticatedAccount = {
+  user: AuthUser;
+  shop: AuthShop | null;
 };
 
 function getJwtSecret() {
@@ -91,7 +108,13 @@ export function verifyAuthToken(token: string): AuthTokenPayload | null {
     const sub = "sub" in decoded ? String(decoded.sub ?? "") : "";
     const email = "email" in decoded ? String(decoded.email ?? "") : "";
     if (!sub || !email) return null;
-    return { sub, email };
+    const roleRaw =
+      "role" in decoded && decoded.role != null ? String(decoded.role) : "";
+    const role: UserRole | undefined =
+      roleRaw === "ADMIN" || roleRaw === "SHOPKEEPER"
+        ? (roleRaw as UserRole)
+        : undefined;
+    return { sub, email, role };
   } catch {
     return null;
   }
@@ -124,7 +147,11 @@ const shopInclude = {
   settings: true,
 } as const;
 
-export async function getCurrentUser(): Promise<AuthSession | null> {
+/**
+ * Load authenticated account from cookie + database.
+ * Role and shop always come from the database — never from client input.
+ */
+export async function getAuthenticatedAccount(): Promise<AuthenticatedAccount | null> {
   const jar = await cookies();
   const token = jar.get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -138,15 +165,14 @@ export async function getCurrentUser(): Promise<AuthSession | null> {
       id: true,
       name: true,
       email: true,
+      role: true,
       shop: {
         include: shopInclude,
       },
     },
   });
 
-  if (!user?.shop || !user.shop.isActive) {
-    return null;
-  }
+  if (!user) return null;
 
   // Extra safety: email in token should still match DB
   if (user.email.toLowerCase() !== payload.email.toLowerCase()) {
@@ -158,14 +184,42 @@ export async function getCurrentUser(): Promise<AuthSession | null> {
       id: user.id,
       name: user.name,
       email: user.email,
+      role: user.role,
     },
-    shop: user.shop,
+    shop: user.shop?.isActive ? user.shop : null,
   };
+}
+
+/**
+ * Shopkeeper session only (active shop required).
+ * Admins and users without an active shop return null.
+ */
+export async function getCurrentUser(): Promise<AuthSession | null> {
+  const account = await getAuthenticatedAccount();
+  if (!account) return null;
+  if (account.user.role !== "SHOPKEEPER") return null;
+  if (!account.shop || !account.shop.isActive) return null;
+
+  return {
+    user: account.user,
+    shop: account.shop,
+  };
+}
+
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const account = await getAuthenticatedAccount();
+  if (!account) return null;
+  if (account.user.role !== "ADMIN") return null;
+  return { user: account.user };
 }
 
 export async function requireAuth(): Promise<AuthSession> {
   const session = await getCurrentUser();
   if (!session) {
+    const account = await getAuthenticatedAccount();
+    if (account?.user.role === "ADMIN") {
+      redirect("/admin");
+    }
     redirect("/login");
   }
   return session;
@@ -183,7 +237,33 @@ export async function getSessionOrNull() {
 export async function requireShopApi(): Promise<AuthSession | Response> {
   const session = await getCurrentUser();
   if (!session) {
+    const account = await getAuthenticatedAccount();
+    if (account?.user.role === "ADMIN") {
+      return Response.json({ error: "Forbidden." }, { status: 403 });
+    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
   return session;
+}
+
+export async function requireAdmin(): Promise<AdminSession> {
+  const account = await getAuthenticatedAccount();
+  if (!account) {
+    redirect("/login");
+  }
+  if (account.user.role !== "ADMIN") {
+    redirect("/dashboard");
+  }
+  return { user: account.user };
+}
+
+export async function requireAdminApi(): Promise<AdminSession | Response> {
+  const account = await getAuthenticatedAccount();
+  if (!account) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  if (account.user.role !== "ADMIN") {
+    return Response.json({ error: "Forbidden." }, { status: 403 });
+  }
+  return { user: account.user };
 }

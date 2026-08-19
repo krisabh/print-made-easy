@@ -3,6 +3,7 @@ import {
   getCashfreeConfig,
   type CashfreeEnvironment,
 } from "@/lib/cashfree";
+import { requireAdminApi } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,9 @@ function cashfreeBaseUrl(environment: CashfreeEnvironment) {
  * A 404 for a nonexistent probe id still means authentication worked.
  */
 export async function GET() {
+  const session = await requireAdminApi();
+  if (session instanceof Response) return session;
+
   let environment: CashfreeEnvironment = "sandbox";
 
   try {

@@ -25,7 +25,7 @@ export function LoginForm() {
         setError(result.error ?? "Invalid email or password");
         return;
       }
-      router.replace("/dashboard");
+      router.replace(result.data?.redirectTo ?? "/dashboard");
       router.refresh();
     });
   }

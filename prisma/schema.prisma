@@ -12,9 +12,12 @@ model User {
   name         String   @db.VarChar(255)
   email        String   @unique @db.VarChar(255)
   passwordHash String   @db.VarChar(255)
+  role         UserRole @default(SHOPKEEPER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   shop         Shop?
+
+  @@index([role])
 }
 
 model Shop {
@@ -183,6 +186,11 @@ model PaymentWebhookEvent {
 
   @@unique([provider, eventId])
   @@index([eventType])
+}
+
+enum UserRole {
+  SHOPKEEPER
+  ADMIN
 }
 
 enum PrintMode {

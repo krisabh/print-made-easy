@@ -73,6 +73,7 @@ export async function signupAction(
           name: parsed.data.name,
           email,
           passwordHash,
+          role: "SHOPKEEPER",
         },
       });
 
@@ -107,7 +108,11 @@ export async function signupAction(
       return createdUser;
     });
 
-    const token = signAuthToken({ sub: user.id, email: user.email });
+    const token = signAuthToken({
+      sub: user.id,
+      email: user.email,
+      role: "SHOPKEEPER",
+    });
     await setAuthCookie(token);
 
     return { success: true, data: { shopCode } };
@@ -122,7 +127,7 @@ export async function signupAction(
 
 export async function loginAction(
   input: z.infer<typeof loginSchema>,
-): Promise<ApiResponse> {
+): Promise<ApiResponse<{ redirectTo: string }>> {
   try {
     const parsed = loginSchema.safeParse(input);
     if (!parsed.success) {
@@ -136,11 +141,12 @@ export async function loginAction(
         id: true,
         email: true,
         passwordHash: true,
+        role: true,
         shop: { select: { id: true, isActive: true } },
       },
     });
 
-    if (!user?.shop?.isActive) {
+    if (!user) {
       return { success: false, error: "Invalid email or password" };
     }
 
@@ -149,9 +155,28 @@ export async function loginAction(
       return { success: false, error: "Invalid email or password" };
     }
 
-    const token = signAuthToken({ sub: user.id, email: user.email });
+    // Role comes from the database only.
+    if (user.role === "ADMIN") {
+      const token = signAuthToken({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
+      await setAuthCookie(token);
+      return { success: true, data: { redirectTo: "/admin" } };
+    }
+
+    if (user.role !== "SHOPKEEPER" || !user.shop?.isActive) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const token = signAuthToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
     await setAuthCookie(token);
-    return { success: true };
+    return { success: true, data: { redirectTo: "/dashboard" } };
   } catch {
     return { success: false, error: "Invalid email or password" };
   }
