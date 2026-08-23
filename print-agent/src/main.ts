@@ -336,35 +336,58 @@ function registerIpc() {
   );
 }
 
-app.whenReady().then(async () => {
-  ensureJobsDirectory();
-  cleanStaleTempFiles();
+function focusExistingAgent() {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  if (app.isReady()) {
+    createWindow();
+  }
+}
 
-  registerIpc();
-  createTray();
-  createWindow();
-
-  const config = loadConfig();
-  app.setLoginItemSettings({
-    openAtLogin: config.openAtLogin,
-    path: process.execPath,
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    focusExistingAgent();
   });
 
-  if (isAgentPaired()) {
-    try {
-      await syncWithCloud();
-    } catch (error) {
-      console.error("Initial cloud sync failed:", error);
+  app.whenReady().then(async () => {
+    ensureJobsDirectory();
+    cleanStaleTempFiles();
+
+    registerIpc();
+    createTray();
+    createWindow();
+
+    const config = loadConfig();
+    app.setLoginItemSettings({
+      openAtLogin: config.openAtLogin,
+      path: process.execPath,
+    });
+
+    if (isAgentPaired()) {
+      try {
+        await syncWithCloud();
+      } catch (error) {
+        console.error("Initial cloud sync failed:", error);
+      }
     }
-  }
 
-  startBackgroundLoops();
-});
+    startBackgroundLoops();
+  });
 
-app.on("window-all-closed", () => {});
+  app.on("window-all-closed", () => {});
 
-app.on("before-quit", () => {
-  isQuitting = true;
-  if (pollTimer) clearInterval(pollTimer);
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-});
+  app.on("before-quit", () => {
+    isQuitting = true;
+    if (pollTimer) clearInterval(pollTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+  });
+}
