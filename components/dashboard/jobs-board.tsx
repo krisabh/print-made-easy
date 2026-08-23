@@ -208,15 +208,15 @@ export function JobsBoard({
       )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-slate-900">Print Jobs</h2>
-            <p className="text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-500">
               Auto-refreshes every 5 seconds
               {isRefreshing ? " · Updating…" : ""}
             </p>
           </div>
-          <div className="relative w-full max-w-xs">
+          <div className="relative w-full sm:max-w-xs sm:shrink-0">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
             <input
               id="dashboard-job-search"
@@ -224,43 +224,63 @@ export function JobsBoard({
               onChange={(event) => setSearch(event.target.value.toUpperCase())}
               placeholder="Search job number"
               aria-label="Search by job number"
-              className="h-11 w-full min-w-0 rounded-lg border border-slate-200 bg-white py-1 pr-2.5 pl-9 text-sm outline-none placeholder:text-slate-400 focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
+              className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white py-1 pr-2.5 pl-9 text-sm outline-none placeholder:text-slate-400 focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setStatus(item.value)}
-              className={`min-h-9 rounded-full px-3 text-sm font-medium ${
-                status === item.value
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <div className="mt-5 space-y-4 border-t border-slate-100 pt-4">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              Status
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_FILTERS.map((item) => {
+                const active = status === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setStatus(item.value)}
+                    aria-pressed={active}
+                    className={`min-h-8 rounded-full px-3 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {DATE_FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setDate(item.value)}
-              className={`min-h-9 rounded-full px-3 text-sm font-medium ${
-                date === item.value
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              Date
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DATE_FILTERS.map((item) => {
+                const active = date === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setDate(item.value)}
+                    aria-pressed={active}
+                    className={`min-h-8 rounded-full px-3 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {error && (

@@ -102,10 +102,10 @@ function StatusPill({
 
   return (
     <div
-      className={`max-w-[16rem] rounded-full px-3 py-1.5 text-xs font-medium ring-1 ${styles[tone]}`}
+      className={`max-w-[16rem] rounded-xl px-3 py-1.5 text-xs font-medium ring-1 ${styles[tone]}`}
     >
       <span className="inline-flex items-center gap-1.5">
-        <span className={`size-1.5 shrink-0 rounded-full ${dot[tone]}`} />
+        <span className={`size-2 shrink-0 rounded-full ${dot[tone]}`} />
         {label}
       </span>
       {detail ? (
