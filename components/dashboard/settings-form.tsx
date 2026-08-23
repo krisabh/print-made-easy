@@ -34,7 +34,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
         setError(result.error ?? "Unable to save settings.");
         return;
       }
-      setMessage("Settings saved successfully.");
+      setMessage("Profile saved successfully.");
     });
   }
 
@@ -45,7 +45,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
         className="max-w-xl space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
       >
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Shop Settings</h2>
+          <h2 className="text-base font-semibold text-slate-900">Shop Profile</h2>
           <p className="mt-1 text-sm text-slate-500">
             Basic shop information for your dashboard and customer page.
           </p>
@@ -97,7 +97,7 @@ export function SettingsForm({ initialValues }: SettingsFormProps) {
           disabled={isPending}
           className="h-11 bg-blue-600 text-white hover:bg-blue-700"
         >
-          {isPending ? "Saving…" : "Save Settings"}
+          {isPending ? "Saving…" : "Save Profile"}
         </Button>
       </form>
 

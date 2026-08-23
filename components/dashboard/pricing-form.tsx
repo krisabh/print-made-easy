@@ -12,17 +12,43 @@ type PricingFormProps = {
   initialPricing: PricingRates;
 };
 
+type PricingDrafts = Record<keyof PricingRates, string>;
+
+const PRICE_FIELDS: { key: keyof PricingRates; label: string }[] = [
+  { key: "bwSingle", label: "B&W Single" },
+  { key: "bwDouble", label: "B&W Double" },
+  { key: "colorSingle", label: "Color Single" },
+  { key: "colorDouble", label: "Color Double" },
+  { key: "minimumCharge", label: "Minimum Charge" },
+];
+
+function toDrafts(pricing: PricingRates): PricingDrafts {
+  return {
+    bwSingle: String(pricing.bwSingle),
+    bwDouble: String(pricing.bwDouble),
+    colorSingle: String(pricing.colorSingle),
+    colorDouble: String(pricing.colorDouble),
+    minimumCharge: String(pricing.minimumCharge),
+  };
+}
+
+function isAllowedPriceInput(value: string) {
+  return value === "" || /^\d*\.?\d*$/.test(value);
+}
+
 export function PricingForm({ initialPricing }: PricingFormProps) {
-  const [values, setValues] = useState(initialPricing);
+  const [drafts, setDrafts] = useState<PricingDrafts>(() =>
+    toDrafts(initialPricing),
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function updateField(key: keyof PricingRates, value: string) {
-    const next = Number(value);
-    setValues((current) => ({
+    if (!isAllowedPriceInput(value)) return;
+    setDrafts((current) => ({
       ...current,
-      [key]: Number.isFinite(next) ? next : 0,
+      [key]: value,
     }));
   }
 
@@ -31,23 +57,32 @@ export function PricingForm({ initialPricing }: PricingFormProps) {
     setMessage(null);
     setError(null);
 
+    const parsed: PricingRates = {
+      bwSingle: Number(drafts.bwSingle),
+      bwDouble: Number(drafts.bwDouble),
+      colorSingle: Number(drafts.colorSingle),
+      colorDouble: Number(drafts.colorDouble),
+      minimumCharge: Number(drafts.minimumCharge),
+    };
+
+    for (const field of PRICE_FIELDS) {
+      const raw = drafts[field.key].trim();
+      if (raw === "" || !Number.isFinite(parsed[field.key])) {
+        setError(`Enter a valid amount for ${field.label}.`);
+        return;
+      }
+    }
+
     startTransition(async () => {
-      const result = await updatePricingAction(values);
+      const result = await updatePricingAction(parsed);
       if (!result.success) {
         setError(result.error ?? "Unable to update pricing.");
         return;
       }
+      setDrafts(toDrafts(parsed));
       setMessage("Pricing updated successfully.");
     });
   }
-
-  const fields: { key: keyof PricingRates; label: string }[] = [
-    { key: "bwSingle", label: "B&W Single" },
-    { key: "bwDouble", label: "B&W Double" },
-    { key: "colorSingle", label: "Color Single" },
-    { key: "colorDouble", label: "Color Double" },
-    { key: "minimumCharge", label: "Minimum Charge" },
-  ];
 
   return (
     <form
@@ -62,15 +97,15 @@ export function PricingForm({ initialPricing }: PricingFormProps) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {fields.map((field) => (
+        {PRICE_FIELDS.map((field) => (
           <div key={field.key} className="space-y-2">
             <Label htmlFor={field.key}>{field.label}</Label>
             <Input
               id={field.key}
-              type="number"
-              min={0}
-              step="0.01"
-              value={values[field.key]}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={drafts[field.key]}
               onChange={(event) => updateField(field.key, event.target.value)}
               className="h-11"
               required

@@ -8,7 +8,7 @@ import {
   toPublicSubscriptionView,
 } from "@/lib/subscription";
 
-export default async function PricingPage() {
+export default async function PlanBillingPage() {
   const { shop } = await requireShop();
   const subscription = await getShopSubscription(shop.id);
 
@@ -20,7 +20,14 @@ export default async function PricingPage() {
   }
 
   return (
-    <div className="pb-6">
+    <div className="space-y-5 pb-6">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900">My Plan / Billing</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          View your current plan and manage your PrintMadeEasy subscription.
+        </p>
+      </div>
+
       <Suspense fallback={<p className="text-sm text-slate-500">Loading plans…</p>}>
         <SaasPricingPlans
           subscription={toPublicSubscriptionView(subscription)}

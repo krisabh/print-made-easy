@@ -4,14 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
+  CreditCard,
+  IndianRupee,
   LayoutDashboard,
   ListOrdered,
   LogOut,
   Menu,
   Printer,
   QrCode,
-  Settings,
-  IndianRupee,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -24,9 +25,10 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/jobs", label: "Jobs", icon: ListOrdered },
   { href: "/dashboard/qr", label: "QR Code", icon: QrCode },
-  { href: "/dashboard/pricing", label: "Pricing", icon: IndianRupee },
   { href: "/dashboard/printers", label: "Printers", icon: Printer },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/print-pricing", label: "Print Pricing", icon: IndianRupee },
+  { href: "/dashboard/pricing", label: "My Plan / Billing", icon: CreditCard },
+  { href: "/dashboard/settings", label: "Profile", icon: UserRound },
 ];
 
 type DashboardShellProps = {

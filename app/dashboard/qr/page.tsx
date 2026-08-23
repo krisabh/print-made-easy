@@ -1,5 +1,3 @@
-import QRCode from "qrcode";
-
 import { QrCard } from "@/components/dashboard/qr-card";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { requireProductAccess } from "@/lib/require-product-access";
@@ -10,21 +8,14 @@ export default async function QrPage() {
 
   const appUrl = await getAppBaseUrl();
   const uploadUrl = `${appUrl}/upload/${shop.shopCode}`;
-  const qrDataUrl = await QRCode.toDataURL(uploadUrl, {
-    margin: 2,
-    width: 512,
-    color: {
-      dark: "#0f172a",
-      light: "#ffffff",
-    },
-  });
 
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-slate-900">QR Code</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Permanent shop QR for customer document uploads.
+          Permanent shop QR for customer document uploads. Customers scan to
+          print — this is not a payment QR.
         </p>
         {uploadUrl.includes("localhost") || uploadUrl.includes("127.0.0.1") ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -49,7 +40,6 @@ export default async function QrPage() {
         shopName={shop.shopName}
         shopCode={shop.shopCode}
         uploadUrl={uploadUrl}
-        qrDataUrl={qrDataUrl}
       />
     </div>
   );
