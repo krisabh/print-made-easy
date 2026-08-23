@@ -66,14 +66,6 @@ function createWindow() {
 
   mainWindow.loadFile(getUiPath());
   mainWindow.once("ready-to-show", () => mainWindow?.show());
-  mainWindow.on("hide", () => {
-    // Ensure webcam is released when the Agent window is hidden to tray.
-    mainWindow?.webContents
-      .executeJavaScript(
-        `(() => { if (window.__pmeStopCamera) window.__pmeStopCamera(); })()`,
-      )
-      .catch(() => undefined);
-  });
   mainWindow.on("close", (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -212,7 +204,7 @@ function registerIpc() {
       } else {
         connection = {
           status: "Disconnected",
-          message: "Not connected. Scan the dashboard QR to connect this Agent.",
+          message: "Not connected. Paste the dashboard connection link to connect this Agent.",
         };
       }
     } catch (error) {
@@ -310,7 +302,7 @@ function registerIpc() {
     "agent:connect-pairing-url",
     async (_event, rawUrl: string) => {
       if (!rawUrl || typeof rawUrl !== "string") {
-        throw new Error("Invalid PrintMadeEasy connection QR.");
+        throw new Error("Invalid PrintMadeEasy connection link.");
       }
 
       const config = loadConfig();
@@ -347,23 +339,6 @@ function registerIpc() {
 app.whenReady().then(async () => {
   ensureJobsDirectory();
   cleanStaleTempFiles();
-
-  // Allow webcam for QR scanning in the Agent window.
-  const { session } = await import("electron");
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      if (permission === "media" || permission === "mediaKeySystem") {
-        callback(true);
-        return;
-      }
-      callback(false);
-    },
-  );
-  session.defaultSession.setPermissionCheckHandler(
-    (_webContents, permission) => {
-      return permission === "media" || permission === "mediaKeySystem";
-    },
-  );
 
   registerIpc();
   createTray();

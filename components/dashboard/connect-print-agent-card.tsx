@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import QRCode from "qrcode";
 import { Check, Copy, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,6 @@ type ConnectPrintAgentCardProps = {
 type PairingState = {
   expiresAt: string;
   connectUrl: string;
-  qrDataUrl: string;
 };
 
 function formatRemaining(ms: number) {
@@ -113,7 +111,7 @@ export function ConnectPrintAgentCard({
           return;
         }
         if (!res.ok) {
-          setError("Unable to create a connection code. Please try again.");
+          setError("Unable to create a connection link. Please try again.");
           return;
         }
 
@@ -128,21 +126,15 @@ export function ConnectPrintAgentCard({
         }
 
         const connectUrl = `${appBaseUrl.replace(/\/$/, "")}/agent/connect?t=${encodeURIComponent(data.pairingToken)}`;
-        const qrDataUrl = await QRCode.toDataURL(connectUrl, {
-          margin: 2,
-          width: 512,
-          color: { dark: "#0f172a", light: "#ffffff" },
-        });
 
         setExpired(false);
         setCopied(false);
         setPairing({
           expiresAt: data.expiresAt,
           connectUrl,
-          qrDataUrl,
         });
       } catch {
-        setError("Unable to create a connection code. Please try again.");
+        setError("Unable to create a connection link. Please try again.");
       }
     });
   }
@@ -209,60 +201,52 @@ export function ConnectPrintAgentCard({
 
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
 
-      {!pairing && !expired ? (
-        <Button
-          type="button"
-          className="mt-5 h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
-          onClick={generatePairing}
-          disabled={pending}
-        >
-          {pending ? "Generating…" : "Generate Connection QR"}
-        </Button>
-      ) : null}
+      <div className="mt-5 space-y-3">
+        <p className="text-sm font-medium text-slate-900">Connection Link</p>
 
-      {expired ? (
-        <div className="mt-5 space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
-          <p className="text-sm font-medium text-amber-900">
-            Connection code expired
-          </p>
-          <p className="text-sm text-amber-800">
-            Generate a new code to continue pairing. Previous codes are no longer
-            valid.
-          </p>
+        {!pairing && !expired ? (
           <Button
             type="button"
             className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
             onClick={generatePairing}
             disabled={pending}
           >
-            {pending ? "Generating…" : "Generate New Code"}
+            {pending ? "Generating…" : "Generate Connection Link"}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
 
-      {pairing ? (
-        <div className="mt-5 space-y-4 text-center">
-          <p className="text-sm font-medium text-slate-900">
-            Scan this QR using PrintMadeEasy Agent
-          </p>
-          <img
-            src={pairing.qrDataUrl}
-            alt="Print Agent pairing QR code"
-            className="mx-auto size-56 rounded-xl border border-slate-200 bg-white p-3 sm:size-64"
-          />
-          <p className="text-sm text-slate-600">
-            Valid for 10 minutes · Expires in:{" "}
-            <span className="font-semibold text-slate-900">{remainingLabel}</span>
-          </p>
-          <p className="text-xs text-slate-400">
-            Pairing code expires automatically. Generating a new code invalidates
-            this one.
-          </p>
-          <div className="space-y-2">
+        {expired ? (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
+            <p className="text-sm font-medium text-amber-900">
+              Connection link expired
+            </p>
+            <p className="text-sm text-amber-800">
+              Generate a new link to continue pairing. Previous links are no
+              longer valid.
+            </p>
             <Button
               type="button"
-              variant="outline"
-              className="h-11 w-full"
+              className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={generatePairing}
+              disabled={pending}
+            >
+              {pending ? "Generating…" : "Generate Connection Link"}
+            </Button>
+          </div>
+        ) : null}
+
+        {pairing ? (
+          <div className="space-y-3">
+            <p className="break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700">
+              {pairing.connectUrl}
+            </p>
+            <p className="text-xs text-slate-500">
+              Paste this link in the PrintMadeEasy Agent. Expires in{" "}
+              <span className="font-semibold text-slate-800">{remainingLabel}</span>
+            </p>
+            <Button
+              type="button"
+              className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
               onClick={copyConnectionLink}
             >
               {copied ? (
@@ -284,11 +268,11 @@ export function ConnectPrintAgentCard({
               onClick={generatePairing}
               disabled={pending}
             >
-              {pending ? "Generating…" : "Generate New Code"}
+              {pending ? "Generating…" : "Generate Connection Link"}
             </Button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </section>
   );
 }

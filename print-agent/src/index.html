@@ -118,14 +118,6 @@
         min-height: 16px;
       }
       .hidden { display: none !important; }
-      #scannerPanel video {
-        width: 100%;
-        max-height: 240px;
-        border-radius: 12px;
-        background: #0f172a;
-        object-fit: cover;
-      }
-      #scannerPanel canvas { display: none; }
       .success-box {
         background: #ecfdf5;
         border: 1px solid #a7f3d0;
@@ -153,29 +145,10 @@
 
       <section class="card" id="connectCard">
         <div class="label">Connect Shop</div>
-        <p class="meta" style="margin-top: 0">
-          Scan the QR code from Dashboard → Printers, or paste the connection link.
+        <p class="meta" id="connectHint" style="margin-top: 0">
+          Paste the connection link from Dashboard → Printers.
         </p>
-        <div class="actions" style="margin-top: 12px">
-          <button id="scanQrBtn" type="button">Scan QR Code</button>
-          <button id="manualLinkBtn" class="secondary" type="button">
-            Enter connection link manually
-          </button>
-        </div>
-
-        <div id="scannerPanel" class="hidden" style="margin-top: 12px">
-          <p class="meta" style="margin-top: 0">
-            Position the QR code inside the frame.
-          </p>
-          <video id="scannerVideo" playsinline muted></video>
-          <canvas id="scannerCanvas"></canvas>
-          <p class="meta" id="scannerHint">Starting camera…</p>
-          <div class="actions" style="margin-top: 8px">
-            <button id="cancelScanBtn" class="secondary" type="button">Cancel</button>
-          </div>
-        </div>
-
-        <div id="manualPanel" class="hidden" style="margin-top: 12px">
+        <div id="manualPanel" style="margin-top: 12px">
           <label class="label" for="pairingUrlInput">Connection link</label>
           <textarea
             id="pairingUrlInput"
@@ -183,7 +156,6 @@
           ></textarea>
           <div class="actions" style="margin-top: 8px">
             <button id="connectUrlBtn" type="button">Connect</button>
-            <button id="cancelManualBtn" class="secondary" type="button">Cancel</button>
           </div>
         </div>
 
@@ -226,7 +198,6 @@
       </section>
     </main>
 
-    <script src="./jsQR.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>
