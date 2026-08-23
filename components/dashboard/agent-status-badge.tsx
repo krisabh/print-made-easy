@@ -11,9 +11,17 @@ type AgentStatus = {
 };
 
 function isPrinterOnline(status: AgentStatus) {
+  if (!status.connected) return false;
   if (!status.printerName) return false;
   if (status.printerOffline) return false;
-  return status.printerStatus?.toLowerCase() !== "offline";
+  const value = status.printerStatus?.toLowerCase();
+  return (
+    value === "online" ||
+    value === "idle" ||
+    value === "printing" ||
+    value === "ready" ||
+    value === "warmup"
+  );
 }
 
 export function AgentStatusBadge() {

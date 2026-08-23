@@ -1,10 +1,13 @@
 import { unlink } from "fs/promises";
-import { PrintStatus } from "@prisma/client";
+import { Prisma, PrintStatus } from "@prisma/client";
 
 import {
+  AGENT_CLOCK_SKEW_MS,
+  AGENT_OFFLINE_MS,
   DOCUMENT_RETENTION_MS,
   MAX_PRINT_ATTEMPTS,
   STALE_PRINTING_MS,
+  isReportedPrinterOnline,
 } from "@/lib/print-agent-auth";
 import { prisma } from "@/lib/prisma";
 import { getStoredFilePath } from "@/lib/storage";
@@ -338,39 +341,148 @@ export async function cleanupExpiredDocuments() {
   return deleted;
 }
 
+type HeartbeatFreshnessRow = {
+  agentId: string | null;
+  agentLastSeen: Date | null;
+  agentFresh: number | bigint;
+  printerName: string | null;
+  printerStatus: string | null;
+  printerLastSeen: Date | null;
+  printerFresh: number | bigint;
+};
+
+function heartbeatWindowSeconds() {
+  const timeoutSec = Math.ceil(AGENT_OFFLINE_MS / 1000);
+  const skewSec = Math.ceil(AGENT_CLOCK_SKEW_MS / 1000);
+  if (
+    !Number.isInteger(timeoutSec) ||
+    timeoutSec < 1 ||
+    timeoutSec > 3600 ||
+    !Number.isInteger(skewSec) ||
+    skewSec < 0 ||
+    skewSec > 60
+  ) {
+    throw new Error("Invalid agent heartbeat freshness window.");
+  }
+  return {
+    timeoutSql: Prisma.raw(String(timeoutSec)),
+    skewSql: Prisma.raw(String(skewSec)),
+  };
+}
+
+/**
+ * True when `column` is within AGENT_OFFLINE_MS of MySQL NOW() or UTC_TIMESTAMP().
+ *
+ * Prisma MySQL DateTime has no timezone. Depending on session TZ, a live
+ * heartbeat may be stored in local wall-clock or UTC wall-clock. Comparing
+ * only in JavaScript (Date.now() - lastSeen) can treat a stopped agent as
+ * still online for hours (lastSeen appears in the future) or treat a live
+ * agent as offline. SQL comparison against both clocks, with an upper bound,
+ * is the source of truth for dashboard status.
+ */
+function sqlIsFreshHeartbeat(column: Prisma.Sql) {
+  const { timeoutSql, skewSql } = heartbeatWindowSeconds();
+  return Prisma.sql`
+    ${column} IS NOT NULL
+    AND (
+      (
+        ${column} >= (UTC_TIMESTAMP() - INTERVAL ${timeoutSql} SECOND)
+        AND ${column} <= (UTC_TIMESTAMP() + INTERVAL ${skewSql} SECOND)
+      )
+      OR
+      (
+        ${column} >= (NOW() - INTERVAL ${timeoutSql} SECOND)
+        AND ${column} <= (NOW() + INTERVAL ${skewSql} SECOND)
+      )
+    )
+  `;
+}
+
+async function getShopHeartbeatFreshness(shopId: string) {
+  const rows = await prisma.$queryRaw<HeartbeatFreshnessRow[]>(Prisma.sql`
+    SELECT
+      s.agentId AS agentId,
+      s.agentLastSeen AS agentLastSeen,
+      CASE
+        WHEN ${sqlIsFreshHeartbeat(Prisma.raw("s.agentLastSeen"))}
+        THEN 1 ELSE 0
+      END AS agentFresh,
+      p.printerName AS printerName,
+      p.status AS printerStatus,
+      p.lastSeen AS printerLastSeen,
+      CASE
+        WHEN ${sqlIsFreshHeartbeat(Prisma.raw("p.lastSeen"))}
+        THEN 1 ELSE 0
+      END AS printerFresh
+    FROM Shop s
+    LEFT JOIN Printer p
+      ON p.shopId = s.id AND p.isDefault = 1
+    WHERE s.id = ${shopId}
+    LIMIT 1
+  `);
+  return rows[0] ?? null;
+}
+
 export async function getShopAgentStatus(shopId: string) {
-  const shop = await prisma.shop.findUnique({
-    where: { id: shopId },
-    select: {
-      agentId: true,
-      agentLastSeen: true,
-      printers: {
-        where: { isDefault: true },
-        take: 1,
-        select: {
-          printerName: true,
-          status: true,
-          lastSeen: true,
-        },
-      },
-    },
-  });
+  const row = await getShopHeartbeatFreshness(shopId);
+  if (!row) return null;
 
-  if (!shop) return null;
-
-  const defaultPrinter = shop.printers[0] ?? null;
-  const online =
-    !!shop.agentLastSeen &&
-    Date.now() - shop.agentLastSeen.getTime() <= 15_000;
+  const agentOnline = Number(row.agentFresh) === 1;
+  const printerReportFresh = Number(row.printerFresh) === 1;
+  const printerOnline =
+    agentOnline &&
+    printerReportFresh &&
+    isReportedPrinterOnline(row.printerStatus);
 
   return {
-    agentId: shop.agentId,
-    connected: online,
-    lastSeen: shop.agentLastSeen?.toISOString() ?? null,
-    printerName: defaultPrinter?.printerName ?? null,
-    printerStatus: defaultPrinter?.status ?? "offline",
-    printerOffline: defaultPrinter
-      ? defaultPrinter.status.toLowerCase() === "offline"
-      : false,
+    agentId: row.agentId,
+    connected: agentOnline,
+    lastSeen: row.agentLastSeen ? new Date(row.agentLastSeen).toISOString() : null,
+    printerName: row.printerName,
+    printerStatus: printerOnline ? row.printerStatus : "offline",
+    printerOffline: !printerOnline,
   };
+}
+
+type PrinterLiveStatusRow = {
+  id: string;
+  printerName: string;
+  status: string;
+  lastSeen: Date | null;
+  isDefault: number | boolean;
+  reportFresh: number | bigint;
+};
+
+export async function listShopPrintersWithLiveStatus(shopId: string) {
+  const agent = await getShopHeartbeatFreshness(shopId);
+  const agentOnline = agent ? Number(agent.agentFresh) === 1 : false;
+
+  const rows = await prisma.$queryRaw<PrinterLiveStatusRow[]>(Prisma.sql`
+    SELECT
+      p.id AS id,
+      p.printerName AS printerName,
+      p.status AS status,
+      p.lastSeen AS lastSeen,
+      p.isDefault AS isDefault,
+      CASE
+        WHEN ${sqlIsFreshHeartbeat(Prisma.raw("p.lastSeen"))}
+        THEN 1 ELSE 0
+      END AS reportFresh
+    FROM Printer p
+    WHERE p.shopId = ${shopId}
+    ORDER BY p.isDefault DESC, p.printerName ASC
+  `);
+
+  return rows.map((printer) => {
+    const reportFresh = Number(printer.reportFresh) === 1;
+    const online =
+      agentOnline && reportFresh && isReportedPrinterOnline(printer.status);
+    return {
+      id: printer.id,
+      printerName: printer.printerName,
+      isDefault: Boolean(printer.isDefault),
+      lastSeen: printer.lastSeen ? new Date(printer.lastSeen) : null,
+      status: online ? printer.status : "offline",
+    };
+  });
 }

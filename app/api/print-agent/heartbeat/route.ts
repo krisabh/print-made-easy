@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       await upsertShopPrinter({
         shopId: shop.id,
         printerName: parsed.data.selectedPrinter,
-        status: (parsed.data.printerStatus || "online").toLowerCase(),
+        status: (parsed.data.printerStatus || "unknown").toLowerCase(),
         isDefault: true,
       });
     }

@@ -3,9 +3,15 @@ import { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Agent heartbeat interval is 5s (print-agent main.ts).
+ * Offline after 3 missed heartbeats. Not related to 1-hour file retention.
+ */
 export const AGENT_OFFLINE_MS = 15_000;
+/** Allow tiny clock skew; reject multi-hour "future" lastSeen (TZ mis-parse). */
+export const AGENT_CLOCK_SKEW_MS = 5_000;
 export const MAX_PRINT_ATTEMPTS = 3;
-export const DOCUMENT_RETENTION_MS = 60 * 60 * 1000; // 1 hour
+export const DOCUMENT_RETENTION_MS = 60 * 60 * 1000; // 1 hour — files only, not agent status
 /** Stuck PRINTING jobs return to PENDING after this (Agent crash / auth race). */
 export const STALE_PRINTING_MS = 2 * 60 * 1000; // 2 minutes
 /** One-time agent pairing token lifetime. */
@@ -50,9 +56,28 @@ export async function authenticateAgent(request: NextRequest) {
   return shop;
 }
 
-export function isAgentOnline(lastSeen: Date | null | undefined) {
+export function isAgentOnline(
+  lastSeen: Date | null | undefined,
+  now: Date = new Date(),
+) {
   if (!lastSeen) return false;
-  return Date.now() - lastSeen.getTime() <= AGENT_OFFLINE_MS;
+  const ageMs = now.getTime() - lastSeen.getTime();
+  // Far-future timestamps are timezone artifacts, not a live heartbeat.
+  if (ageMs < -AGENT_CLOCK_SKEW_MS) return false;
+  if (ageMs < 0) return true;
+  return ageMs <= AGENT_OFFLINE_MS;
+}
+
+/** Status strings that mean the printer is currently usable. */
+export function isReportedPrinterOnline(status: string | null | undefined) {
+  const value = (status || "").trim().toLowerCase();
+  return (
+    value === "online" ||
+    value === "idle" ||
+    value === "printing" ||
+    value === "ready" ||
+    value === "warmup"
+  );
 }
 
 /** Constant-time compare for setup secrets (when both present). */
