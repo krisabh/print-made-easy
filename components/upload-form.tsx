@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Check, FileText, Loader2, Minus, Plus, Upload, X } from "lucide-react";
 
 import { submitPrintJobAction } from "@/app/upload/[shopCode]/actions";
+import { CustomerDocumentPrivacyNotice } from "@/components/customer-document-privacy-notice";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { calculatePrintCost } from "@/lib/pricing-service";
@@ -675,6 +676,8 @@ export function UploadForm({ shop }: UploadFormProps) {
               </p>
             </div>
           </section>
+
+          <CustomerDocumentPrivacyNotice />
 
           {formError && (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">

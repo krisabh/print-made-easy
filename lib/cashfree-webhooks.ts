@@ -31,6 +31,7 @@ function pickSubscriptionIds(data: Record<string, unknown>) {
   const details = asRecord(data.subscription_details);
   const gateway = asRecord(data.payment_gateway_details);
   const payment = asRecord(data.payment || data.payment_details);
+  const authorization = asRecord(data.authorization_details);
 
   const candidates = [
     details.cf_subscription_id,
@@ -40,6 +41,8 @@ function pickSubscriptionIds(data: Record<string, unknown>) {
     gateway.gateway_subscription_id,
     payment.cf_subscription_id,
     payment.subscription_id,
+    authorization.cf_subscription_id,
+    authorization.subscription_id,
   ]
     .map((value) => (value == null ? "" : String(value).trim()))
     .filter(Boolean);
@@ -53,15 +56,54 @@ function parseMaybeDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** Prefer merchant subscription_id (PME-…) for cancel API; keep existing if still valid. */
+function resolveProviderSubscriptionId(input: {
+  details: Record<string, unknown>;
+  ids: string[];
+  existing: string | null;
+}) {
+  const merchantFromPayload = String(input.details.subscription_id || "").trim();
+  if (merchantFromPayload) return merchantFromPayload;
+
+  if (input.existing && input.ids.includes(input.existing)) {
+    return input.existing;
+  }
+
+  const existingMerchant = input.existing?.startsWith("PME-") ? input.existing : null;
+  if (existingMerchant) return existingMerchant;
+
+  return (
+    String(input.details.cf_subscription_id || "").trim() ||
+    input.ids[0] ||
+    input.existing ||
+    ""
+  );
+}
+
 async function findSubscriptionForWebhook(ids: string[]) {
   if (ids.length === 0) return null;
 
-  return prisma.subscription.findFirst({
+  const byProvider = await prisma.subscription.findFirst({
     where: {
       provider: CASHFREE_PROVIDER,
       providerSubscriptionId: { in: ids },
     },
   });
+  if (byProvider) return byProvider;
+
+  // Fallback: ID match even if provider column was unset during a partial create.
+  return prisma.subscription.findFirst({
+    where: {
+      providerSubscriptionId: { in: ids },
+    },
+  });
+}
+
+function logWebhookDiagnostic(fields: Record<string, string | boolean | null | undefined>) {
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${value === null ? "null" : String(value)}`);
+  console.info(`[CASHFREE WEBHOOK] ${parts.join(" ")}`);
 }
 
 export async function processCashfreeWebhook(input: {
@@ -77,6 +119,9 @@ export async function processCashfreeWebhook(input: {
   });
 
   if (!valid) {
+    logWebhookDiagnostic({
+      result: "invalid_signature",
+    });
     return { ok: false as const, status: 401 as const, error: "Invalid webhook signature." };
   }
 
@@ -103,7 +148,11 @@ export async function processCashfreeWebhook(input: {
       },
     });
   } catch {
-    // Unique constraint → already processed/received
+    logWebhookDiagnostic({
+      event: eventType,
+      result: "duplicate",
+      eventId,
+    });
     return {
       ok: true as const,
       status: 200 as const,
@@ -118,14 +167,13 @@ export async function processCashfreeWebhook(input: {
   const subscription = await findSubscriptionForWebhook(ids);
 
   if (!subscription) {
-    console.warn(
-      "Cashfree webhook: subscription not found",
-      JSON.stringify({
-        eventType,
-        eventId,
-        ids,
-      }),
-    );
+    logWebhookDiagnostic({
+      event: eventType,
+      result: "subscription_not_found",
+      eventId,
+      providerSubscriptionId: ids[0] || null,
+      matchedIds: ids.join(",") || null,
+    });
     await prisma.paymentWebhookEvent.update({
       where: {
         provider_eventId: { provider: CASHFREE_PROVIDER, eventId },
@@ -147,13 +195,11 @@ export async function processCashfreeWebhook(input: {
   const customer = asRecord(data.customer_details);
   const authorization = asRecord(data.authorization_details);
   const payment = asRecord(data.payment || data.payment_details);
-  const providerSubscriptionId =
-    String(
-      details.cf_subscription_id ||
-        details.subscription_id ||
-        subscription.providerSubscriptionId ||
-        "",
-    ) || subscription.providerSubscriptionId!;
+  const providerSubscriptionId = resolveProviderSubscriptionId({
+    details,
+    ids,
+    existing: subscription.providerSubscriptionId,
+  });
 
   const providerStatus = String(details.subscription_status || "").toUpperCase();
   const authorizationStatus = String(
@@ -175,6 +221,8 @@ export async function processCashfreeWebhook(input: {
     providerStatus === "ACTIVE" ||
     eventType === "SUBSCRIPTION_PAYMENT_SUCCESS" ||
     authSucceeded;
+
+  let resultLabel = "ignored";
 
   if (
     eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
@@ -207,30 +255,31 @@ export async function processCashfreeWebhook(input: {
         currentPeriodEnd: periodEnd,
         now,
       });
+      resultLabel = "activated";
     } else if (providerStatus === "ON_HOLD") {
       await markSubscriptionPastDue({
         subscriptionId: subscription.id,
         now,
       });
+      resultLabel = "past_due";
     } else if (
       providerStatus === "CUSTOMER_CANCELLED" ||
       providerStatus === "CANCELLED"
     ) {
       const periodEnd = parseMaybeDate(details.next_schedule_date);
-      if (
-        periodEnd &&
-        periodEnd.getTime() > now.getTime()
-      ) {
+      if (periodEnd && periodEnd.getTime() > now.getTime()) {
         await markSubscriptionCancelAtPeriodEnd({
           subscriptionId: subscription.id,
           currentPeriodEnd: periodEnd,
           now,
         });
+        resultLabel = "cancel_at_period_end";
       } else {
         await markSubscriptionCancelled({
           subscriptionId: subscription.id,
           now,
         });
+        resultLabel = "cancelled";
       }
     } else if (
       providerStatus === "EXPIRED" ||
@@ -239,12 +288,18 @@ export async function processCashfreeWebhook(input: {
       providerStatus === "CARD_EXPIRED"
     ) {
       await markSubscriptionExpired({ subscriptionId: subscription.id });
+      resultLabel = "expired";
+    } else {
+      resultLabel = `ignored_status_${providerStatus || "unknown"}`;
     }
   } else if (eventType === "SUBSCRIPTION_PAYMENT_FAILED") {
     await markSubscriptionPastDue({
       subscriptionId: subscription.id,
       now,
     });
+    resultLabel = "past_due";
+  } else {
+    resultLabel = "ignored_event";
   }
 
   await prisma.paymentWebhookEvent.update({
@@ -254,6 +309,17 @@ export async function processCashfreeWebhook(input: {
     data: { processedAt: now },
   });
 
+  logWebhookDiagnostic({
+    event: eventType,
+    result: resultLabel,
+    providerSubscriptionId,
+    shopId: subscription.shopId,
+    subscriptionId: subscription.id,
+    providerStatus: providerStatus || null,
+    authorizationStatus: authorizationStatus || null,
+    paymentStatus: paymentStatus || null,
+  });
+
   return {
     ok: true as const,
     status: 200 as const,
@@ -261,6 +327,7 @@ export async function processCashfreeWebhook(input: {
     eventId,
     eventType,
     subscriptionId: subscription.id,
+    result: resultLabel,
   };
 }
 

@@ -9,7 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function LoginForm() {
+type LoginFormProps = {
+  nextPath?: string | null;
+};
+
+function safeNextPath(raw: string | null | undefined) {
+  if (!raw) return null;
+  const value = raw.trim();
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
+export function LoginForm({ nextPath }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +36,9 @@ export function LoginForm() {
         setError(result.error ?? "Invalid email or password");
         return;
       }
-      router.replace(result.data?.redirectTo ?? "/dashboard");
+      const destination =
+        safeNextPath(nextPath) || result.data?.redirectTo || "/dashboard";
+      router.replace(destination);
       router.refresh();
     });
   }

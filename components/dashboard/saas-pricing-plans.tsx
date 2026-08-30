@@ -121,38 +121,52 @@ export function SaasPricingPlans({
     if (!payment) return;
 
     let cancelled = false;
+    let attempts = 0;
 
     async function refreshFromServer() {
       setConfirming(true);
       setError(null);
-      try {
-        const res = await fetch("/api/subscription", { cache: "no-store" });
-        if (!res.ok) {
-          throw new Error("Unable to refresh subscription status.");
-        }
-        const data = (await res.json()) as PublicSubscriptionView;
-        if (cancelled) return;
-        setSubscription(data);
+      setNotice(
+        "Payment submitted. We're confirming your subscription. This usually takes a moment.",
+      );
 
-        if (data.status === "ACTIVE" && data.plan === "PREMIUM") {
-          setNotice("Premium is active.");
-        } else if (payment === "failed") {
-          setNotice("Checkout was not completed. You can try again.");
-        } else {
-          setNotice(
-            "Payment confirmation pending. Premium activates after Cashfree confirms the subscription (webhook). This page does not activate Premium by itself.",
-          );
+      while (!cancelled && attempts < 8) {
+        attempts += 1;
+        try {
+          const res = await fetch("/api/subscription", { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error("Unable to refresh subscription status.");
+          }
+          const data = (await res.json()) as PublicSubscriptionView;
+          if (cancelled) return;
+          setSubscription(data);
+
+          if (data.status === "ACTIVE" && data.plan === "PREMIUM" && data.hasAccess) {
+            setNotice("Premium is active.");
+            setConfirming(false);
+            router.replace("/dashboard/pricing");
+            return;
+          }
+        } catch {
+          // keep polling briefly
         }
-      } catch {
-        if (!cancelled) {
-          setNotice(
-            "Payment confirmation pending. Premium activates after Cashfree confirms the subscription.",
-          );
+
+        if (attempts < 8) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2500));
         }
-      } finally {
-        if (!cancelled) setConfirming(false);
-        router.replace("/dashboard/pricing");
       }
+
+      if (cancelled) return;
+
+      if (payment === "failed") {
+        setNotice("Checkout was not completed. You can try again.");
+      } else {
+        setNotice(
+          "Payment processing. Your payment was received and your subscription is being confirmed. Refresh this page in a moment if Premium is not active yet.",
+        );
+      }
+      setConfirming(false);
+      router.replace("/dashboard/pricing");
     }
 
     void refreshFromServer();
@@ -288,7 +302,7 @@ export function SaasPricingPlans({
 
       {subscription ? (
         <div
-          className={`mx-auto mt-8 max-w-xl rounded-2xl border px-4 py-4 text-center ${
+          className={`mx-auto mt-8 max-w-xl rounded-2xl border px-4 py-5 text-left sm:px-5 ${
             pastDue || expired
               ? "border-amber-200 bg-amber-50"
               : subscription.hasAccess
@@ -299,12 +313,79 @@ export function SaasPricingPlans({
           }`}
         >
           <p className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
-            Your current plan
+            Current plan
           </p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {subscription.label}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">{subscription.detail}</p>
+          {premiumActive || cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xl font-semibold text-slate-900">Premium</p>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                  {cancelAtPeriodEnd || cancelledUntilPeriodEnd
+                    ? "Active until period end"
+                    : "Active"}
+                </span>
+              </div>
+              <p className="text-sm font-medium text-slate-800">
+                ₹{premiumPriceInr} / month
+              </p>
+              {subscription.currentPeriodEnd ? (
+                <p className="text-sm text-slate-600">
+                  Next billing date:{" "}
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    },
+                  )}
+                </p>
+              ) : null}
+              {subscription.currentPeriodStart && subscription.currentPeriodEnd ? (
+                <p className="text-sm text-slate-600">
+                  Subscription period:{" "}
+                  {new Date(subscription.currentPeriodStart).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    },
+                  )}{" "}
+                  –{" "}
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    },
+                  )}
+                </p>
+              ) : null}
+              {cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
+                <p className="text-sm font-medium text-amber-800">
+                  Cancellation scheduled
+                  {subscription.currentPeriodEnd
+                    ? ` · Active until ${new Date(
+                        subscription.currentPeriodEnd,
+                      ).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {subscription.label}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">{subscription.detail}</p>
+            </>
+          )}
           {trialActive ? (
             <p className="mt-2 text-sm font-medium text-emerald-700">
               Trial is active

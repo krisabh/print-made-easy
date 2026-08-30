@@ -27,3 +27,19 @@ export async function getAppBaseUrl() {
 
   return "http://localhost:3000";
 }
+
+/**
+ * Prefer configured public site URL for Cashfree return/webhook-facing links.
+ * Avoids LAN IPs that Cashfree and browsers cannot use after hosted checkout.
+ */
+export async function getPublicAppBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "").trim();
+  if (
+    configured &&
+    !configured.includes("localhost") &&
+    !configured.includes("127.0.0.1")
+  ) {
+    return configured;
+  }
+  return getAppBaseUrl();
+}

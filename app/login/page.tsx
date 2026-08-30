@@ -3,10 +3,23 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { getCurrentUser } from "@/lib/auth";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ next?: string }>;
+};
+
+function safeNextPath(raw: string | undefined) {
+  if (!raw) return null;
+  const value = raw.trim();
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const nextPath = safeNextPath(params.next);
   const session = await getCurrentUser();
   if (session) {
-    redirect("/dashboard");
+    redirect(nextPath || "/dashboard");
   }
 
   return (
@@ -22,7 +35,7 @@ export default async function LoginPage() {
           Sign in to manage your print shop.
         </p>
         <div className="mt-6">
-          <LoginForm />
+          <LoginForm nextPath={nextPath} />
         </div>
       </div>
     </main>

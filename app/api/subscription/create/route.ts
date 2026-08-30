@@ -1,5 +1,5 @@
 import { requireShopApi } from "@/lib/auth";
-import { getAppBaseUrl } from "@/lib/app-url";
+import { getPublicAppBaseUrl } from "@/lib/app-url";
 import {
   buildMerchantSubscriptionId,
   createCashfreeSubscription,
@@ -28,7 +28,7 @@ export async function POST() {
       return Response.json({ error: "Subscription not found." }, { status: 404 });
     }
 
-    const appBaseUrl = await getAppBaseUrl();
+    const appBaseUrl = await getPublicAppBaseUrl();
     const returnUrl = `${appBaseUrl.replace(/\/$/, "")}/dashboard/pricing?payment=return`;
     const merchantSubscriptionId = buildMerchantSubscriptionId(
       session.shop.shopCode,

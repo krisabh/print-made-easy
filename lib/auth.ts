@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 
@@ -213,6 +213,15 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   return { user: account.user };
 }
 
+function safeLoginNextPath(raw: string | null | undefined) {
+  if (!raw) return "/login";
+  const value = raw.trim();
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return "/login";
+  }
+  return `/login?next=${encodeURIComponent(value)}`;
+}
+
 export async function requireAuth(): Promise<AuthSession> {
   const session = await getCurrentUser();
   if (!session) {
@@ -220,7 +229,17 @@ export async function requireAuth(): Promise<AuthSession> {
     if (account?.user.role === "ADMIN") {
       redirect("/admin");
     }
-    redirect("/login");
+    let nextPath = "/dashboard";
+    try {
+      const headerStore = await headers();
+      const pathname = headerStore.get("x-pathname");
+      if (pathname && pathname.startsWith("/") && !pathname.startsWith("//")) {
+        nextPath = pathname;
+      }
+    } catch {
+      // headers unavailable
+    }
+    redirect(safeLoginNextPath(nextPath));
   }
   return session;
 }
