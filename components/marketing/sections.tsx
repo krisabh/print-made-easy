@@ -13,6 +13,8 @@ import {
   WifiOff,
 } from "lucide-react";
 
+import { PREMIUM_PLAN } from "@/lib/cashfree";
+
 export function HeroSection() {
   return (
     <section className="relative overflow-hidden border-b border-slate-200 bg-[#f5f7fb]">
@@ -445,7 +447,7 @@ export function PricingSection() {
           <article className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm ring-1 ring-blue-100">
             <p className="text-sm font-semibold text-blue-700">Premium</p>
             <h3 className="mt-2 text-2xl font-semibold text-slate-900">
-              ₹499
+              ₹{PREMIUM_PLAN.amountInr}
               <span className="text-base font-medium text-slate-500"> / month</span>
             </h3>
             <p className="mt-2 text-sm text-slate-600">

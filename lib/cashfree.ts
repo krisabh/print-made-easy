@@ -3,10 +3,10 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 export const CASHFREE_PROVIDER = "CASHFREE";
 export const CASHFREE_API_VERSION = "2025-01-01";
 
-/** PrintMadeEasy Premium — ₹499 / month (server-side only). */
+/** PrintMadeEasy Premium — ₹199 / month (server-side only). */
 export const PREMIUM_PLAN = {
   internalKey: "PREMIUM",
-  amountInr: 499,
+  amountInr: 199,
   currency: "INR",
   intervalType: "MONTH" as const,
   intervals: 1,

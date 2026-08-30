@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { SaasPricingPlans } from "@/components/dashboard/saas-pricing-plans";
 import { requireShop } from "@/lib/auth";
-import { getCashfreeJsMode } from "@/lib/cashfree";
+import { getCashfreeJsMode, PREMIUM_PLAN } from "@/lib/cashfree";
 import {
   getShopSubscription,
   toPublicSubscriptionView,
@@ -32,6 +32,7 @@ export default async function PlanBillingPage() {
         <SaasPricingPlans
           subscription={toPublicSubscriptionView(subscription)}
           cashfreeJsMode={cashfreeJsMode}
+          premiumPriceInr={PREMIUM_PLAN.amountInr}
         />
       </Suspense>
     </div>

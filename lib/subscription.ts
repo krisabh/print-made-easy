@@ -4,8 +4,8 @@ import type {
   SubscriptionStatus,
 } from "@prisma/client";
 
+import { addMonths, cancelCashfreeSubscription, PREMIUM_PLAN } from "@/lib/cashfree";
 import { prisma } from "@/lib/prisma";
-import { addMonths, cancelCashfreeSubscription } from "@/lib/cashfree";
 
 export const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 export const PAST_DUE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -254,8 +254,8 @@ function buildLabels(
       detail = `Your subscription is cancelled and will remain active until ${formatDateIn(subscription.currentPeriodEnd)}`;
     } else {
       detail = subscription.currentPeriodEnd
-        ? `₹499/month · Current period ends ${formatDateIn(subscription.currentPeriodEnd)}`
-        : "₹499/month";
+        ? `₹${PREMIUM_PLAN.amountInr}/month · Current period ends ${formatDateIn(subscription.currentPeriodEnd)}`
+        : `₹${PREMIUM_PLAN.amountInr}/month`;
     }
   } else if (subscription.status === "CANCELLED") {
     if (access.hasAccess && subscription.currentPeriodEnd) {
@@ -686,7 +686,7 @@ export function getDashboardSubscriptionSummary(
   if (view.status === "ACTIVE" && view.hasAccess) {
     return {
       title: "Premium",
-      subtitle: "₹499/month",
+      subtitle: `₹${PREMIUM_PLAN.amountInr}/month`,
     };
   }
 

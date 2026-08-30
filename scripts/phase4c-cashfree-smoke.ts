@@ -103,8 +103,15 @@ async function main() {
     assert.notEqual(shopA.subscription!.id, shopB.subscription!.id);
     console.log("C PASS Shop A/B subscriptions are isolated");
 
-    // E — mock Cashfree create stores provider id
+    // E — mock Cashfree create stores provider id + charges PREMIUM_PLAN amount
+    delete process.env.CASHFREE_PLAN_ID;
     const merchantId = buildMerchantSubscriptionId(shopA.shopCode);
+    const captured: {
+      body: {
+        plan_details?: Record<string, unknown>;
+        authorization_details?: Record<string, unknown>;
+      } | null;
+    } = { body: null };
     const created = await createCashfreeSubscription({
       merchantSubscriptionId: merchantId,
       customer: {
@@ -113,8 +120,12 @@ async function main() {
         phone: shopA.phone,
       },
       returnUrl: "https://example.com/dashboard/pricing?payment=return",
-      fetchImpl: async () =>
-        new Response(
+      fetchImpl: async (_url, init) => {
+        captured.body = JSON.parse(String(init?.body || "{}")) as {
+          plan_details?: Record<string, unknown>;
+          authorization_details?: Record<string, unknown>;
+        };
+        return new Response(
           JSON.stringify({
             subscription_id: merchantId,
             cf_subscription_id: `cf_${stamp}`,
@@ -124,11 +135,20 @@ async function main() {
             customer_details: { customer_id: `cust_${stamp}` },
           }),
           { status: 200, headers: { "content-type": "application/json" } },
-        ),
+        );
+      },
     });
 
     assert.equal(created.subscriptionSessionId.startsWith("sub_session_"), true);
-    assert.equal(PREMIUM_PLAN.amountInr, 499);
+    assert.equal(PREMIUM_PLAN.amountInr, 199);
+
+    if (!captured.body) {
+      throw new Error("Cashfree create body should be captured");
+    }
+    assert.equal(captured.body.plan_details?.plan_amount, 199);
+    assert.equal(captured.body.plan_details?.plan_max_amount, 199);
+    assert.equal(captured.body.authorization_details?.authorization_amount, 199);
+    console.log("E PASS Cashfree create payload uses ₹199 from PREMIUM_PLAN");
 
     await prisma.subscription.update({
       where: { id: shopA.subscription!.id },

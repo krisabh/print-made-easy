@@ -16,6 +16,8 @@ import type { PublicSubscriptionView } from "@/lib/subscription";
 type SaasPricingPlansProps = {
   subscription: PublicSubscriptionView | null;
   cashfreeJsMode: "sandbox" | "production";
+  /** Shopkeeper Premium monthly price in INR (from server PREMIUM_PLAN). */
+  premiumPriceInr: number;
 };
 
 const START_FREE_FEATURES = [
@@ -93,6 +95,7 @@ function reasonMessage(reason: string | null) {
 export function SaasPricingPlans({
   subscription: initialSubscription,
   cashfreeJsMode,
+  premiumPriceInr,
 }: SaasPricingPlansProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -409,7 +412,7 @@ export function SaasPricingPlans({
             Everything you need to grow your business
           </p>
           <p className="mt-6 text-4xl font-semibold tracking-tight text-slate-900">
-            ₹499
+            ₹{premiumPriceInr}
             <span className="text-lg font-medium text-slate-500"> /month</span>
           </p>
           {premiumActive ? (
