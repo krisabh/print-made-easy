@@ -308,9 +308,25 @@ async function main() {
       const updated = await getShopSubscription(shopB.id);
       assert.equal(updated?.cancelAtPeriodEnd, true);
       assert.equal(updated?.status, "ACTIVE");
+      assert.ok(updated?.cancelledAt);
+      assert.ok(updated?.currentPeriodEnd);
       assert.equal(getSubscriptionAccess(updated, now).hasAccess, true);
+      assert.equal(
+        getSubscriptionAccess(updated, now).reason,
+        "cancelled_until_period_end",
+      );
       assert.equal(canInitiatePremiumCheckout(updated, now).ok, false);
+      assert.equal(canCancelSubscription(updated, now).ok, false);
       console.log("J2 PASS cancel sets cancelAtPeriodEnd, access until period end");
+
+      // J3 — after period end, access denied and resubscribe allowed
+      const afterEnd = {
+        ...updated!,
+        currentPeriodEnd: daysFrom(now, -1),
+      };
+      assert.equal(getSubscriptionAccess(afterEnd, now).hasAccess, false);
+      assert.equal(canInitiatePremiumCheckout(afterEnd, now).ok, true);
+      console.log("J3 PASS after cancel period end → access denied, resubscribe allowed");
     }
 
     // K — Browser/client cannot override subscription state
@@ -422,6 +438,16 @@ async function main() {
           expectAccess: true,
         },
         {
+          name: "past_due_expired",
+          patch: {
+            status: "PAST_DUE",
+            pastDueSince: new Date(now.getTime() - PAST_DUE_GRACE_MS - 60_000),
+            cancelAtPeriodEnd: false,
+          },
+          expectLabel: /Payment required/i,
+          expectAccess: false,
+        },
+        {
           name: "expired",
           patch: {
             status: "EXPIRED",
@@ -452,13 +478,21 @@ async function main() {
         assert.equal(view.hasAccess, c.expectAccess, c.name);
         assert.equal(state.hasAccess, c.expectAccess, c.name);
         if (c.name === "cancelAtPeriodEnd") {
-          assert.match(view.detail, /cancelled and will remain active until/i);
+          assert.match(view.detail, /Cancellation scheduled/i);
+          assert.match(view.detail, /No further renewal/i);
         }
         if (c.name === "past_due") {
           assert.match(view.detail, /3-day grace period/i);
         }
         const card = getDashboardSubscriptionSummary(view);
         assert.ok(card.title.length > 0);
+        if (c.name === "cancelAtPeriodEnd") {
+          assert.match(card.title, /Cancellation scheduled/i);
+        }
+        if (c.name === "past_due_expired") {
+          assert.match(view.detail, /grace period has ended/i);
+          assert.match(card.title, /Payment required/i);
+        }
       }
       console.log("N PASS pricing representations for each state");
     }

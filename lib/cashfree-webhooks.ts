@@ -229,45 +229,23 @@ export async function processCashfreeWebhook(input: {
     eventType === "SUBSCRIPTION_AUTH_STATUS" ||
     eventType === "SUBSCRIPTION_PAYMENT_SUCCESS"
   ) {
-    if (shouldActivatePremium) {
-      const periodStart =
-        parseMaybeDate(details.subscription_first_charge_time) ||
-        parseMaybeDate(details.authorization_time) ||
-        parseMaybeDate(authorization.authorization_time) ||
-        now;
-      const periodEnd =
-        parseMaybeDate(details.next_schedule_date) ||
-        parseMaybeDate(plan.plan_next_charge_date) ||
-        null;
-
-      await markSubscriptionPremiumActive({
-        subscriptionId: subscription.id,
-        providerSubscriptionId,
-        providerCustomerId: customer.customer_id
-          ? String(customer.customer_id)
-          : customer.customer_email
-            ? String(customer.customer_email)
-            : subscription.providerCustomerId,
-        providerPlanId: plan.plan_id
-          ? String(plan.plan_id)
-          : subscription.providerPlanId,
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        now,
-      });
-      resultLabel = "activated";
-    } else if (providerStatus === "ON_HOLD") {
-      await markSubscriptionPastDue({
-        subscriptionId: subscription.id,
-        now,
-      });
-      resultLabel = "past_due";
-    } else if (
-      providerStatus === "CUSTOMER_CANCELLED" ||
-      providerStatus === "CANCELLED"
+    if (
+      (providerStatus === "CUSTOMER_CANCELLED" ||
+        providerStatus === "CANCELLED") &&
+      (eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
+        eventType === "SUBSCRIPTION_AUTH_STATUS")
     ) {
-      const periodEnd = parseMaybeDate(details.next_schedule_date);
-      if (periodEnd && periodEnd.getTime() > now.getTime()) {
+      const payloadPeriodEnd = parseMaybeDate(details.next_schedule_date);
+      const periodEnd =
+        (payloadPeriodEnd && payloadPeriodEnd.getTime() > now.getTime()
+          ? payloadPeriodEnd
+          : null) ||
+        (subscription.currentPeriodEnd &&
+        subscription.currentPeriodEnd.getTime() > now.getTime()
+          ? subscription.currentPeriodEnd
+          : null);
+
+      if (periodEnd) {
         await markSubscriptionCancelAtPeriodEnd({
           subscriptionId: subscription.id,
           currentPeriodEnd: periodEnd,
@@ -281,6 +259,51 @@ export async function processCashfreeWebhook(input: {
         });
         resultLabel = "cancelled";
       }
+    } else if (shouldActivatePremium) {
+      // Do not clear a scheduled cancellation from a late ACTIVE/success
+      // webhook for the same Cashfree subscription.
+      const sameProviderSubscription =
+        !providerSubscriptionId ||
+        !subscription.providerSubscriptionId ||
+        providerSubscriptionId === subscription.providerSubscriptionId ||
+        ids.includes(subscription.providerSubscriptionId);
+
+      if (subscription.cancelAtPeriodEnd && sameProviderSubscription) {
+        resultLabel = "ignored_cancel_at_period_end";
+      } else {
+        const periodStart =
+          parseMaybeDate(details.subscription_first_charge_time) ||
+          parseMaybeDate(details.authorization_time) ||
+          parseMaybeDate(authorization.authorization_time) ||
+          now;
+        const periodEnd =
+          parseMaybeDate(details.next_schedule_date) ||
+          parseMaybeDate(plan.plan_next_charge_date) ||
+          null;
+
+        await markSubscriptionPremiumActive({
+          subscriptionId: subscription.id,
+          providerSubscriptionId,
+          providerCustomerId: customer.customer_id
+            ? String(customer.customer_id)
+            : customer.customer_email
+              ? String(customer.customer_email)
+              : subscription.providerCustomerId,
+          providerPlanId: plan.plan_id
+            ? String(plan.plan_id)
+            : subscription.providerPlanId,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          now,
+        });
+        resultLabel = "activated";
+      }
+    } else if (providerStatus === "ON_HOLD") {
+      await markSubscriptionPastDue({
+        subscriptionId: subscription.id,
+        now,
+      });
+      resultLabel = "past_due";
     } else if (
       providerStatus === "EXPIRED" ||
       providerStatus === "COMPLETED" ||

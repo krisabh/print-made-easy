@@ -126,9 +126,12 @@ export function buildWebhookEventId(payload: {
         "",
     ) || "none";
 
+  // Cashfree may nest payment ids or place them at data root (PAYMENT_FAILED).
   const paymentKey = String(
     payment.payment_id ||
       payment.cf_payment_id ||
+      data.payment_id ||
+      data.cf_payment_id ||
       (data.authorization_details as Record<string, unknown> | undefined)
         ?.payment_id ||
       "none",

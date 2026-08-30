@@ -1,15 +1,17 @@
 export function CustomerDocumentPrivacyNotice() {
   return (
-    <aside className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-4 sm:px-5">
-      <p className="text-sm font-semibold text-slate-900">
-        Your documents stay private
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-slate-700">
-        Your uploaded document is used only to process your print job. It is
-        automatically deleted from our server within 1 hour.
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-slate-600">
-        We do not keep your documents permanently.
+    <aside
+      className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 sm:px-5"
+      aria-label="Document privacy notice"
+    >
+      <span className="mt-0.5 shrink-0 rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white uppercase">
+        Privacy
+      </span>
+      <p className="text-sm leading-snug text-slate-800">
+        <span className="font-semibold text-slate-900">
+          Auto-deleted after 1 hour.
+        </span>{" "}
+        Your file is kept only to print your job — then removed from our server.
       </p>
     </aside>
   );

@@ -16,7 +16,9 @@ import {
 import { processCashfreeWebhook } from "../lib/cashfree-webhooks";
 import {
   PAST_DUE_GRACE_MS,
+  abandonPendingCashfreeCheckout,
   canInitiatePremiumCheckout,
+  claimPremiumCheckoutSlot,
   createNestedTrialSubscription,
   getSubscriptionAccess,
   markSubscriptionCancelAtPeriodEnd,
@@ -177,6 +179,49 @@ async function main() {
     assert.equal(blocked.ok, false);
     console.log("D PASS duplicate active subscription initiation prevented");
 
+    // D2 — fresh pending checkout claim blocks another claim
+    await prisma.subscription.update({
+      where: { id: shopA.subscription!.id },
+      data: {
+        plan: "TRIAL",
+        status: "TRIALING",
+        provider: "CASHFREE",
+        providerSubscriptionId: `PENDING-CHECKOUT:${Date.now()}-smoke`,
+      },
+    });
+    const pendingBlocked = await claimPremiumCheckoutSlot({
+      shopId: shopA.id,
+    });
+    assert.equal(pendingBlocked.ok, false);
+    console.log("D2 PASS fresh pending checkout claim blocks another Subscribe");
+
+    // D3 — prior real provider id is abandoned before a new claim succeeds
+    let cancelledIds: string[] = [];
+    await prisma.subscription.update({
+      where: { id: shopA.subscription!.id },
+      data: {
+        plan: "TRIAL",
+        status: "TRIALING",
+        provider: "CASHFREE",
+        providerSubscriptionId: "PME-OLD-PENDING-SUB",
+      },
+    });
+    const abandoned = await abandonPendingCashfreeCheckout({
+      subscription: (await prisma.subscription.findUnique({
+        where: { id: shopA.subscription!.id },
+      }))!,
+      cancelProvider: async ({ subscriptionId }) => {
+        cancelledIds.push(subscriptionId);
+        return {
+          subscriptionId,
+          subscriptionStatus: "CANCELLED",
+        };
+      },
+    });
+    assert.equal(abandoned.abandoned, true);
+    assert.deepEqual(cancelledIds, ["PME-OLD-PENDING-SUB"]);
+    console.log("D3 PASS prior pending Cashfree id is abandoned before recreate");
+
     // Reset to provider-linked trial-like state for webhook activation
     await prisma.subscription.update({
       where: { id: shopA.subscription!.id },
@@ -332,12 +377,61 @@ async function main() {
       where: { id: shopA.subscription!.id },
     });
     assert.equal(pastDue?.status, "PAST_DUE");
+    assert.equal(pastDue?.plan, "PREMIUM");
     assert.ok(pastDue?.pastDueSince);
+    const graceStartedAt = pastDue!.pastDueSince!;
     console.log("I PASS payment failure → PAST_DUE");
+
+    // I2 — duplicate payment-failure webhook is harmless (same event id)
+    const failDup = await processCashfreeWebhook({
+      rawBody: failBody,
+      signature: signBody(failBody, secret, ts2),
+      timestamp: ts2,
+    });
+    assert.equal(failDup.ok, true);
+    assert.equal("duplicate" in failDup && failDup.duplicate, true);
+    const pastDueAfterDup = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(pastDueAfterDup?.status, "PAST_DUE");
+    assert.equal(
+      pastDueAfterDup?.pastDueSince?.getTime(),
+      graceStartedAt.getTime(),
+    );
+    console.log("I2 PASS duplicate PAYMENT_FAILED is harmless");
+
+    // I3 — second distinct failure preserves original pastDueSince grace clock
+    const failBody2 = JSON.stringify({
+      type: "SUBSCRIPTION_PAYMENT_FAILED",
+      event_time: "2026-08-19T12:00:00+05:30",
+      data: {
+        cf_subscription_id: `cf_${stamp}`,
+        subscription_id: merchantId,
+        payment_id: `pay_fail2_${stamp}`,
+        payment_status: "FAILED",
+      },
+    });
+    const tsFail2 = String(Date.now() + 2);
+    const fail2 = await processCashfreeWebhook({
+      rawBody: failBody2,
+      signature: signBody(failBody2, secret, tsFail2),
+      timestamp: tsFail2,
+    });
+    assert.equal(fail2.ok, true);
+    const pastDueRetry = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(pastDueRetry?.status, "PAST_DUE");
+    assert.equal(
+      pastDueRetry?.pastDueSince?.getTime(),
+      graceStartedAt.getTime(),
+    );
+    console.log("I3 PASS repeated failure preserves grace clock");
 
     // J — within 3 days access allowed
     assert.equal(getSubscriptionAccess(pastDue).hasAccess, true);
     assert.equal(getSubscriptionAccess(pastDue).isGracePeriod, true);
+    assert.equal(getSubscriptionAccess(pastDue).reason, "past_due_grace");
     console.log("J PASS PAST_DUE within 3 days → access allowed");
 
     // K — after 3 days access denied
@@ -346,7 +440,77 @@ async function main() {
       pastDueSince: new Date(Date.now() - PAST_DUE_GRACE_MS - 60_000),
     };
     assert.equal(getSubscriptionAccess(expiredGrace).hasAccess, false);
+    assert.equal(getSubscriptionAccess(expiredGrace).reason, "past_due_expired");
     console.log("K PASS PAST_DUE after 3 days → access denied");
+
+    // K2 — ON_HOLD status change also marks PAST_DUE
+    await prisma.subscription.update({
+      where: { id: shopA.subscription!.id },
+      data: {
+        plan: "PREMIUM",
+        status: "ACTIVE",
+        pastDueSince: null,
+        providerSubscriptionId: `cf_${stamp}`,
+      },
+    });
+    const holdBody = JSON.stringify({
+      type: "SUBSCRIPTION_STATUS_CHANGED",
+      event_time: "2026-08-19T13:00:00+05:30",
+      data: {
+        subscription_details: {
+          cf_subscription_id: `cf_${stamp}`,
+          subscription_id: merchantId,
+          subscription_status: "ON_HOLD",
+        },
+      },
+    });
+    const tsHold = String(Date.now() + 3);
+    const holdResult = await processCashfreeWebhook({
+      rawBody: holdBody,
+      signature: signBody(holdBody, secret, tsHold),
+      timestamp: tsHold,
+    });
+    assert.equal(holdResult.ok, true);
+    const afterHold = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(afterHold?.status, "PAST_DUE");
+    assert.ok(afterHold?.pastDueSince);
+    console.log("K2 PASS ON_HOLD → PAST_DUE");
+
+    // K3 — successful payment webhook recovers PAST_DUE → PREMIUM + ACTIVE
+    const recoverBody = JSON.stringify({
+      type: "SUBSCRIPTION_PAYMENT_SUCCESS",
+      event_time: "2026-08-19T14:00:00+05:30",
+      data: {
+        subscription_details: {
+          cf_subscription_id: `cf_${stamp}`,
+          subscription_id: merchantId,
+          subscription_status: "ACTIVE",
+          subscription_first_charge_time: "2026-08-19T14:00:00+05:30",
+          next_schedule_date: "2026-09-19T14:00:00+05:30",
+        },
+        payment: { payment_id: `pay_ok_${stamp}`, payment_status: "SUCCESS" },
+        plan_details: { plan_id: "plan_pme_premium" },
+        customer_details: { customer_id: `cust_${stamp}` },
+      },
+    });
+    const tsRecover = String(Date.now() + 4);
+    const recovered = await processCashfreeWebhook({
+      rawBody: recoverBody,
+      signature: signBody(recoverBody, secret, tsRecover),
+      timestamp: tsRecover,
+    });
+    assert.equal(recovered.ok, true);
+    const afterRecover = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(afterRecover?.plan, "PREMIUM");
+    assert.equal(afterRecover?.status, "ACTIVE");
+    assert.equal(afterRecover?.pastDueSince, null);
+    assert.equal(getSubscriptionAccess(afterRecover).hasAccess, true);
+    assert.equal(getSubscriptionAccess(afterRecover).isGracePeriod, false);
+    console.log("K3 PASS payment success recovers PAST_DUE → PREMIUM + ACTIVE");
 
     // L — cancellation at period end preserves access
     const periodEnd = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
@@ -370,7 +534,69 @@ async function main() {
     assert.equal(cancelPending?.cancelAtPeriodEnd, true);
     assert.equal(cancelPending?.status, "ACTIVE");
     assert.equal(getSubscriptionAccess(cancelPending).hasAccess, true);
+    assert.equal(
+      getSubscriptionAccess(cancelPending).reason,
+      "cancelled_until_period_end",
+    );
     console.log("L PASS cancel-at-period-end keeps access until period end");
+
+    // L2 — webhook CANCELLED without next_schedule_date keeps existing period end
+    const cancelWebhookBody = JSON.stringify({
+      type: "SUBSCRIPTION_STATUS_CHANGED",
+      event_time: "2026-08-19T15:00:00+05:30",
+      data: {
+        subscription_details: {
+          cf_subscription_id: `cf_${stamp}`,
+          subscription_id: merchantId,
+          subscription_status: "CANCELLED",
+        },
+      },
+    });
+    const tsCancelWh = String(Date.now() + 5);
+    const cancelWh = await processCashfreeWebhook({
+      rawBody: cancelWebhookBody,
+      signature: signBody(cancelWebhookBody, secret, tsCancelWh),
+      timestamp: tsCancelWh,
+    });
+    assert.equal(cancelWh.ok, true);
+    const afterCancelWh = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(afterCancelWh?.cancelAtPeriodEnd, true);
+    assert.equal(afterCancelWh?.status, "ACTIVE");
+    assert.equal(
+      afterCancelWh?.currentPeriodEnd?.getTime(),
+      periodEnd.getTime(),
+    );
+    assert.equal(getSubscriptionAccess(afterCancelWh).hasAccess, true);
+    console.log("L2 PASS cancel webhook preserves access until currentPeriodEnd");
+
+    // L3 — late ACTIVE webhook must not clear cancel-at-period-end
+    const lateActiveBody = JSON.stringify({
+      type: "SUBSCRIPTION_STATUS_CHANGED",
+      event_time: "2026-08-19T15:30:00+05:30",
+      data: {
+        subscription_details: {
+          cf_subscription_id: `cf_${stamp}`,
+          subscription_id: merchantId,
+          subscription_status: "ACTIVE",
+          next_schedule_date: "2026-09-19T10:00:00+05:30",
+        },
+      },
+    });
+    const tsLate = String(Date.now() + 6);
+    const lateActive = await processCashfreeWebhook({
+      rawBody: lateActiveBody,
+      signature: signBody(lateActiveBody, secret, tsLate),
+      timestamp: tsLate,
+    });
+    assert.equal(lateActive.ok, true);
+    const stillCancelling = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(stillCancelling?.cancelAtPeriodEnd, true);
+    assert.equal(stillCancelling?.status, "ACTIVE");
+    console.log("L3 PASS late ACTIVE webhook does not clear cancellation");
 
     // M — after period end access denied
     const afterPeriod = {

@@ -330,7 +330,9 @@ export function SaasPricingPlans({
               </p>
               {subscription.currentPeriodEnd ? (
                 <p className="text-sm text-slate-600">
-                  Next billing date:{" "}
+                  {cancelAtPeriodEnd || cancelledUntilPeriodEnd
+                    ? "Access until: "
+                    : "Next billing date: "}
                   {new Date(subscription.currentPeriodEnd).toLocaleDateString(
                     "en-IN",
                     {
@@ -365,7 +367,7 @@ export function SaasPricingPlans({
               ) : null}
               {cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
                 <p className="text-sm font-medium text-amber-800">
-                  Cancellation scheduled
+                  Cancellation scheduled · No further renewal
                   {subscription.currentPeriodEnd
                     ? ` · Active until ${new Date(
                         subscription.currentPeriodEnd,
@@ -510,7 +512,10 @@ export function SaasPricingPlans({
             </p>
           ) : expired ? (
             <p className="mt-2 text-sm font-medium text-amber-700">
-              Subscribe again to restore access.
+              {subscription?.status === "PAST_DUE"
+                ? subscription.detail ||
+                  "Payment failed and the grace period has ended. Restore Premium to continue."
+                : "Subscribe again to restore access."}
             </p>
           ) : (
             <p className="mt-2 text-sm text-slate-500">Billed monthly. Cancel anytime.</p>

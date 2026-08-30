@@ -10,6 +10,10 @@ import { prisma } from "@/lib/prisma";
 export const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 export const PAST_DUE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
+/** Temporary claim written to providerSubscriptionId while Cashfree checkout is created. */
+export const CHECKOUT_CLAIM_PREFIX = "PENDING-CHECKOUT:";
+export const CHECKOUT_CLAIM_TTL_MS = 3 * 60 * 1000;
+
 export type ShopSubscription = Subscription;
 
 export type SubscriptionAccessReason =
@@ -158,12 +162,19 @@ export function getSubscriptionAccess(
   }
 
   if (subscription.status === "ACTIVE") {
-    if (
-      subscription.cancelAtPeriodEnd &&
-      subscription.currentPeriodEnd &&
-      subscription.currentPeriodEnd.getTime() <= now.getTime()
-    ) {
-      return { hasAccess: false, reason: "cancelled", isGracePeriod: false };
+    if (subscription.cancelAtPeriodEnd) {
+      // Scheduled cancellation: keep Premium only while the paid period is open.
+      if (
+        !subscription.currentPeriodEnd ||
+        subscription.currentPeriodEnd.getTime() <= now.getTime()
+      ) {
+        return { hasAccess: false, reason: "cancelled", isGracePeriod: false };
+      }
+      return {
+        hasAccess: true,
+        reason: "cancelled_until_period_end",
+        isGracePeriod: false,
+      };
     }
     return { hasAccess: true, reason: "active", isGracePeriod: false };
   }
@@ -251,7 +262,7 @@ function buildLabels(
     daysRemaining = daysUntil(subscription.currentPeriodEnd, now);
     label = "Premium";
     if (subscription.cancelAtPeriodEnd && subscription.currentPeriodEnd) {
-      detail = `Your subscription is cancelled and will remain active until ${formatDateIn(subscription.currentPeriodEnd)}`;
+      detail = `Cancellation scheduled. Premium remains active until ${formatDateIn(subscription.currentPeriodEnd)}. No further renewal.`;
     } else {
       detail = subscription.currentPeriodEnd
         ? `₹${PREMIUM_PLAN.amountInr}/month · Current period ends ${formatDateIn(subscription.currentPeriodEnd)}`
@@ -260,7 +271,7 @@ function buildLabels(
   } else if (subscription.status === "CANCELLED") {
     if (access.hasAccess && subscription.currentPeriodEnd) {
       label = "Cancelled";
-      detail = `Access available until ${formatDateIn(subscription.currentPeriodEnd)}`;
+      detail = `Cancellation scheduled. Premium remains active until ${formatDateIn(subscription.currentPeriodEnd)}. No further renewal.`;
       daysRemaining = daysUntil(subscription.currentPeriodEnd, now);
     } else {
       label = "Subscription expired";
@@ -268,13 +279,14 @@ function buildLabels(
       daysRemaining = 0;
     }
   } else if (subscription.status === "PAST_DUE") {
-    label = "Payment issue";
+    label = access.hasAccess ? "Payment issue" : "Payment required";
     const graceEnd = graceEndDate(subscription);
     daysRemaining = daysUntil(graceEnd, now);
     if (access.hasAccess) {
       detail = `Your payment could not be completed. Access remains available during the 3-day grace period (until ${formatDateIn(graceEnd)}).`;
     } else {
-      detail = "Subscription expired. Subscribe again to restore access.";
+      detail =
+        "Your recurring Premium payment failed and the 3-day grace period has ended. Restore payment to unlock printing again.";
       daysRemaining = 0;
     }
   } else {
@@ -481,6 +493,191 @@ export function canInitiatePremiumCheckout(
   return { ok: true as const };
 }
 
+export function isCheckoutClaimId(providerSubscriptionId: string | null | undefined) {
+  return Boolean(providerSubscriptionId?.startsWith(CHECKOUT_CLAIM_PREFIX));
+}
+
+export function isFreshCheckoutClaim(
+  subscription: ShopSubscription,
+  now: Date = new Date(),
+) {
+  if (!isCheckoutClaimId(subscription.providerSubscriptionId)) return false;
+  return now.getTime() - subscription.updatedAt.getTime() < CHECKOUT_CLAIM_TTL_MS;
+}
+
+/**
+ * Best-effort cancel of a previous non-active Cashfree subscription id.
+ * Never cancels when the shop already has usable Premium access.
+ */
+export async function abandonPendingCashfreeCheckout(input: {
+  subscription: ShopSubscription;
+  now?: Date;
+  cancelProvider?: typeof cancelCashfreeSubscription;
+}) {
+  const now = input.now || new Date();
+  const subscription = input.subscription;
+  const access = getSubscriptionAccess(subscription, now);
+
+  if (subscription.status === "ACTIVE" && access.hasAccess) {
+    return { abandoned: false as const, reason: "active" as const };
+  }
+  if (access.hasAccess && subscription.cancelAtPeriodEnd) {
+    return { abandoned: false as const, reason: "cancel_at_period_end" as const };
+  }
+
+  const providerId = subscription.providerSubscriptionId?.trim() || "";
+  if (!providerId || isCheckoutClaimId(providerId)) {
+    return { abandoned: false as const, reason: "none" as const };
+  }
+
+  const cancelFn = input.cancelProvider || cancelCashfreeSubscription;
+  try {
+    await cancelFn({ subscriptionId: providerId });
+    return {
+      abandoned: true as const,
+      reason: "cancelled" as const,
+      previousId: providerId,
+    };
+  } catch {
+    // Previous checkout may already be cancelled/expired — allow a new create.
+    console.warn("abandonPendingCashfreeCheckout: cancel failed (continuing)");
+    return {
+      abandoned: false as const,
+      reason: "cancel_failed" as const,
+      previousId: providerId,
+    };
+  }
+}
+
+/**
+ * Claim the shop subscription row for a new checkout attempt.
+ * Serializes concurrent Subscribe clicks via SELECT FOR UPDATE + claim token.
+ */
+export async function claimPremiumCheckoutSlot(input: {
+  shopId: string;
+  now?: Date;
+}): Promise<
+  | {
+      ok: true;
+      subscription: ShopSubscription;
+      previousProviderSubscriptionId: string | null;
+      claimToken: string;
+    }
+  | { ok: false; error: string; status: 404 | 409 }
+> {
+  const now = input.now || new Date();
+  const claimToken = `${CHECKOUT_CLAIM_PREFIX}${now.getTime()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`
+          SELECT id FROM Subscription WHERE shopId = ${input.shopId} FOR UPDATE
+        `;
+
+        const subscription = await tx.subscription.findUnique({
+          where: { shopId: input.shopId },
+        });
+        if (!subscription) {
+          return {
+            ok: false as const,
+            error: "Subscription not found.",
+            status: 404 as const,
+          };
+        }
+
+        const gate = canInitiatePremiumCheckout(subscription, now);
+        if (!gate.ok) {
+          return {
+            ok: false as const,
+            error: gate.error,
+            status: 409 as const,
+          };
+        }
+
+        if (isFreshCheckoutClaim(subscription, now)) {
+          return {
+            ok: false as const,
+            error:
+              "A checkout is already in progress for this shop. Please wait a moment and try again.",
+            status: 409 as const,
+          };
+        }
+
+        const previousProviderSubscriptionId = isCheckoutClaimId(
+          subscription.providerSubscriptionId,
+        )
+          ? null
+          : subscription.providerSubscriptionId;
+
+        const claimed = await tx.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            provider: "CASHFREE",
+            providerSubscriptionId: claimToken,
+          },
+        });
+
+        return {
+          ok: true as const,
+          subscription: claimed,
+          previousProviderSubscriptionId,
+          claimToken,
+        };
+      },
+      { maxWait: 5_000, timeout: 15_000 },
+    );
+  } catch {
+    return {
+      ok: false as const,
+      error: "Unable to start checkout. Please try again.",
+      status: 409 as const,
+    };
+  }
+}
+
+export async function finalizePremiumCheckoutClaim(input: {
+  subscriptionId: string;
+  claimToken: string;
+  providerSubscriptionId: string;
+  providerCustomerId?: string | null;
+  providerPlanId?: string | null;
+}) {
+  return prisma.subscription.updateMany({
+    where: {
+      id: input.subscriptionId,
+      providerSubscriptionId: input.claimToken,
+      status: { not: "ACTIVE" },
+    },
+    data: {
+      provider: "CASHFREE",
+      providerSubscriptionId: input.providerSubscriptionId,
+      providerCustomerId: input.providerCustomerId ?? undefined,
+      providerPlanId: input.providerPlanId ?? undefined,
+    },
+  });
+}
+
+export async function releasePremiumCheckoutClaim(input: {
+  subscriptionId: string;
+  claimToken: string;
+  restoreProviderSubscriptionId?: string | null;
+}) {
+  return prisma.subscription.updateMany({
+    where: {
+      id: input.subscriptionId,
+      providerSubscriptionId: input.claimToken,
+      status: { not: "ACTIVE" },
+    },
+    data: {
+      providerSubscriptionId: input.restoreProviderSubscriptionId ?? null,
+      provider: input.restoreProviderSubscriptionId ? "CASHFREE" : null,
+    },
+  });
+}
+
 export function canCancelSubscription(
   subscription: ShopSubscription | null | undefined,
   now: Date = new Date(),
@@ -503,7 +700,7 @@ export function canCancelSubscription(
     };
   }
 
-  if (!subscription.providerSubscriptionId) {
+  if (!subscription.providerSubscriptionId || isCheckoutClaimId(subscription.providerSubscriptionId)) {
     return {
       ok: false as const,
       error: "No Cashfree subscription is linked to cancel.",
@@ -511,7 +708,7 @@ export function canCancelSubscription(
   }
 
   const access = getSubscriptionAccess(subscription, now);
-  if (!access.hasAccess && subscription.status !== "PAST_DUE") {
+  if (!access.hasAccess) {
     return { ok: false as const, error: "Subscription is not active." };
   }
 
@@ -555,6 +752,9 @@ export async function cancelShopSubscription(input: {
     currentPeriodEnd: subscription.currentPeriodEnd,
     now,
   });
+  if (!updated) {
+    return { ok: false as const, error: "Subscription not found." };
+  }
 
   return {
     ok: true as const,
@@ -604,13 +804,48 @@ export async function markSubscriptionPastDue(input: {
   });
   if (!existing) return null;
 
+  // Recurring failure only applies to billable Premium states.
+  // Never reopen cancelled/expired/trial rows from a failure webhook.
+  if (existing.status !== "ACTIVE" && existing.status !== "PAST_DUE") {
+    return existing;
+  }
+
+  // Already scheduled to end — keep cancel-at-period-end access window.
+  if (existing.cancelAtPeriodEnd) {
+    return existing;
+  }
+
   return prisma.subscription.update({
     where: { id: input.subscriptionId },
     data: {
       status: "PAST_DUE",
+      // Preserve the original grace clock across duplicate failure webhooks.
       pastDueSince: existing.pastDueSince || now,
     },
   });
+}
+
+function resolveCancelPeriodEnd(input: {
+  existing: ShopSubscription;
+  currentPeriodEnd?: Date | null;
+  now: Date;
+}) {
+  if (input.currentPeriodEnd && !Number.isNaN(input.currentPeriodEnd.getTime())) {
+    return input.currentPeriodEnd;
+  }
+  if (
+    input.existing.currentPeriodEnd &&
+    !Number.isNaN(input.existing.currentPeriodEnd.getTime())
+  ) {
+    return input.existing.currentPeriodEnd;
+  }
+  if (
+    input.existing.currentPeriodStart &&
+    !Number.isNaN(input.existing.currentPeriodStart.getTime())
+  ) {
+    return addMonths(input.existing.currentPeriodStart, 1);
+  }
+  return addMonths(input.now, 1);
 }
 
 export async function markSubscriptionCancelAtPeriodEnd(input: {
@@ -619,14 +854,27 @@ export async function markSubscriptionCancelAtPeriodEnd(input: {
   now?: Date;
 }) {
   const now = input.now || new Date();
+  const existing = await prisma.subscription.findUnique({
+    where: { id: input.subscriptionId },
+  });
+  if (!existing) return null;
+
+  const periodEnd = resolveCancelPeriodEnd({
+    existing,
+    currentPeriodEnd: input.currentPeriodEnd,
+    now,
+  });
+
   return prisma.subscription.update({
     where: { id: input.subscriptionId },
     data: {
       cancelAtPeriodEnd: true,
-      cancelledAt: now,
-      currentPeriodEnd: input.currentPeriodEnd ?? undefined,
+      cancelledAt: existing.cancelledAt || now,
+      currentPeriodEnd: periodEnd,
+      pastDueSince: null,
       // Keep ACTIVE until period end when still within paid window.
       status: "ACTIVE",
+      plan: existing.plan === "PREMIUM" ? "PREMIUM" : existing.plan,
     },
   });
 }
@@ -678,8 +926,8 @@ export function getDashboardSubscriptionSummary(
 
   if (view.status === "ACTIVE" && view.cancelAtPeriodEnd && view.currentPeriodEnd) {
     return {
-      title: "Premium",
-      subtitle: `Premium active until ${formatDateIn(new Date(view.currentPeriodEnd))}`,
+      title: "Cancellation scheduled",
+      subtitle: `Active until ${formatDateIn(new Date(view.currentPeriodEnd))} · No renewal`,
     };
   }
 
@@ -692,8 +940,8 @@ export function getDashboardSubscriptionSummary(
 
   if (view.status === "CANCELLED" && view.hasAccess && view.currentPeriodEnd) {
     return {
-      title: "Cancelled",
-      subtitle: `Premium active until ${formatDateIn(new Date(view.currentPeriodEnd))}`,
+      title: "Cancellation scheduled",
+      subtitle: `Active until ${formatDateIn(new Date(view.currentPeriodEnd))} · No renewal`,
     };
   }
 
@@ -705,6 +953,13 @@ export function getDashboardSubscriptionSummary(
         days === 1
           ? "1 day remaining in grace period"
           : `${days} days remaining in grace period`,
+    };
+  }
+
+  if (view.status === "PAST_DUE" && !view.hasAccess) {
+    return {
+      title: "Payment required",
+      subtitle: "Grace period ended — restore Premium to continue",
     };
   }
 

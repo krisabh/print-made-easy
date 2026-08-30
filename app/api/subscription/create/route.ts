@@ -2,15 +2,16 @@ import { requireShopApi } from "@/lib/auth";
 import { getPublicAppBaseUrl } from "@/lib/app-url";
 import {
   buildMerchantSubscriptionId,
+  cancelCashfreeSubscription,
   createCashfreeSubscription,
   getCashfreeJsMode,
-  CASHFREE_PROVIDER,
   PREMIUM_PLAN,
 } from "@/lib/cashfree";
-import { prisma } from "@/lib/prisma";
 import {
-  canInitiatePremiumCheckout,
-  getShopSubscription,
+  abandonPendingCashfreeCheckout,
+  claimPremiumCheckoutSlot,
+  finalizePremiumCheckoutClaim,
+  releasePremiumCheckoutClaim,
 } from "@/lib/subscription";
 
 export async function POST() {
@@ -18,14 +19,19 @@ export async function POST() {
     const session = await requireShopApi();
     if (session instanceof Response) return session;
 
-    const subscription = await getShopSubscription(session.shop.id);
-    const gate = canInitiatePremiumCheckout(subscription);
-    if (!gate.ok) {
-      return Response.json({ error: gate.error }, { status: 409 });
+    const claim = await claimPremiumCheckoutSlot({ shopId: session.shop.id });
+    if (!claim.ok) {
+      return Response.json({ error: claim.error }, { status: claim.status });
     }
 
-    if (!subscription) {
-      return Response.json({ error: "Subscription not found." }, { status: 404 });
+    // Best-effort cancel of a previous pending Cashfree subscription (never ACTIVE).
+    if (claim.previousProviderSubscriptionId) {
+      await abandonPendingCashfreeCheckout({
+        subscription: {
+          ...claim.subscription,
+          providerSubscriptionId: claim.previousProviderSubscriptionId,
+        },
+      });
     }
 
     const appBaseUrl = await getPublicAppBaseUrl();
@@ -37,7 +43,9 @@ export async function POST() {
     const customerName =
       session.user.name || session.shop.shopName || "PrintMadeEasy Shop";
     const customerEmail =
-      session.user.email || session.shop.email || `shop-${session.shop.shopCode}@printmadeeasy.local`;
+      session.user.email ||
+      session.shop.email ||
+      `shop-${session.shop.shopCode}@printmadeeasy.local`;
     const customerPhone = session.shop.phone || "9999999999";
 
     let created;
@@ -53,6 +61,13 @@ export async function POST() {
       });
     } catch (error) {
       console.error("Cashfree create subscription failed");
+      // Release claim so the shopkeeper can retry.
+      await releasePremiumCheckoutClaim({
+        subscriptionId: claim.subscription.id,
+        claimToken: claim.claimToken,
+        restoreProviderSubscriptionId: claim.previousProviderSubscriptionId,
+      }).catch(() => undefined);
+
       return Response.json(
         {
           error:
@@ -66,17 +81,36 @@ export async function POST() {
 
     // Persist provider references only — do NOT activate Premium here.
     // Prefer merchant subscription_id (required by Cashfree manage/cancel API).
-    // Webhook lookup still matches via subscription_id / cf_subscription_id lists.
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        provider: CASHFREE_PROVIDER,
-        providerSubscriptionId:
-          created.subscriptionId || created.cfSubscriptionId,
-        providerCustomerId: created.customerId,
-        providerPlanId: created.planId || String(PREMIUM_PLAN.internalKey),
-      },
+    const providerSubscriptionId =
+      created.subscriptionId || created.cfSubscriptionId;
+
+    const finalized = await finalizePremiumCheckoutClaim({
+      subscriptionId: claim.subscription.id,
+      claimToken: claim.claimToken,
+      providerSubscriptionId,
+      providerCustomerId: created.customerId,
+      providerPlanId: created.planId || String(PREMIUM_PLAN.internalKey),
     });
+
+    if (finalized.count === 0) {
+      // Row became ACTIVE or claim was lost — abandon the new Cashfree sub.
+      try {
+        await cancelCashfreeSubscription({
+          subscriptionId: providerSubscriptionId,
+        });
+      } catch {
+        console.warn(
+          "Unable to cancel orphan Cashfree subscription after lost checkout claim",
+        );
+      }
+      return Response.json(
+        {
+          error:
+            "This shop already has an active Premium subscription or another checkout finished first.",
+        },
+        { status: 409 },
+      );
+    }
 
     return Response.json({
       success: true,
