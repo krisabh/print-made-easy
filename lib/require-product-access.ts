@@ -12,23 +12,33 @@ export function pricingRedirectPath(reason?: string) {
 }
 
 /**
- * Server-side product access for dashboard pages.
- * Pricing / billing remain reachable without this check.
+ * Authenticated shopkeeper session for dashboard pages.
+ * Always allows viewing dashboard sections; callers must gate core
+ * printing/write actions with hasAccess / requireProductAccessApi.
  */
-export async function requireProductAccess(): Promise<{
+export async function requireDashboardSession(): Promise<{
   session: AuthSession;
   access: SubscriptionAccessState;
 }> {
   const session = await requireShop();
   const access = await getSubscriptionAccessForShop(session.shop.id);
-  if (!access.hasAccess) {
-    redirect(pricingRedirectPath(access.reason));
-  }
   return { session, access };
 }
 
 /**
- * Server-side product access for authenticated shop APIs.
+ * @deprecated Prefer requireDashboardSession for pages.
+ * Kept for any callers that still need hard redirect — now aliases view access.
+ */
+export async function requireProductAccess(): Promise<{
+  session: AuthSession;
+  access: SubscriptionAccessState;
+}> {
+  return requireDashboardSession();
+}
+
+/**
+ * Server-side product access for authenticated shop APIs that perform
+ * core printing / billing-gated write operations.
  * Returns a Response when denied (402 Payment Required).
  */
 export async function requireProductAccessApi(): Promise<
@@ -50,5 +60,16 @@ export async function requireProductAccessApi(): Promise<
     );
   }
 
+  return { session, access };
+}
+
+/** Shop session for read-only dashboard APIs (jobs list, etc.). */
+export async function requireShopApiSession(): Promise<
+  | { session: AuthSession; access: SubscriptionAccessState }
+  | Response
+> {
+  const session = await requireShopApi();
+  if (session instanceof Response) return session;
+  const access = await getSubscriptionAccessForShop(session.shop.id);
   return { session, access };
 }

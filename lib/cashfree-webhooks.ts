@@ -118,6 +118,14 @@ export async function processCashfreeWebhook(input: {
   const subscription = await findSubscriptionForWebhook(ids);
 
   if (!subscription) {
+    console.warn(
+      "Cashfree webhook: subscription not found",
+      JSON.stringify({
+        eventType,
+        eventId,
+        ids,
+      }),
+    );
     await prisma.paymentWebhookEvent.update({
       where: {
         provider_eventId: { provider: CASHFREE_PROVIDER, eventId },
@@ -137,6 +145,8 @@ export async function processCashfreeWebhook(input: {
   const details = asRecord(data.subscription_details);
   const plan = asRecord(data.plan_details);
   const customer = asRecord(data.customer_details);
+  const authorization = asRecord(data.authorization_details);
+  const payment = asRecord(data.payment || data.payment_details);
   const providerSubscriptionId =
     String(
       details.cf_subscription_id ||
@@ -146,19 +156,36 @@ export async function processCashfreeWebhook(input: {
     ) || subscription.providerSubscriptionId!;
 
   const providerStatus = String(details.subscription_status || "").toUpperCase();
+  const authorizationStatus = String(
+    authorization.authorization_status || "",
+  ).toUpperCase();
+  const paymentStatus = String(
+    data.payment_status || payment.payment_status || "",
+  ).toUpperCase();
+
+  const authSucceeded =
+    eventType === "SUBSCRIPTION_AUTH_STATUS" &&
+    (authorizationStatus === "SUCCESS" ||
+      authorizationStatus === "ACTIVE" ||
+      paymentStatus === "SUCCESS") &&
+    paymentStatus !== "FAILED" &&
+    authorizationStatus !== "FAILED";
+
+  const shouldActivatePremium =
+    providerStatus === "ACTIVE" ||
+    eventType === "SUBSCRIPTION_PAYMENT_SUCCESS" ||
+    authSucceeded;
 
   if (
     eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
     eventType === "SUBSCRIPTION_AUTH_STATUS" ||
     eventType === "SUBSCRIPTION_PAYMENT_SUCCESS"
   ) {
-    if (
-      providerStatus === "ACTIVE" ||
-      eventType === "SUBSCRIPTION_PAYMENT_SUCCESS"
-    ) {
+    if (shouldActivatePremium) {
       const periodStart =
         parseMaybeDate(details.subscription_first_charge_time) ||
         parseMaybeDate(details.authorization_time) ||
+        parseMaybeDate(authorization.authorization_time) ||
         now;
       const periodEnd =
         parseMaybeDate(details.next_schedule_date) ||

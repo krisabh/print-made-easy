@@ -18,6 +18,7 @@ type ConnectPrintAgentCardProps = {
   shopCode: string;
   appBaseUrl: string;
   initialStatus: AgentStatusSnapshot;
+  pairingLocked?: boolean;
 };
 
 type PairingState = {
@@ -37,6 +38,7 @@ export function ConnectPrintAgentCard({
   shopCode,
   appBaseUrl,
   initialStatus,
+  pairingLocked = false,
 }: ConnectPrintAgentCardProps) {
   const [status, setStatus] = useState(initialStatus);
   const [pairing, setPairing] = useState<PairingState | null>(null);
@@ -99,6 +101,10 @@ export function ConnectPrintAgentCard({
   }
 
   function generatePairing() {
+    if (pairingLocked) {
+      setError("Subscription required to connect a Print Agent.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -108,6 +114,10 @@ export function ConnectPrintAgentCard({
         });
         if (res.status === 401) {
           setError("Please sign in again to connect a Print Agent.");
+          return;
+        }
+        if (res.status === 402) {
+          setError("Subscription required to connect a Print Agent.");
           return;
         }
         if (!res.ok) {
@@ -231,10 +241,14 @@ export function ConnectPrintAgentCard({
             <Button
               type="button"
               className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
+              disabled={pending || pairingLocked}
               onClick={generatePairing}
-              disabled={pending}
             >
-              {pending ? "Generating…" : "Generate Connection Link"}
+              {pairingLocked
+                ? "Subscribe to connect Agent"
+                : pending
+                  ? "Generating…"
+                  : "Generate Connection Link"}
             </Button>
           ) : null}
 
@@ -250,10 +264,14 @@ export function ConnectPrintAgentCard({
               <Button
                 type="button"
                 className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
+                disabled={pending || pairingLocked}
                 onClick={generatePairing}
-                disabled={pending}
               >
-                {pending ? "Generating…" : "Generate Connection Link"}
+                {pairingLocked
+                  ? "Subscribe to connect Agent"
+                  : pending
+                    ? "Generating…"
+                    : "Generate Connection Link"}
               </Button>
             </div>
           ) : null}
@@ -291,9 +309,13 @@ export function ConnectPrintAgentCard({
                 variant="outline"
                 className="h-11 w-full"
                 onClick={generatePairing}
-                disabled={pending}
+                disabled={pending || pairingLocked}
               >
-                {pending ? "Generating…" : "Generate Connection Link"}
+                {pairingLocked
+                  ? "Subscribe to connect Agent"
+                  : pending
+                    ? "Generating…"
+                    : "Generate Connection Link"}
               </Button>
             </div>
           ) : null}

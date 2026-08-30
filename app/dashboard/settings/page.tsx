@@ -1,10 +1,10 @@
 import { ChangePasswordForm } from "@/components/dashboard/change-password-form";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { serializeShopForDashboard } from "@/lib/dashboard-service";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function ProfilePage() {
-  const { session } = await requireProductAccess();
+  const { session } = await requireDashboardSession();
   const { shop, user } = session;
   const serialized = serializeShopForDashboard(shop);
 

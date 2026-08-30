@@ -10,6 +10,7 @@ import type { PricingRates } from "@/lib/pricing-service";
 
 type PricingFormProps = {
   initialPricing: PricingRates;
+  editingLocked?: boolean;
 };
 
 type PricingDrafts = Record<keyof PricingRates, string>;
@@ -36,7 +37,10 @@ function isAllowedPriceInput(value: string) {
   return value === "" || /^\d*\.?\d*$/.test(value);
 }
 
-export function PricingForm({ initialPricing }: PricingFormProps) {
+export function PricingForm({
+  initialPricing,
+  editingLocked = false,
+}: PricingFormProps) {
   const [drafts, setDrafts] = useState<PricingDrafts>(() =>
     toDrafts(initialPricing),
   );
@@ -54,6 +58,10 @@ export function PricingForm({ initialPricing }: PricingFormProps) {
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (editingLocked) {
+      setError("Subscription required to update print pricing.");
+      return;
+    }
     setMessage(null);
     setError(null);
 
@@ -109,6 +117,8 @@ export function PricingForm({ initialPricing }: PricingFormProps) {
               onChange={(event) => updateField(field.key, event.target.value)}
               className="h-11"
               required
+              disabled={editingLocked}
+              readOnly={editingLocked}
             />
           </div>
         ))}
@@ -125,10 +135,14 @@ export function PricingForm({ initialPricing }: PricingFormProps) {
 
       <Button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || editingLocked}
         className="h-11 bg-blue-600 text-white hover:bg-blue-700"
       >
-        {isPending ? "Saving…" : "Save Pricing"}
+        {editingLocked
+          ? "Subscribe to edit pricing"
+          : isPending
+            ? "Saving…"
+            : "Save Pricing"}
       </Button>
     </form>
   );

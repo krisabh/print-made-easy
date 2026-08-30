@@ -243,8 +243,8 @@ function buildLabels(
           ? "1 day remaining"
           : `${daysRemaining ?? 0} days remaining`;
     } else {
-      label = "Subscription expired";
-      detail = "Subscribe again to restore access.";
+      label = "Your free trial has ended";
+      detail = "Subscribe to continue using PrintMadeEasy.";
       daysRemaining = 0;
     }
   } else if (subscription.status === "ACTIVE") {
@@ -709,7 +709,10 @@ export function getDashboardSubscriptionSummary(
   }
 
   return {
-    title: "Subscription expired",
-    subtitle: "Subscribe again to restore access",
+    title:
+      view.status === "TRIALING"
+        ? "Your free trial has ended"
+        : "Subscription expired",
+    subtitle: "Subscribe to continue using PrintMadeEasy",
   };
 }

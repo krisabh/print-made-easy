@@ -1,9 +1,10 @@
 import { PricingForm } from "@/components/dashboard/pricing-form";
+import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { serializeShopForDashboard } from "@/lib/dashboard-service";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function PrintPricingPage() {
-  const { session } = await requireProductAccess();
+  const { session, access } = await requireDashboardSession();
   const serialized = serializeShopForDashboard(session.shop);
 
   return (
@@ -15,8 +16,13 @@ export default async function PrintPricingPage() {
         </p>
       </div>
 
+      <SubscriptionGateBanner access={access} />
+
       {serialized.pricing ? (
-        <PricingForm initialPricing={serialized.pricing} />
+        <PricingForm
+          initialPricing={serialized.pricing}
+          editingLocked={!access.hasAccess}
+        />
       ) : (
         <p className="text-sm text-slate-500">
           Pricing configuration is missing for this shop.

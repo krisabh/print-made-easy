@@ -1,9 +1,10 @@
 import { QrCard } from "@/components/dashboard/qr-card";
+import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { getAppBaseUrl } from "@/lib/app-url";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function QrPage() {
-  const { session } = await requireProductAccess();
+  const { session, access } = await requireDashboardSession();
   const { shop } = session;
 
   const appUrl = await getAppBaseUrl();
@@ -36,6 +37,13 @@ export default async function QrPage() {
           </p>
         )}
       </div>
+      <SubscriptionGateBanner access={access} />
+      {!access.hasAccess ? (
+        <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+          Your QR link still opens, but customers cannot submit new print orders
+          until you subscribe.
+        </p>
+      ) : null}
       <QrCard
         shopName={shop.shopName}
         shopCode={shop.shopCode}

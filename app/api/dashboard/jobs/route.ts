@@ -10,11 +10,11 @@ import {
 } from "@/lib/dashboard-service";
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { getShopAgentStatus } from "@/lib/print-agent-service";
-import { requireProductAccessApi } from "@/lib/require-product-access";
+import { requireShopApiSession } from "@/lib/require-product-access";
 
 export async function GET(request: NextRequest) {
   try {
-    const gated = await requireProductAccessApi();
+    const gated = await requireShopApiSession();
     if (gated instanceof Response) return gated;
     const { shop } = gated.session;
 

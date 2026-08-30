@@ -77,8 +77,6 @@ export async function updateShopSettingsAction(
   input: z.infer<typeof settingsSchema>,
 ): Promise<ApiResponse> {
   const { shop } = await requireShop();
-  const denied = await assertProductAccess(shop.id);
-  if (denied) return denied;
 
   try {
     const parsed = settingsSchema.safeParse(input);

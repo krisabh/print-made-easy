@@ -3,7 +3,7 @@ import { access } from "fs/promises";
 import { Readable } from "stream";
 
 import { getFileForShopPreview } from "@/lib/dashboard-service";
-import { requireProductAccessApi } from "@/lib/require-product-access";
+import { requireShopApiSession } from "@/lib/require-product-access";
 import {
   canPreviewInBrowser,
   getContentType,
@@ -16,7 +16,7 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const gated = await requireProductAccessApi();
+    const gated = await requireShopApiSession();
     if (gated instanceof Response) return gated;
     const { shop } = gated.session;
 

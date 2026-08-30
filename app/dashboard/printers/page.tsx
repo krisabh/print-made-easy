@@ -2,15 +2,16 @@ import { Printer } from "lucide-react";
 
 import { ConnectPrintAgentCard } from "@/components/dashboard/connect-print-agent-card";
 import { DownloadWindowsAgentCard } from "@/components/dashboard/download-windows-agent-card";
+import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { getAppBaseUrl } from "@/lib/app-url";
 import {
   getShopAgentStatus,
   listShopPrintersWithLiveStatus,
 } from "@/lib/print-agent-service";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function PrintersPage() {
-  const { session } = await requireProductAccess();
+  const { session, access } = await requireDashboardSession();
   const { shop } = session;
   const [agentStatus, printers, appBaseUrl] = await Promise.all([
     getShopAgentStatus(shop.id),
@@ -28,12 +29,21 @@ export default async function PrintersPage() {
         </p>
       </div>
 
+      <SubscriptionGateBanner access={access} />
+      {!access.hasAccess ? (
+        <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+          Printing is currently disabled because your subscription is inactive.
+          You can still review Agent and printer status below.
+        </p>
+      ) : null}
+
       <DownloadWindowsAgentCard />
 
       <ConnectPrintAgentCard
         shopName={shop.shopName}
         shopCode={shop.shopCode}
         appBaseUrl={appBaseUrl}
+        pairingLocked={!access.hasAccess}
         initialStatus={{
           connected: agentStatus?.connected ?? false,
           lastSeen: agentStatus?.lastSeen ?? null,

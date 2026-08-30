@@ -1,17 +1,18 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { SubscriptionStatusCard } from "@/components/dashboard/subscription-status-card";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 import {
   getShopSubscription,
   toPublicSubscriptionView,
 } from "@/lib/subscription";
 
 export default async function DashboardPage() {
-  const { session, access } = await requireProductAccess();
+  const { session, access } = await requireDashboardSession();
   const { shop } = session;
 
   const [summary, jobs, subscription] = await Promise.all([
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
           Overview of today&apos;s print activity for your shop.
         </p>
       </div>
+      <SubscriptionGateBanner access={access} />
       <SubscriptionStatusCard
         subscription={toPublicSubscriptionView(subscription)}
         showGraceWarning={access.isGracePeriod}
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
         initialJobs={jobs}
         initialSummary={summary}
         showSummary
+        printingLocked={!access.hasAccess}
       />
     </div>
   );

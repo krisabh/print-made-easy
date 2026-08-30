@@ -81,7 +81,7 @@ function loadCashfreeSdk() {
 function reasonMessage(reason: string | null) {
   switch (reason) {
     case "trial_expired":
-      return "Your free trial has ended. Subscribe to restore access.";
+      return "Your free trial has ended. Subscribe to continue using PrintMadeEasy.";
     case "expired":
     case "cancelled":
     case "past_due_expired":
@@ -140,13 +140,13 @@ export function SaasPricingPlans({
           setNotice("Checkout was not completed. You can try again.");
         } else {
           setNotice(
-            "Returned from checkout. Status updates after Cashfree confirms payment.",
+            "Payment confirmation pending. Premium activates after Cashfree confirms the subscription (webhook). This page does not activate Premium by itself.",
           );
         }
       } catch {
         if (!cancelled) {
           setNotice(
-            "Returned from checkout. Status updates after Cashfree confirms payment.",
+            "Payment confirmation pending. Premium activates after Cashfree confirms the subscription.",
           );
         }
       } finally {
@@ -466,7 +466,9 @@ export function SaasPricingPlans({
                 className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 onClick={() => void startPremiumCheckout()}
               >
-                {busy ? "Processing…" : "Subscribe Now"}
+                {busy
+                  ? "Processing…"
+                  : `Subscribe for ₹${premiumPriceInr}/month`}
               </button>
             )}
             <p className="mt-3 text-center text-xs text-slate-500">

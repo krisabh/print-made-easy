@@ -1,12 +1,13 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
-import { requireProductAccess } from "@/lib/require-product-access";
+import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function JobsPage() {
-  const { session } = await requireProductAccess();
+  const { session, access } = await requireDashboardSession();
   const { shop } = session;
 
   const [summary, jobs] = await Promise.all([
@@ -22,7 +23,12 @@ export default async function JobsPage() {
           Search, filter, preview, and manage incoming print jobs.
         </p>
       </div>
-      <JobsBoard initialJobs={jobs} initialSummary={summary} />
+      <SubscriptionGateBanner access={access} />
+      <JobsBoard
+        initialJobs={jobs}
+        initialSummary={summary}
+        printingLocked={!access.hasAccess}
+      />
     </div>
   );
 }

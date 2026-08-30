@@ -85,12 +85,14 @@ type JobsBoardProps = {
   initialJobs: JobItem[];
   initialSummary: Summary;
   showSummary?: boolean;
+  printingLocked?: boolean;
 };
 
 export function JobsBoard({
   initialJobs,
   initialSummary,
   showSummary = false,
+  printingLocked = false,
 }: JobsBoardProps) {
   const [jobs, setJobs] = useState(initialJobs);
   const [summary, setSummary] = useState(initialSummary);
@@ -136,6 +138,10 @@ export function JobsBoard({
   }, [query, selected]);
 
   async function handleDeleteJob(job: JobItem) {
+    if (printingLocked) {
+      setError("Subscription required to manage print jobs.");
+      return;
+    }
     const isActive =
       job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
     const confirmed = window.confirm(
@@ -359,9 +365,13 @@ export function JobsBoard({
                           variant="outline"
                           size="icon"
                           className="size-8 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          disabled={deletingId === job.id}
+                          disabled={deletingId === job.id || printingLocked}
                           aria-label={`Delete job ${job.jobNumber}`}
-                          title="Delete job"
+                          title={
+                            printingLocked
+                              ? "Subscribe to manage jobs"
+                              : "Delete job"
+                          }
                           onClick={() => void handleDeleteJob(job)}
                         >
                           <Trash2 className="size-3.5" />
@@ -418,11 +428,15 @@ export function JobsBoard({
                   variant="outline"
                   size="sm"
                   className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                  disabled={deletingId === selected.id}
+                  disabled={deletingId === selected.id || printingLocked}
                   onClick={() => void handleDeleteJob(selected)}
                 >
                   <Trash2 className="size-3.5" />
-                  {deletingId === selected.id ? "Deleting…" : "Delete Job"}
+                  {printingLocked
+                    ? "Subscribe to manage"
+                    : deletingId === selected.id
+                      ? "Deleting…"
+                      : "Delete Job"}
                 </Button>
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm">

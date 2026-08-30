@@ -241,6 +241,50 @@ async function main() {
     assert.equal(getSubscriptionAccess(afterActive).hasAccess, true);
     console.log("F PASS valid webhook → PREMIUM + ACTIVE");
 
+    // F2 — SUBSCRIPTION_AUTH_STATUS with successful authorization activates Premium
+    await prisma.subscription.update({
+      where: { id: shopA.subscription!.id },
+      data: {
+        plan: "TRIAL",
+        status: "TRIALING",
+        provider: "CASHFREE",
+        providerSubscriptionId: `cf_${stamp}`,
+      },
+    });
+    const authBody = JSON.stringify({
+      type: "SUBSCRIPTION_AUTH_STATUS",
+      event_time: "2026-08-19T10:05:00+05:30",
+      data: {
+        payment_status: "SUCCESS",
+        subscription_details: {
+          cf_subscription_id: `cf_${stamp}`,
+          subscription_id: merchantId,
+          subscription_status: "INITIALIZED",
+          authorization_time: "2026-08-19T10:05:00+05:30",
+        },
+        authorization_details: {
+          authorization_status: "SUCCESS",
+          authorization_time: "2026-08-19T10:05:00+05:30",
+        },
+        plan_details: { plan_id: "plan_pme_premium" },
+        customer_details: { customer_id: `cust_${stamp}` },
+      },
+    });
+    const authTs = String(Date.now() + 1);
+    const authSig = signBody(authBody, secret, authTs);
+    const authActivated = await processCashfreeWebhook({
+      rawBody: authBody,
+      signature: authSig,
+      timestamp: authTs,
+    });
+    assert.equal(authActivated.ok, true);
+    const afterAuth = await prisma.subscription.findUnique({
+      where: { id: shopA.subscription!.id },
+    });
+    assert.equal(afterAuth?.plan, "PREMIUM");
+    assert.equal(afterAuth?.status, "ACTIVE");
+    console.log("F2 PASS AUTH_STATUS SUCCESS → PREMIUM + ACTIVE");
+
     // G — duplicate webhook processed once
     const dup = await processCashfreeWebhook({
       rawBody: successBody,
