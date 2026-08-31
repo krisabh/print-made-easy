@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { SITE } from "@/lib/marketing";
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export default function ForgotPasswordPage() {
   return (
@@ -10,51 +8,15 @@ export default function ForgotPasswordPage() {
           PrintMadeEasy
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-          Forgot Password
+          Forgot your password?
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Automated password reset email is not available yet. Contact support
-          and we will help you regain access to your shop account securely.
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+          Enter your registered email address and we&apos;ll send you a secure
+          password reset link.
         </p>
-
-        <div className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              Email
-            </p>
-            <a
-              href={SITE.emailHref}
-              className="mt-1 inline-block break-all text-sm font-medium text-blue-700 hover:underline"
-            >
-              {SITE.email}
-            </a>
-          </div>
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              WhatsApp
-            </p>
-            <a
-              href={SITE.whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-block text-sm font-medium text-blue-700 hover:underline"
-            >
-              {SITE.whatsappDisplay}
-            </a>
-          </div>
+        <div className="mt-6">
+          <ForgotPasswordForm />
         </div>
-
-        <p className="mt-4 text-xs leading-relaxed text-slate-500">
-          For your security, include the email address registered on your
-          PrintMadeEasy account when you contact us. Never share your password
-          in chat or email.
-        </p>
-
-        <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/login" className="font-medium text-blue-600 hover:underline">
-            Back to Login
-          </Link>
-        </p>
       </div>
     </main>
   );

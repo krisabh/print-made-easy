@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -185,4 +186,110 @@ export async function loginAction(
 export async function logoutAction() {
   await clearAuthCookie();
   redirect("/login");
+}
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email("Enter a valid email.").max(255),
+});
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(1, "Reset token is required."),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters.")
+      .max(128, "Password is too long."),
+    confirmPassword: z.string().min(1, "Confirm your password."),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+/**
+ * Always returns the same generic success message (user-enumeration safe).
+ */
+export async function forgotPasswordAction(
+  input: z.infer<typeof forgotPasswordSchema>,
+): Promise<ApiResponse<{ message: string }>> {
+  const {
+    PASSWORD_RESET_GENERIC_MESSAGE,
+    requestPasswordReset,
+  } = await import("@/lib/password-reset");
+
+  try {
+    const parsed = forgotPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      // Invalid email format can be reported; existence cannot.
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Enter a valid email.",
+      };
+    }
+
+    let ip: string | null = null;
+    try {
+      const headerStore = await headers();
+      ip =
+        headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        headerStore.get("x-real-ip") ||
+        null;
+    } catch {
+      ip = null;
+    }
+
+    const result = await requestPasswordReset({
+      email: parsed.data.email,
+      ip,
+    });
+
+    return {
+      success: true,
+      data: { message: result.message || PASSWORD_RESET_GENERIC_MESSAGE },
+    };
+  } catch {
+    console.error("forgotPasswordAction failed");
+    return {
+      success: true,
+      data: { message: PASSWORD_RESET_GENERIC_MESSAGE },
+    };
+  }
+}
+
+export async function resetPasswordAction(
+  input: z.infer<typeof resetPasswordSchema>,
+): Promise<ApiResponse<{ message: string }>> {
+  try {
+    const parsed = resetPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Please check the form.",
+      };
+    }
+
+    const { resetPasswordWithToken } = await import("@/lib/password-reset");
+    const result = await resetPasswordWithToken({
+      rawToken: parsed.data.token,
+      newPassword: parsed.data.password,
+    });
+
+    if (!result.ok) {
+      return { success: false, error: result.error };
+    }
+
+    // Do not auto-login. Clear any session on this browser for safety.
+    await clearAuthCookie();
+
+    return {
+      success: true,
+      data: { message: "Your password has been reset successfully." },
+    };
+  } catch {
+    console.error("resetPasswordAction failed");
+    return {
+      success: false,
+      error: "Unable to reset password. Please try again.",
+    };
+  }
 }
