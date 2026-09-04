@@ -409,8 +409,13 @@ export function PricingSection() {
             Simple pricing for growing print shops
           </h2>
           <p className="mt-4 text-base text-slate-600">
-            Start with a free trial, then continue with Premium when you are
-            ready.
+            Start with a free trial, then continue with{" "}
+            <span className="font-medium text-slate-800">
+              PrintMadeEasy Premium
+            </span>{" "}
+            when you are ready. Pricing is in Indian Rupees (INR). Only
+            shopkeepers pay PrintMadeEasy — customer document uploads are not
+            charged through this billing.
           </p>
         </div>
 
@@ -445,20 +450,26 @@ export function PricingSection() {
           </article>
 
           <article className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm ring-1 ring-blue-100">
-            <p className="text-sm font-semibold text-blue-700">Premium</p>
+            <p className="text-sm font-semibold text-blue-700">
+              PrintMadeEasy Premium
+            </p>
             <h3 className="mt-2 text-2xl font-semibold text-slate-900">
               ₹{PREMIUM_PLAN.amountInr}
-              <span className="text-base font-medium text-slate-500"> / month</span>
+              <span className="text-base font-medium text-slate-500">
+                {" "}
+                / month (INR)
+              </span>
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Continue after your trial with full Premium access.
+              Paid by the shopkeeper after the free trial for full Premium
+              access.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {[
                 "Add printers and manage jobs",
                 "Windows Agent connectivity",
                 "Dashboard job tracking",
-                "Cancel anytime from Settings",
+                "Cancel anytime from My Plan / Billing",
               ].map((item) => (
                 <li key={item} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />

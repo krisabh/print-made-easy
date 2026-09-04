@@ -80,6 +80,9 @@ export function MarketingFooter() {
             <Link href="/terms" className="hover:text-blue-700">
               Terms of Service
             </Link>
+            <Link href="/refunds" className="hover:text-blue-700">
+              Refunds &amp; Cancellations
+            </Link>
           </div>
         </div>
       </div>

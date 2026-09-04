@@ -23,8 +23,10 @@ export default function PricingPage() {
             Simple pricing for growing print shops
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            Pricing below matches the plans available inside PrintMadeEasy after
-            you create your shop.
+            PrintMadeEasy Premium is{" "}
+            <span className="font-medium text-slate-800">₹199 per month (INR)</span>{" "}
+            after a 7-day free trial. Only shopkeepers pay PrintMadeEasy;
+            customers do not pay through this billing.
           </p>
         </div>
       </section>
