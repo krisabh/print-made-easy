@@ -12,6 +12,8 @@ export type PendingJob = {
   totalPages: number;
   printMode: "BW" | "COLOR";
   printType: "SINGLE" | "DOUBLE";
+  /** Optional; null/undefined on legacy jobs. Do not trust shape — parse safely. */
+  printSettings?: unknown | null;
   status: string;
   printAttempts: number;
   files: Array<{

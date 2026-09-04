@@ -115,6 +115,13 @@ model PrintJob {
   printMode     PrintMode
   printType     PrintType
   totalPrice    Decimal        @db.Decimal(10, 2)
+  /**
+   * Versioned print instructions (nullable JSON).
+   * null = legacy job — Agent must use today's exact print behavior.
+   * See shared/print-settings.ts for the v1 shape. Not a pricing source of truth;
+   * PrintJob.copies remains canonical for billing/pricing.
+   */
+  printSettings Json?
   status        PrintStatus    @default(PENDING)
   printAttempts Int            @default(0)
   lastError     String?        @db.Text

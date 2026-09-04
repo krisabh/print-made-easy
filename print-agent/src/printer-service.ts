@@ -164,9 +164,14 @@ function delay(ms: number) {
 }
 
 /**
- * Print a PDF on Windows via pdf-to-printer (SumatraPDF).
+ * Print a PDF on Windows via pdf-to-printer (SumatraPDF 3.4.6 bundled).
  * Keep options minimal — Canon XPS drivers often print blank pages when
  * Sumatra is given monochrome/simplex flags.
+ *
+ * Orientation: pdf-to-printer passes portrait|landscape into Sumatra
+ * `-print-settings`. Sumatra treats these as content rotation (not tray
+ * paper-direction). Legacy jobs omit the flag (today's behavior).
+ * Portrait jobs also omit the flag so default output matches Phase A.
  */
 export async function printPdfFile(
   filePath: string,
@@ -175,6 +180,7 @@ export async function printPdfFile(
     copies?: number;
     printMode?: "BW" | "COLOR";
     printType?: "SINGLE" | "DOUBLE";
+    orientation?: "portrait" | "landscape";
   },
 ) {
   const printOptions: {
@@ -183,6 +189,7 @@ export async function printPdfFile(
     copies: number;
     scale: "fit";
     side?: "duplex" | "simplex";
+    orientation?: "portrait" | "landscape";
   } = {
     printer: printerName,
     silent: true,
@@ -192,6 +199,11 @@ export async function printPdfFile(
 
   if (options?.printType === "DOUBLE") {
     printOptions.side = "duplex";
+  }
+
+  // Only set landscape — portrait/legacy leave unset for today's behavior.
+  if (options?.orientation === "landscape") {
+    printOptions.orientation = "landscape";
   }
 
   await printPdf(filePath, printOptions);

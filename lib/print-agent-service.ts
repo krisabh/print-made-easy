@@ -81,6 +81,7 @@ export async function listPendingJobsForShop(shopId: string) {
       totalPages: true,
       printMode: true,
       printType: true,
+      printSettings: true,
       status: true,
       printAttempts: true,
       createdAt: true,

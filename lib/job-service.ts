@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import type { PrintSettingsV1 } from "@/lib/print-settings";
 import type { SavedUploadFile } from "@/lib/upload-service";
 
 export type CreatePrintJobInput = {
@@ -16,6 +17,11 @@ export type CreatePrintJobInput = {
   printType: PrintType;
   totalPrice: number;
   files: SavedUploadFile[];
+  /**
+   * Phase B+: versioned print instructions. When omitted, SQL NULL (legacy).
+   * copies inside settings must match PrintJob.copies.
+   */
+  printSettings?: PrintSettingsV1 | null;
 };
 
 function formatJobNumber(sequence: number) {
@@ -51,6 +57,11 @@ async function allocateShopJobSequence(
   };
 }
 
+/**
+ * Creates a PrintJob.
+ * PrintJob.copies remains the pricing source of truth.
+ * printSettings (when provided) stores print instructions including orientation.
+ */
 export async function createPrintJob(input: CreatePrintJobInput) {
   return prisma.$transaction(async (tx) => {
     const { jobSequence, jobNumber } = await allocateShopJobSequence(
@@ -68,6 +79,11 @@ export async function createPrintJob(input: CreatePrintJobInput) {
         printMode: input.printMode,
         printType: input.printType,
         totalPrice: input.totalPrice,
+        ...(input.printSettings
+          ? {
+              printSettings: input.printSettings as Prisma.InputJsonValue,
+            }
+          : {}),
         status: PrintStatus.PENDING,
         files: {
           create: input.files.map((file) => ({

@@ -12,6 +12,7 @@ import type { ShopUploadContext, UploadSuccessData } from "@/types";
 
 type PrintMode = "BW" | "COLOR";
 type PrintType = "SINGLE" | "DOUBLE";
+type PrintOrientation = "portrait" | "landscape";
 type JobLiveStatus =
   | "PENDING"
   | "PRINTING"
@@ -30,6 +31,7 @@ const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
 const MAX_FILES = 10;
 const MAX_FILE_SIZE_MB = 20;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_COPIES = 100;
 const STATUS_POLL_MS = 3000;
 
 function getExtension(fileName: string) {
@@ -192,6 +194,7 @@ export function UploadForm({ shop }: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [copies, setCopies] = useState(1);
+  const [orientation, setOrientation] = useState<PrintOrientation>("portrait");
   const [printMode, setPrintMode] = useState<PrintMode>("BW");
   const [printType, setPrintType] = useState<PrintType>("SINGLE");
   const [fileError, setFileError] = useState<string | null>(null);
@@ -314,7 +317,7 @@ export function UploadForm({ shop }: UploadFormProps) {
   }
 
   function updateCopies(next: number) {
-    setCopies(Math.max(1, Math.floor(next)));
+    setCopies(Math.min(MAX_COPIES, Math.max(1, Math.floor(next))));
   }
 
   function resetForm() {
@@ -322,6 +325,7 @@ export function UploadForm({ shop }: UploadFormProps) {
     setLiveStatus("PENDING");
     setFiles([]);
     setCopies(1);
+    setOrientation("portrait");
     setPrintMode("BW");
     setPrintType("SINGLE");
     setFileError(null);
@@ -336,8 +340,12 @@ export function UploadForm({ shop }: UploadFormProps) {
       setFileError("Please upload at least one document.");
       return;
     }
-    if (!Number.isInteger(copies) || copies < 1) {
-      setFormError("Copies must be at least 1.");
+    if (!Number.isInteger(copies) || copies < 1 || copies > MAX_COPIES) {
+      setFormError("Copies must be between 1 and 100.");
+      return;
+    }
+    if (orientation !== "portrait" && orientation !== "landscape") {
+      setFormError("Please choose Portrait or Landscape.");
       return;
     }
     if (isPending) return;
@@ -345,6 +353,7 @@ export function UploadForm({ shop }: UploadFormProps) {
     const formData = new FormData();
     formData.set("shopCode", shop.shopCode);
     formData.set("copies", String(copies));
+    formData.set("orientation", orientation);
     formData.set("printMode", printMode);
     formData.set("printType", printType);
     files.forEach((item) => formData.append("files", item.file));
@@ -566,6 +575,16 @@ export function UploadForm({ shop }: UploadFormProps) {
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-base font-semibold text-slate-900">Print options</h2>
 
+            <SegmentedControl
+              label="Orientation"
+              value={orientation}
+              onChange={setOrientation}
+              options={[
+                { value: "portrait", label: "Portrait" },
+                { value: "landscape", label: "Landscape" },
+              ]}
+            />
+
             <div className="space-y-2">
               <Label htmlFor="copies">Copies</Label>
               <div className="flex items-center gap-2">
@@ -583,6 +602,7 @@ export function UploadForm({ shop }: UploadFormProps) {
                   name="copies"
                   type="number"
                   min={1}
+                  max={MAX_COPIES}
                   inputMode="numeric"
                   value={copies}
                   onChange={(event) => {
@@ -600,7 +620,8 @@ export function UploadForm({ shop }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => updateCopies(copies + 1)}
-                  className="flex size-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  disabled={copies >= MAX_COPIES}
+                  className="flex size-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                   aria-label="Increase copies"
                 >
                   <Plus className="size-4" />
@@ -651,6 +672,12 @@ export function UploadForm({ shop }: UploadFormProps) {
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Orientation</dt>
+                <dd className="font-medium text-slate-900">
+                  {orientation === "portrait" ? "Portrait" : "Landscape"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Print mode</dt>
                 <dd className="font-medium text-slate-900">
                   {printMode === "BW" ? "Black & White" : "Color"}
@@ -694,10 +721,10 @@ export function UploadForm({ shop }: UploadFormProps) {
             {isPending ? (
               <>
                 <Loader2 className="animate-spin" aria-hidden="true" />
-                Submitting…
+                Printing…
               </>
             ) : (
-              "Submit Print Job"
+              "Print"
             )}
           </Button>
         </>

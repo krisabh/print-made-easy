@@ -71,6 +71,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
           copies: claimed.copies,
           printMode: claimed.printMode,
           printType: claimed.printType,
+          // Optional; null/omitted on legacy jobs. Agent must tolerate missing.
+          printSettings: claimed.printSettings ?? null,
           files: claimed.files.map((file) => ({
             id: file.id,
             originalFileName: file.originalFileName,

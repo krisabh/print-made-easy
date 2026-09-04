@@ -11,6 +11,10 @@ import {
   getShopWithPricing,
   toPricingRates,
 } from "@/lib/pricing-service";
+import {
+  buildPrintSettingsV1,
+  type PrintOrientationV1,
+} from "@/lib/print-settings";
 import { hasSubscriptionAccess } from "@/lib/subscription";
 import { saveUploadFiles, validateUploadFiles } from "@/lib/upload-service";
 import type { ApiResponse, UploadSuccessData } from "@/types";
@@ -25,6 +29,7 @@ const submitSchema = z.object({
   copies: z.coerce.number().int().min(1, "Copies must be at least 1.").max(100),
   printMode: z.nativeEnum(PrintMode),
   printType: z.nativeEnum(PrintType),
+  orientation: z.enum(["portrait", "landscape"]).default("portrait"),
 });
 
 function toFriendlyError(message: string) {
@@ -58,6 +63,7 @@ export async function submitPrintJobAction(
       copies: formData.get("copies"),
       printMode: formData.get("printMode"),
       printType: formData.get("printType"),
+      orientation: formData.get("orientation") || "portrait",
     });
 
     if (!parsed.success) {
@@ -97,7 +103,7 @@ export async function submitPrintJobAction(
     const totalPages = savedFiles.reduce((sum, file) => sum + file.totalPages, 0);
     const rates = toPricingRates(shop.printPrice);
 
-    // Server is the source of truth for final price
+    // Server is the source of truth for final price — uses PrintJob.copies only.
     const totalPrice = calculatePrintCost(
       rates,
       totalPages,
@@ -106,6 +112,12 @@ export async function submitPrintJobAction(
       parsed.data.printType,
     );
 
+    const orientation = parsed.data.orientation as PrintOrientationV1;
+    const printSettings = buildPrintSettingsV1({
+      copies: parsed.data.copies,
+      orientation,
+    });
+
     const job = await createPrintJob({
       shopId: shop.id,
       copies: parsed.data.copies,
@@ -113,6 +125,7 @@ export async function submitPrintJobAction(
       printMode: parsed.data.printMode,
       printType: parsed.data.printType,
       totalPrice,
+      printSettings,
       files: savedFiles,
     });
 

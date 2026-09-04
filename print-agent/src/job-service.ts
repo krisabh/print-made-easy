@@ -1,4 +1,3 @@
-import { PDFDocument } from "pdf-lib";
 import fs from "fs/promises";
 
 import {
@@ -11,6 +10,11 @@ import {
   type PendingJob,
 } from "./api-client";
 import { loadConfig } from "./config";
+import {
+  createImagePrintablePdf,
+  type PrintableOrientation,
+} from "./image-to-printable-pdf";
+import { planJobPrint } from "./print-settings";
 import { detectPrinters, printPdfFile } from "./printer-service";
 import { deleteFileSafe, getTempFilePath } from "./storage-service";
 import { runTestPrint as runInternalTestPrint } from "./test-print";
@@ -26,6 +30,7 @@ async function ensurePrintablePdf(
   extension: string,
   jobNumber: string,
   fileId: string,
+  orientation: PrintableOrientation,
 ) {
   const ext = extension.toLowerCase();
   if (ext === "pdf") {
@@ -34,31 +39,9 @@ async function ensurePrintablePdf(
 
   if (ext === "png" || ext === "jpg" || ext === "jpeg") {
     const bytes = await fs.readFile(sourcePath);
-    const pdf = await PDFDocument.create();
-    const image =
-      ext === "png" ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
-
-    // Fit image onto A4 so Canon drivers don't get a huge/odd page size.
-    const pageWidth = 595;
-    const pageHeight = 842;
-    const margin = 24;
-    const maxWidth = pageWidth - margin * 2;
-    const maxHeight = pageHeight - margin * 2;
-    const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
-    const x = (pageWidth - drawWidth) / 2;
-    const y = (pageHeight - drawHeight) / 2;
-
-    const page = pdf.addPage([pageWidth, pageHeight]);
-    page.drawImage(image, {
-      x,
-      y,
-      width: drawWidth,
-      height: drawHeight,
-    });
+    const pdfBytes = await createImagePrintablePdf(bytes, ext, orientation);
     const outPath = getTempFilePath(`job-${jobNumber}-${fileId}-converted.pdf`);
-    await fs.writeFile(outPath, await pdf.save());
+    await fs.writeFile(outPath, pdfBytes);
     return outPath;
   }
 
@@ -70,15 +53,29 @@ async function ensurePrintablePdf(
 async function printCloudJob(job: PendingJob, printerName: string) {
   let claimed = false;
   const localFiles: string[] = [];
-  let printed = false;
 
   try {
     const claim = await claimJob(job.id);
-    const claimedJob = claim.job;
+    const claimedJob = claim.job as
+      | (PendingJob & {
+          files?: Array<{
+            id: string;
+            originalFileName: string;
+            fileExtension: string;
+            fileSize: number;
+            printedAt?: string | null;
+          }>;
+        })
+      | null;
     if (!claimedJob) {
       throw new Error("Job could not be claimed.");
     }
     claimed = true;
+
+    const plan = planJobPrint(
+      claimedJob.printSettings ?? job.printSettings,
+      claimedJob.copies,
+    );
 
     if (!claimedJob.files?.length) {
       throw new Error(
@@ -104,22 +101,24 @@ async function printCloudJob(job: PendingJob, printerName: string) {
         file.fileExtension,
         claimedJob.jobNumber,
         file.id,
+        plan.imageOrientation,
       );
       if (printablePath !== localPath) {
         localFiles.push(printablePath);
       }
 
+      // PrintJob.copies remains the print-count source of truth (matches pricing).
       await printPdfFile(printablePath, printerName, {
         copies: claimedJob.copies,
         printMode: claimedJob.printMode,
         printType: claimedJob.printType,
+        orientation: plan.sumatraOrientation,
       });
 
       await reportFilePrinted(job.id, file.id);
       console.log(`Printed file ${file.originalFileName}`);
     }
 
-    printed = true;
     await reportJobReady(job.id);
   } catch (error) {
     const message =
