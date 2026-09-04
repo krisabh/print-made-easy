@@ -60,6 +60,7 @@ model Shop {
   printers               Printer[]
   settings               Settings?
   subscription           Subscription?
+  billingPayments        BillingPayment[]
 
   @@index([agentId])
   @@index([agentPairingTokenHash])
@@ -184,6 +185,36 @@ model Subscription {
   @@index([status])
   @@index([trialEndAt])
   @@index([providerSubscriptionId])
+}
+
+/**
+ * Shopkeeper SaaS payment ledger (not customer print payments).
+ * Entitlement/access remains on Subscription — this records verified charges.
+ */
+model BillingPayment {
+  id                 String   @id @default(uuid())
+  shopId             String
+  provider           String   @db.VarChar(64)
+  mode               String   @db.VarChar(32)
+  status             String   @db.VarChar(32)
+  amountInr          Int
+  currency           String   @default("INR") @db.VarChar(16)
+  providerOrderId    String   @db.VarChar(128)
+  providerPaymentId  String?  @db.VarChar(128)
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  paidAt             DateTime?
+  failureReason      String?  @db.VarChar(500)
+  metadataJson       String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  shop               Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerOrderId])
+  @@index([shopId])
+  @@index([status])
+  @@index([providerPaymentId])
+  @@index([createdAt])
 }
 
 /**

@@ -6,6 +6,10 @@ import {
   hashWebhookPayload,
   verifyCashfreeWebhookSignature,
 } from "@/lib/cashfree";
+import {
+  claimWebhookEvent,
+  markWebhookEventProcessed,
+} from "@/lib/billing/webhook-idempotency";
 import { prisma } from "@/lib/prisma";
 import {
   markSubscriptionCancelAtPeriodEnd,
@@ -137,17 +141,13 @@ export async function processCashfreeWebhook(input: {
   const payloadHash = hashWebhookPayload(input.rawBody);
   const now = input.now || new Date();
 
-  try {
-    await prisma.paymentWebhookEvent.create({
-      data: {
-        provider: CASHFREE_PROVIDER,
-        eventId,
-        eventType,
-        payloadHash,
-        receivedAt: now,
-      },
-    });
-  } catch {
+  const claim = await claimWebhookEvent({
+    eventId,
+    eventType,
+    payloadHash,
+    now,
+  });
+  if (claim === "already_processed") {
     logWebhookDiagnostic({
       event: eventType,
       result: "duplicate",
@@ -162,196 +162,198 @@ export async function processCashfreeWebhook(input: {
     };
   }
 
-  const data = asRecord(payload.data);
-  const ids = pickSubscriptionIds(data);
-  const subscription = await findSubscriptionForWebhook(ids);
+  try {
+    const data = asRecord(payload.data);
+    const ids = pickSubscriptionIds(data);
+    const subscription = await findSubscriptionForWebhook(ids);
 
-  if (!subscription) {
-    logWebhookDiagnostic({
-      event: eventType,
-      result: "subscription_not_found",
-      eventId,
-      providerSubscriptionId: ids[0] || null,
-      matchedIds: ids.join(",") || null,
+    if (!subscription) {
+      logWebhookDiagnostic({
+        event: eventType,
+        result: "subscription_not_found",
+        eventId,
+        providerSubscriptionId: ids[0] || null,
+        matchedIds: ids.join(",") || null,
+      });
+      await markWebhookEventProcessed({ eventId, now });
+      return {
+        ok: true as const,
+        status: 200 as const,
+        ignored: true,
+        reason: "subscription_not_found",
+        eventId,
+        eventType,
+      };
+    }
+
+    const details = asRecord(data.subscription_details);
+    const plan = asRecord(data.plan_details);
+    const customer = asRecord(data.customer_details);
+    const authorization = asRecord(data.authorization_details);
+    const payment = asRecord(data.payment || data.payment_details);
+    const providerSubscriptionId = resolveProviderSubscriptionId({
+      details,
+      ids,
+      existing: subscription.providerSubscriptionId,
     });
-    await prisma.paymentWebhookEvent.update({
-      where: {
-        provider_eventId: { provider: CASHFREE_PROVIDER, eventId },
-      },
-      data: { processedAt: now },
-    });
-    return {
-      ok: true as const,
-      status: 200 as const,
-      ignored: true,
-      reason: "subscription_not_found",
-      eventId,
-      eventType,
-    };
-  }
 
-  const details = asRecord(data.subscription_details);
-  const plan = asRecord(data.plan_details);
-  const customer = asRecord(data.customer_details);
-  const authorization = asRecord(data.authorization_details);
-  const payment = asRecord(data.payment || data.payment_details);
-  const providerSubscriptionId = resolveProviderSubscriptionId({
-    details,
-    ids,
-    existing: subscription.providerSubscriptionId,
-  });
+    const providerStatus = String(
+      details.subscription_status || "",
+    ).toUpperCase();
+    const authorizationStatus = String(
+      authorization.authorization_status || "",
+    ).toUpperCase();
+    const paymentStatus = String(
+      data.payment_status || payment.payment_status || "",
+    ).toUpperCase();
 
-  const providerStatus = String(details.subscription_status || "").toUpperCase();
-  const authorizationStatus = String(
-    authorization.authorization_status || "",
-  ).toUpperCase();
-  const paymentStatus = String(
-    data.payment_status || payment.payment_status || "",
-  ).toUpperCase();
+    const authSucceeded =
+      eventType === "SUBSCRIPTION_AUTH_STATUS" &&
+      (authorizationStatus === "SUCCESS" ||
+        authorizationStatus === "ACTIVE" ||
+        paymentStatus === "SUCCESS") &&
+      paymentStatus !== "FAILED" &&
+      authorizationStatus !== "FAILED";
 
-  const authSucceeded =
-    eventType === "SUBSCRIPTION_AUTH_STATUS" &&
-    (authorizationStatus === "SUCCESS" ||
-      authorizationStatus === "ACTIVE" ||
-      paymentStatus === "SUCCESS") &&
-    paymentStatus !== "FAILED" &&
-    authorizationStatus !== "FAILED";
+    const shouldActivatePremium =
+      providerStatus === "ACTIVE" ||
+      eventType === "SUBSCRIPTION_PAYMENT_SUCCESS" ||
+      authSucceeded;
 
-  const shouldActivatePremium =
-    providerStatus === "ACTIVE" ||
-    eventType === "SUBSCRIPTION_PAYMENT_SUCCESS" ||
-    authSucceeded;
+    let resultLabel = "ignored";
 
-  let resultLabel = "ignored";
-
-  if (
-    eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
-    eventType === "SUBSCRIPTION_AUTH_STATUS" ||
-    eventType === "SUBSCRIPTION_PAYMENT_SUCCESS"
-  ) {
     if (
-      (providerStatus === "CUSTOMER_CANCELLED" ||
-        providerStatus === "CANCELLED") &&
-      (eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
-        eventType === "SUBSCRIPTION_AUTH_STATUS")
+      eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
+      eventType === "SUBSCRIPTION_AUTH_STATUS" ||
+      eventType === "SUBSCRIPTION_PAYMENT_SUCCESS"
     ) {
-      const payloadPeriodEnd = parseMaybeDate(details.next_schedule_date);
-      const periodEnd =
-        (payloadPeriodEnd && payloadPeriodEnd.getTime() > now.getTime()
-          ? payloadPeriodEnd
-          : null) ||
-        (subscription.currentPeriodEnd &&
-        subscription.currentPeriodEnd.getTime() > now.getTime()
-          ? subscription.currentPeriodEnd
-          : null);
-
-      if (periodEnd) {
-        await markSubscriptionCancelAtPeriodEnd({
-          subscriptionId: subscription.id,
-          currentPeriodEnd: periodEnd,
-          now,
-        });
-        resultLabel = "cancel_at_period_end";
-      } else {
-        await markSubscriptionCancelled({
-          subscriptionId: subscription.id,
-          now,
-        });
-        resultLabel = "cancelled";
-      }
-    } else if (shouldActivatePremium) {
-      // Do not clear a scheduled cancellation from a late ACTIVE/success
-      // webhook for the same Cashfree subscription.
-      const sameProviderSubscription =
-        !providerSubscriptionId ||
-        !subscription.providerSubscriptionId ||
-        providerSubscriptionId === subscription.providerSubscriptionId ||
-        ids.includes(subscription.providerSubscriptionId);
-
-      if (subscription.cancelAtPeriodEnd && sameProviderSubscription) {
-        resultLabel = "ignored_cancel_at_period_end";
-      } else {
-        const periodStart =
-          parseMaybeDate(details.subscription_first_charge_time) ||
-          parseMaybeDate(details.authorization_time) ||
-          parseMaybeDate(authorization.authorization_time) ||
-          now;
+      if (
+        (providerStatus === "CUSTOMER_CANCELLED" ||
+          providerStatus === "CANCELLED") &&
+        (eventType === "SUBSCRIPTION_STATUS_CHANGED" ||
+          eventType === "SUBSCRIPTION_AUTH_STATUS")
+      ) {
+        const payloadPeriodEnd = parseMaybeDate(details.next_schedule_date);
         const periodEnd =
-          parseMaybeDate(details.next_schedule_date) ||
-          parseMaybeDate(plan.plan_next_charge_date) ||
-          null;
+          (payloadPeriodEnd && payloadPeriodEnd.getTime() > now.getTime()
+            ? payloadPeriodEnd
+            : null) ||
+          (subscription.currentPeriodEnd &&
+          subscription.currentPeriodEnd.getTime() > now.getTime()
+            ? subscription.currentPeriodEnd
+            : null);
 
-        await markSubscriptionPremiumActive({
+        if (periodEnd) {
+          await markSubscriptionCancelAtPeriodEnd({
+            subscriptionId: subscription.id,
+            currentPeriodEnd: periodEnd,
+            now,
+          });
+          resultLabel = "cancel_at_period_end";
+        } else {
+          await markSubscriptionCancelled({
+            subscriptionId: subscription.id,
+            now,
+          });
+          resultLabel = "cancelled";
+        }
+      } else if (shouldActivatePremium) {
+        // Do not clear a scheduled cancellation from a late ACTIVE/success
+        // webhook for the same Cashfree subscription.
+        const sameProviderSubscription =
+          !providerSubscriptionId ||
+          !subscription.providerSubscriptionId ||
+          providerSubscriptionId === subscription.providerSubscriptionId ||
+          ids.includes(subscription.providerSubscriptionId);
+
+        if (subscription.cancelAtPeriodEnd && sameProviderSubscription) {
+          resultLabel = "ignored_cancel_at_period_end";
+        } else {
+          const periodStart =
+            parseMaybeDate(details.subscription_first_charge_time) ||
+            parseMaybeDate(details.authorization_time) ||
+            parseMaybeDate(authorization.authorization_time) ||
+            now;
+          const periodEnd =
+            parseMaybeDate(details.next_schedule_date) ||
+            parseMaybeDate(plan.plan_next_charge_date) ||
+            null;
+
+          await markSubscriptionPremiumActive({
+            subscriptionId: subscription.id,
+            providerSubscriptionId,
+            providerCustomerId: customer.customer_id
+              ? String(customer.customer_id)
+              : customer.customer_email
+                ? String(customer.customer_email)
+                : subscription.providerCustomerId,
+            providerPlanId: plan.plan_id
+              ? String(plan.plan_id)
+              : subscription.providerPlanId,
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            now,
+          });
+          resultLabel = "activated";
+        }
+      } else if (providerStatus === "ON_HOLD") {
+        await markSubscriptionPastDue({
           subscriptionId: subscription.id,
-          providerSubscriptionId,
-          providerCustomerId: customer.customer_id
-            ? String(customer.customer_id)
-            : customer.customer_email
-              ? String(customer.customer_email)
-              : subscription.providerCustomerId,
-          providerPlanId: plan.plan_id
-            ? String(plan.plan_id)
-            : subscription.providerPlanId,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
           now,
         });
-        resultLabel = "activated";
+        resultLabel = "past_due";
+      } else if (
+        providerStatus === "EXPIRED" ||
+        providerStatus === "COMPLETED" ||
+        providerStatus === "LINK_EXPIRED" ||
+        providerStatus === "CARD_EXPIRED"
+      ) {
+        await markSubscriptionExpired({ subscriptionId: subscription.id });
+        resultLabel = "expired";
+      } else {
+        resultLabel = `ignored_status_${providerStatus || "unknown"}`;
       }
-    } else if (providerStatus === "ON_HOLD") {
+    } else if (eventType === "SUBSCRIPTION_PAYMENT_FAILED") {
       await markSubscriptionPastDue({
         subscriptionId: subscription.id,
         now,
       });
       resultLabel = "past_due";
-    } else if (
-      providerStatus === "EXPIRED" ||
-      providerStatus === "COMPLETED" ||
-      providerStatus === "LINK_EXPIRED" ||
-      providerStatus === "CARD_EXPIRED"
-    ) {
-      await markSubscriptionExpired({ subscriptionId: subscription.id });
-      resultLabel = "expired";
     } else {
-      resultLabel = `ignored_status_${providerStatus || "unknown"}`;
+      resultLabel = "ignored_event";
     }
-  } else if (eventType === "SUBSCRIPTION_PAYMENT_FAILED") {
-    await markSubscriptionPastDue({
+
+    await markWebhookEventProcessed({ eventId, now });
+
+    logWebhookDiagnostic({
+      event: eventType,
+      result: resultLabel,
+      providerSubscriptionId,
+      shopId: subscription.shopId,
       subscriptionId: subscription.id,
-      now,
+      providerStatus: providerStatus || null,
+      authorizationStatus: authorizationStatus || null,
+      paymentStatus: paymentStatus || null,
     });
-    resultLabel = "past_due";
-  } else {
-    resultLabel = "ignored_event";
+
+    return {
+      ok: true as const,
+      status: 200 as const,
+      duplicate: false,
+      eventId,
+      eventType,
+      subscriptionId: subscription.id,
+      result: resultLabel,
+    };
+  } catch (error) {
+    // Leave processedAt null so Cashfree can retry the same eventId.
+    logWebhookDiagnostic({
+      event: eventType,
+      result: "processing_error",
+      eventId,
+    });
+    throw error;
   }
-
-  await prisma.paymentWebhookEvent.update({
-    where: {
-      provider_eventId: { provider: CASHFREE_PROVIDER, eventId },
-    },
-    data: { processedAt: now },
-  });
-
-  logWebhookDiagnostic({
-    event: eventType,
-    result: resultLabel,
-    providerSubscriptionId,
-    shopId: subscription.shopId,
-    subscriptionId: subscription.id,
-    providerStatus: providerStatus || null,
-    authorizationStatus: authorizationStatus || null,
-    paymentStatus: paymentStatus || null,
-  });
-
-  return {
-    ok: true as const,
-    status: 200 as const,
-    duplicate: false,
-    eventId,
-    eventType,
-    subscriptionId: subscription.id,
-    result: resultLabel,
-  };
 }
 
 /** Test helper: stable hash for smoke scripts. */

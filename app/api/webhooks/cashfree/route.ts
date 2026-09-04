@@ -1,3 +1,6 @@
+import { getPaymentProviderAdapter } from "@/lib/billing/registry";
+import { processNormalizedBillingEvent } from "@/lib/billing/service";
+import { markWebhookEventProcessed } from "@/lib/billing/webhook-idempotency";
 import { processCashfreeWebhook } from "@/lib/cashfree-webhooks";
 
 export const runtime = "nodejs";
@@ -23,6 +26,61 @@ export async function POST(request: Request) {
       request.headers.get("x-webhook-timestamp") ||
       request.headers.get("X-Webhook-Timestamp");
 
+    // Prefer provider-agnostic PG (one-time) normalization when applicable.
+    const adapter = getPaymentProviderAdapter("cashfree");
+    if (adapter.oneTimeWebhook) {
+      const normalized = await adapter.oneTimeWebhook.verifyAndNormalize({
+        rawBody,
+        signature,
+        timestamp,
+      });
+
+      if (normalized) {
+        if (!normalized.ok) {
+          return Response.json(
+            { error: normalized.error },
+            { status: normalized.status },
+          );
+        }
+
+        if ("duplicate" in normalized && normalized.duplicate) {
+          return Response.json({
+            received: true,
+            duplicate: true,
+            eventId: normalized.eventId,
+            eventType: normalized.eventType,
+          });
+        }
+
+        if ("event" in normalized) {
+          try {
+            const applied = await processNormalizedBillingEvent(
+              normalized.event,
+            );
+            // Mark processed only after apply completes (including definitive rejects).
+            // Transient throws leave processedAt null so Cashfree can retry.
+            await markWebhookEventProcessed({
+              eventId: normalized.event.eventId,
+            });
+            return Response.json({
+              received: true,
+              duplicate: false,
+              result: "result" in applied ? applied.result : "processed",
+            });
+          } catch {
+            console.error(
+              "POST /api/webhooks/cashfree PG apply failed (retryable)",
+            );
+            return Response.json(
+              { error: "Webhook processing failed." },
+              { status: 500 },
+            );
+          }
+        }
+      }
+    }
+
+    // Subscription (and other) Cashfree events — existing processor (unchanged behavior).
     const result = await processCashfreeWebhook({
       rawBody,
       signature,
@@ -39,7 +97,7 @@ export async function POST(request: Request) {
       ignored: Boolean("ignored" in result && result.ignored),
       reason: "reason" in result ? result.reason : undefined,
     });
-  } catch (error) {
+  } catch {
     console.error("POST /api/webhooks/cashfree failed");
     return Response.json({ error: "Webhook processing failed." }, { status: 500 });
   }

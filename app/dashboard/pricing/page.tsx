@@ -2,15 +2,21 @@ import { Suspense } from "react";
 
 import { SaasPricingPlans } from "@/components/dashboard/saas-pricing-plans";
 import { requireShop } from "@/lib/auth";
-import { getCashfreeJsMode, PREMIUM_PLAN } from "@/lib/cashfree";
+import { getBillingConfig } from "@/lib/billing/config";
+import { PREMIUM_PLAN } from "@/lib/billing/plan";
+import { getCashfreeJsMode } from "@/lib/cashfree";
 import {
   getShopSubscription,
   toPublicSubscriptionView,
 } from "@/lib/subscription";
 
+/** Always read current Subscription entitlement — never serve a cached Trial snapshot. */
+export const dynamic = "force-dynamic";
+
 export default async function PlanBillingPage() {
   const { shop } = await requireShop();
   const subscription = await getShopSubscription(shop.id);
+  const billing = getBillingConfig();
 
   let cashfreeJsMode: "sandbox" | "production" = "sandbox";
   try {
@@ -33,6 +39,7 @@ export default async function PlanBillingPage() {
           subscription={toPublicSubscriptionView(subscription)}
           cashfreeJsMode={cashfreeJsMode}
           premiumPriceInr={PREMIUM_PLAN.amountInr}
+          billingMode={billing.mode}
         />
       </Suspense>
     </div>

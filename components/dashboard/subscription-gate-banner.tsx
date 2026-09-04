@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { PREMIUM_PLAN } from "@/lib/billing/plan";
 import type { SubscriptionAccessState } from "@/lib/subscription";
 
 type SubscriptionGateBannerProps = {

@@ -11,6 +11,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import type { BillingMode } from "@/lib/billing/types";
+import { resolveBillingPlanCta } from "@/lib/billing/plan-cta";
 import type { PublicSubscriptionView } from "@/lib/subscription";
 
 type SaasPricingPlansProps = {
@@ -18,6 +20,8 @@ type SaasPricingPlansProps = {
   cashfreeJsMode: "sandbox" | "production";
   /** Shopkeeper Premium monthly price in INR (from server PREMIUM_PLAN). */
   premiumPriceInr: number;
+  /** Server billing mode — drives CTA copy and checkout path. */
+  billingMode: BillingMode;
 };
 
 const START_FREE_FEATURES = [
@@ -39,6 +43,10 @@ const PREMIUM_FEATURES = [
 declare global {
   interface Window {
     Cashfree?: (options: { mode: string }) => {
+      checkout: (options: {
+        paymentSessionId: string;
+        redirectTarget?: string;
+      }) => Promise<{ error?: { message?: string } }>;
       subscriptionsCheckout: (options: {
         subsSessionId: string;
         redirectTarget?: string;
@@ -96,6 +104,7 @@ export function SaasPricingPlans({
   subscription: initialSubscription,
   cashfreeJsMode,
   premiumPriceInr,
+  billingMode,
 }: SaasPricingPlansProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -107,6 +116,7 @@ export function SaasPricingPlans({
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
+    // Server props are authoritative after refresh / navigation.
     setSubscription(initialSubscription);
   }, [initialSubscription]);
 
@@ -127,12 +137,39 @@ export function SaasPricingPlans({
       setConfirming(true);
       setError(null);
       setNotice(
-        "Payment submitted. We're confirming your subscription. This usually takes a moment.",
+        "Payment received. We are confirming your payment. This usually takes a moment.",
       );
 
       while (!cancelled && attempts < 8) {
         attempts += 1;
         try {
+          // Server verifies pending orders with Cashfree (not the browser).
+          // Covers localhost when Cashfree cannot deliver webhooks to 127.0.0.1.
+          const confirmRes = await fetch("/api/billing/confirm", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            cache: "no-store",
+          });
+          if (confirmRes.ok) {
+            const confirmData = (await confirmRes.json()) as {
+              subscription?: PublicSubscriptionView | null;
+            };
+            if (confirmData.subscription) {
+              setSubscription(confirmData.subscription);
+              if (
+                confirmData.subscription.status === "ACTIVE" &&
+                confirmData.subscription.plan === "PREMIUM" &&
+                confirmData.subscription.hasAccess
+              ) {
+                setNotice("Premium is active.");
+                setConfirming(false);
+                router.replace("/dashboard/pricing");
+                router.refresh();
+                return;
+              }
+            }
+          }
+
           const res = await fetch("/api/subscription", { cache: "no-store" });
           if (!res.ok) {
             throw new Error("Unable to refresh subscription status.");
@@ -145,6 +182,7 @@ export function SaasPricingPlans({
             setNotice("Premium is active.");
             setConfirming(false);
             router.replace("/dashboard/pricing");
+            router.refresh();
             return;
           }
         } catch {
@@ -167,6 +205,7 @@ export function SaasPricingPlans({
       }
       setConfirming(false);
       router.replace("/dashboard/pricing");
+      router.refresh();
     }
 
     void refreshFromServer();
@@ -193,26 +232,35 @@ export function SaasPricingPlans({
   const pastDue =
     subscription?.status === "PAST_DUE" && subscription.hasAccess;
   const expired = Boolean(subscription && !subscription.hasAccess);
-  const canSubscribe = Boolean(subscription?.canSubscribe);
   const canCancel = Boolean(subscription?.canCancel);
+  const planCta = resolveBillingPlanCta(subscription, {
+    billingMode,
+    premiumPriceInr,
+    busy,
+  });
 
   async function startPremiumCheckout() {
     setBusy(true);
     setError(null);
-    setNotice("Creating subscription…");
+    setNotice(
+      billingMode === "ONE_TIME"
+        ? "Creating payment…"
+        : "Creating subscription…",
+    );
 
     try {
-      const res = await fetch("/api/subscription/create", {
+      const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
-        subscriptionSessionId?: string;
+        checkoutSessionId?: string;
+        checkoutKind?: "cashfree_payment" | "cashfree_subscription";
         environment?: "sandbox" | "production";
       };
 
-      if (!res.ok || !data.subscriptionSessionId) {
+      if (!res.ok || !data.checkoutSessionId || !data.checkoutKind) {
         throw new Error(data.error || "Payment initiation failed.");
       }
 
@@ -226,14 +274,29 @@ export function SaasPricingPlans({
         mode: data.environment || cashfreeJsMode,
       });
 
-      const result = await cashfree.subscriptionsCheckout({
-        subsSessionId: data.subscriptionSessionId,
-        redirectTarget: "_self",
-      });
-
-      if (result?.error?.message) {
-        throw new Error(result.error.message);
+      if (data.checkoutKind === "cashfree_payment") {
+        const result = await cashfree.checkout({
+          paymentSessionId: data.checkoutSessionId,
+          redirectTarget: "_self",
+        });
+        if (result?.error?.message) {
+          throw new Error(result.error.message);
+        }
+        return;
       }
+
+      if (data.checkoutKind === "cashfree_subscription") {
+        const result = await cashfree.subscriptionsCheckout({
+          subsSessionId: data.checkoutSessionId,
+          redirectTarget: "_self",
+        });
+        if (result?.error?.message) {
+          throw new Error(result.error.message);
+        }
+        return;
+      }
+
+      throw new Error("Unsupported checkout type.");
     } catch (err) {
       setNotice(null);
       setError(
@@ -499,9 +562,18 @@ export function SaasPricingPlans({
             <span className="text-lg font-medium text-slate-500"> /month</span>
           </p>
           {premiumActive ? (
-            <p className="mt-2 text-sm font-medium text-blue-700">
-              {subscription?.detail}
-            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-medium text-blue-700">
+                {planCta.headline || "You are already a Premium member."}
+              </p>
+              {planCta.validUntil ? (
+                <p className="text-sm text-slate-600">
+                  Valid until: {planCta.validUntil}
+                </p>
+              ) : subscription?.detail ? (
+                <p className="text-sm text-slate-600">{subscription.detail}</p>
+              ) : null}
+            </div>
           ) : cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
             <p className="mt-2 text-sm font-medium text-amber-800">
               {subscription?.detail}
@@ -518,7 +590,11 @@ export function SaasPricingPlans({
                 : "Subscribe again to restore access."}
             </p>
           ) : (
-            <p className="mt-2 text-sm text-slate-500">Billed monthly. Cancel anytime.</p>
+            <p className="mt-2 text-sm text-slate-500">
+              {billingMode === "ONE_TIME"
+                ? "Pay monthly. Renew manually when your period ends."
+                : "Billed monthly. Cancel anytime."}
+            </p>
           )}
 
           <ul className="mt-8 space-y-3">
@@ -533,32 +609,42 @@ export function SaasPricingPlans({
           </ul>
 
           <div className="mt-8 flex flex-1 flex-col justify-end">
-            {premiumActive ? (
-              <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-50 text-sm font-semibold text-blue-800">
-                Already Premium
+            {planCta.kind === "premium_active" ? (
+              <div className="space-y-2">
+                <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-50 text-sm font-semibold text-blue-800">
+                  {planCta.label}
+                </div>
+                <p className="text-center text-sm text-slate-600">
+                  {planCta.headline}
+                </p>
+                {planCta.validUntil ? (
+                  <p className="text-center text-xs text-slate-500">
+                    Valid until: {planCta.validUntil}
+                  </p>
+                ) : null}
               </div>
-            ) : cancelAtPeriodEnd || cancelledUntilPeriodEnd ? (
+            ) : planCta.kind === "access_until_period_end" ? (
               <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-700">
-                Access until period end
+                {planCta.label}
               </div>
-            ) : pastDue ? (
+            ) : planCta.kind === "past_due_grace" ? (
               <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-amber-50 text-sm font-semibold text-amber-800">
-                Payment issue — grace period active
+                {planCta.label}
               </div>
             ) : (
               <button
                 type="button"
-                disabled={busy || !canSubscribe}
+                disabled={!planCta.payEnabled}
                 className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 onClick={() => void startPremiumCheckout()}
               >
-                {busy
-                  ? "Processing…"
-                  : `Subscribe for ₹${premiumPriceInr}/month`}
+                {planCta.label}
               </button>
             )}
             <p className="mt-3 text-center text-xs text-slate-500">
-              Secure payments powered by Cashfree
+              {billingMode === "ONE_TIME"
+                ? "Manual monthly renewal · Secure checkout"
+                : "Secure payments powered by Cashfree"}
             </p>
           </div>
         </article>
@@ -568,12 +654,16 @@ export function SaasPricingPlans({
         <TrustItem
           icon={ShieldCheck}
           title="Secure Payments"
-          text="Powered by Cashfree"
+          text="Encrypted checkout"
         />
         <TrustItem
           icon={Ban}
-          title="Cancel Anytime"
-          text="No lock-in. Cancel anytime."
+          title={billingMode === "ONE_TIME" ? "No auto-renewal" : "Cancel Anytime"}
+          text={
+            billingMode === "ONE_TIME"
+              ? "You choose when to renew."
+              : "No lock-in. Cancel anytime."
+          }
         />
         <TrustItem
           icon={Lock}
@@ -588,7 +678,9 @@ export function SaasPricingPlans({
       </section>
 
       <p className="mt-8 text-center text-sm text-slate-500">
-        All plans include 7-day free trial • Cancel anytime
+        {billingMode === "ONE_TIME"
+          ? "All plans include 7-day free trial · Renew manually each month"
+          : "All plans include 7-day free trial • Cancel anytime"}
       </p>
     </div>
   );

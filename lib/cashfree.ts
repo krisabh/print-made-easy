@@ -1,17 +1,12 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 
+import { PREMIUM_PLAN } from "@/lib/billing/plan";
+
 export const CASHFREE_PROVIDER = "CASHFREE";
 export const CASHFREE_API_VERSION = "2025-01-01";
 
-/** PrintMadeEasy Premium — ₹199 / month (server-side only). */
-export const PREMIUM_PLAN = {
-  internalKey: "PREMIUM",
-  amountInr: 199,
-  currency: "INR",
-  intervalType: "MONTH" as const,
-  intervals: 1,
-  planName: "PrintMadeEasy Premium",
-};
+/** @deprecated Import from `@/lib/billing/plan` — re-exported for compatibility. */
+export { PREMIUM_PLAN };
 
 export type CashfreeEnvironment = "sandbox" | "production";
 
@@ -304,4 +299,170 @@ export function addMonths(from: Date, months: number) {
   const next = new Date(from.getTime());
   next.setUTCMonth(next.getUTCMonth() + months);
   return next;
+}
+
+export function buildMerchantOrderId(shopCode: string) {
+  const stamp = Date.now().toString(36);
+  const rand = randomBytes(3).toString("hex");
+  return `PMEPAY-${shopCode}-${stamp}${rand}`
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 45);
+}
+
+export type CashfreeCreateOrderResult = {
+  orderId: string;
+  cfOrderId: string | null;
+  paymentSessionId: string;
+  orderStatus: string;
+};
+
+/**
+ * Create a Cashfree Payment Gateway order (one-time payment).
+ * Docs: POST /pg/orders → payment_session_id for JS checkout().
+ */
+export async function createCashfreeOrder(input: {
+  config?: CashfreeClientConfig;
+  orderId: string;
+  amountInr: number;
+  currency: string;
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+  returnUrl: string;
+  /** Opaque tag echoed in webhooks / order notes — e.g. shopId. */
+  orderNote?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<CashfreeCreateOrderResult> {
+  const config = input.config || getCashfreeConfig();
+  const fetchImpl = input.fetchImpl || fetch;
+  const phone =
+    input.customer.phone.replace(/\D/g, "").slice(-10) || "9999999999";
+
+  const body = {
+    order_id: input.orderId,
+    order_amount: input.amountInr,
+    order_currency: input.currency,
+    customer_details: {
+      customer_id: `shop_${phone}`.slice(0, 50),
+      customer_name: input.customer.name.slice(0, 100),
+      customer_email: input.customer.email.slice(0, 255),
+      customer_phone: phone,
+    },
+    order_meta: {
+      return_url: input.returnUrl,
+    },
+    order_note: (input.orderNote || "PrintMadeEasy Premium").slice(0, 200),
+  };
+
+  const response = await fetchImpl(`${getBaseUrl(config.environment)}/orders`, {
+    method: "POST",
+    headers: authHeaders(config),
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+
+  if (!response.ok) {
+    const message =
+      (typeof data.message === "string" && data.message) ||
+      (typeof data.error === "string" && data.error) ||
+      `Cashfree order create failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  const paymentSessionId = String(
+    data.payment_session_id || data.payment_sessions_id || "",
+  );
+  if (!paymentSessionId) {
+    throw new Error("Cashfree did not return a payment session.");
+  }
+
+  return {
+    orderId: String(data.order_id || input.orderId),
+    cfOrderId: data.cf_order_id ? String(data.cf_order_id) : null,
+    paymentSessionId,
+    orderStatus: String(data.order_status || "ACTIVE"),
+  };
+}
+
+export type CashfreeOrderLookupResult = {
+  orderId: string;
+  orderStatus: string;
+  orderAmount: number;
+  orderCurrency: string;
+  cfPaymentId: string | null;
+  paymentStatus: string | null;
+};
+
+/** Server-side order lookup — never trust browser return as payment proof. */
+export async function getCashfreeOrder(input: {
+  config?: CashfreeClientConfig;
+  orderId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<CashfreeOrderLookupResult> {
+  const config = input.config || getCashfreeConfig();
+  const fetchImpl = input.fetchImpl || fetch;
+  const response = await fetchImpl(
+    `${getBaseUrl(config.environment)}/orders/${encodeURIComponent(input.orderId)}`,
+    {
+      method: "GET",
+      headers: authHeaders(config),
+    },
+  );
+  const data = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (!response.ok) {
+    const message =
+      (typeof data.message === "string" && data.message) ||
+      `Cashfree order lookup failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  const payments = Array.isArray(data.payments)
+    ? (data.payments as Record<string, unknown>[])
+    : [];
+  const latestPayment = payments[0] || {};
+
+  return {
+    orderId: String(data.order_id || input.orderId),
+    orderStatus: String(data.order_status || ""),
+    orderAmount: Number(data.order_amount ?? 0),
+    orderCurrency: String(data.order_currency || "INR").toUpperCase(),
+    cfPaymentId: latestPayment.cf_payment_id
+      ? String(latestPayment.cf_payment_id)
+      : null,
+    paymentStatus: latestPayment.payment_status
+      ? String(latestPayment.payment_status)
+      : null,
+  };
+}
+
+export function buildPgWebhookEventId(payload: {
+  type?: string;
+  event_time?: string;
+  data?: Record<string, unknown>;
+}) {
+  const type = payload.type || "UNKNOWN";
+  const eventTime = payload.event_time || "";
+  const data = payload.data || {};
+  const order = (data.order as Record<string, unknown> | undefined) || {};
+  const payment = (data.payment as Record<string, unknown> | undefined) || {};
+
+  const orderKey = String(order.order_id || data.order_id || "none");
+  const paymentKey = String(
+    payment.cf_payment_id ||
+      payment.payment_id ||
+      data.cf_payment_id ||
+      data.payment_id ||
+      "none",
+  );
+
+  return `${type}:${orderKey}:${eventTime}:${paymentKey}`.slice(0, 191);
 }

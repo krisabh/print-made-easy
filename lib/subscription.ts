@@ -4,7 +4,8 @@ import type {
   SubscriptionStatus,
 } from "@prisma/client";
 
-import { addMonths, cancelCashfreeSubscription, PREMIUM_PLAN } from "@/lib/cashfree";
+import { addMonths, cancelCashfreeSubscription } from "@/lib/cashfree";
+import { PREMIUM_PLAN } from "@/lib/billing/plan";
 import { prisma } from "@/lib/prisma";
 
 export const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
