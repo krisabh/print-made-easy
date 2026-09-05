@@ -16,7 +16,7 @@ export const SITE = {
 /** Desktop primary nav — keeps the header uncluttered. */
 export const MARKETING_PRIMARY_NAV = [
   { href: "/", label: "Home" },
-  { href: "/products", label: "Products" },
+  { href: "/products", label: "Products & Services" },
   { href: "/features", label: "Features" },
   { href: "/how-it-works", label: "How It Works" },
   { href: "/pricing", label: "Pricing" },

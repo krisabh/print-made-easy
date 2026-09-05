@@ -3,6 +3,13 @@ import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { WhatsAppFloatingButton } from "@/components/marketing/whatsapp-floating-button";
 import { getCurrentUser } from "@/lib/auth";
 
+/**
+ * Always render marketing chrome from the current MarketingHeader/Footer.
+ * Prevents stale CDN/prerender HTML (e.g. old “Terms of Service” footer on `/`)
+ * from diverging from newer dynamic routes like `/products`.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function MarketingLayout({
   children,
 }: {
