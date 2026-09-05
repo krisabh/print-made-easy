@@ -8,6 +8,15 @@ const MARKETING_NO_STORE = [
   },
 ] as const;
 
+/** Content-hashed build assets — safe to cache forever; must never inherit HTML no-store. */
+const NEXT_STATIC_IMMUTABLE = [
+  {
+    key: "Cache-Control",
+    value: "public, max-age=31536000, immutable",
+  },
+] as const;
+
+/** Exact document paths only — never `/_next/*` or nested static assets. */
 const MARKETING_PATHS = [
   "/",
   "/features",
@@ -33,10 +42,16 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   async headers() {
-    return MARKETING_PATHS.map((source) => ({
-      source,
-      headers: [...MARKETING_NO_STORE],
-    }));
+    return [
+      {
+        source: "/_next/static/:path*",
+        headers: [...NEXT_STATIC_IMMUTABLE],
+      },
+      ...MARKETING_PATHS.map((source) => ({
+        source,
+        headers: [...MARKETING_NO_STORE],
+      })),
+    ];
   },
 };
 
