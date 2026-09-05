@@ -8,17 +8,27 @@ import {
   SITE,
 } from "@/lib/marketing";
 
-const ACCOUNT_LINKS = [
+const ANON_ACCOUNT_LINKS = [
   { href: "/login", label: "Shopkeeper Login" },
   { href: "/signup", label: "Start Free Trial" },
 ] as const;
 
-export function MarketingFooter() {
+const AUTH_ACCOUNT_LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
+] as const;
+
+type MarketingFooterProps = {
+  authenticated?: boolean;
+};
+
+export function MarketingFooter({ authenticated = false }: MarketingFooterProps) {
+  const accountLinks = authenticated ? AUTH_ACCOUNT_LINKS : ANON_ACCOUNT_LINKS;
+
   return (
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-1">
-          <p className="text-sm font-bold tracking-wide text-blue-700 uppercase">
+          <p className="text-sm font-bold tracking-[0.12em] text-blue-700 uppercase">
             {SITE.name}
           </p>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
@@ -31,7 +41,7 @@ export function MarketingFooter() {
 
         <FooterColumn title="Product" links={FOOTER_PRODUCT_LINKS} />
         <FooterColumn title="Company" links={FOOTER_COMPANY_LINKS} />
-        <FooterColumn title="Account" links={ACCOUNT_LINKS} />
+        <FooterColumn title="Account" links={accountLinks} />
 
         <div>
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
