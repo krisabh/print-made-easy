@@ -29,27 +29,28 @@ export function HeroSection() {
             <span className="block text-blue-700">Without the Print Chaos.</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
-            PrintMadeEasy helps print shops manage incoming print orders, connect
-            their shop computer to their printers, track jobs, and keep the
-            entire printing workflow organized.
+            PrintMadeEasy is print-shop management software for shopkeepers.
+            Customers scan your shop QR code to submit documents; your Windows
+            Agent prints them. Shopkeepers subscribe for ₹{PREMIUM_PLAN.amountInr}
+            /month after a 7-day free trial — customers do not pay PrintMadeEasy.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/signup"
               className="inline-flex h-12 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
-              Create Your Shop
+              Start Free Trial
             </Link>
             <Link
-              href="/login"
+              href="/products"
               className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
             >
-              Shopkeeper Login
+              Products &amp; Services
             </Link>
           </div>
           <p className="mt-5 text-sm text-slate-500">
-            Simple setup • Windows Agent • Printer connectivity • Real-time job
-            status
+            QR print requests • Windows Agent • Job dashboard • Documents deleted
+            after 1 hour
           </p>
         </div>
 
@@ -409,13 +410,14 @@ export function PricingSection() {
             Simple pricing for growing print shops
           </h2>
           <p className="mt-4 text-base text-slate-600">
-            Start with a free trial, then continue with{" "}
+            <span className="font-medium text-slate-800">PrintMadeEasy</span>{" "}
+            Premium is{" "}
             <span className="font-medium text-slate-800">
-              PrintMadeEasy Premium
+              ₹{PREMIUM_PLAN.amountInr}/month (INR)
             </span>{" "}
-            when you are ready. Pricing is in Indian Rupees (INR). Only
-            shopkeepers pay PrintMadeEasy — customer document uploads are not
-            charged through this billing.
+            after a 7-day free trial. Only shopkeepers pay PrintMadeEasy —
+            customers who submit documents via the shop QR code do not pay
+            PrintMadeEasy.
           </p>
         </div>
 
@@ -445,7 +447,7 @@ export function PricingSection() {
               href="/signup"
               className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Create Your Shop
+              Start Free Trial
             </Link>
           </article>
 
@@ -462,7 +464,7 @@ export function PricingSection() {
             </h3>
             <p className="mt-2 text-sm text-slate-600">
               Paid by the shopkeeper after the free trial for full Premium
-              access.
+              access. Customers do not pay PrintMadeEasy.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {[
@@ -481,7 +483,7 @@ export function PricingSection() {
               href="/signup"
               className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Create Your Shop
+              Start Free Trial
             </Link>
           </article>
         </div>
@@ -506,13 +508,13 @@ export function FinalCtaSection() {
             href="/signup"
             className="inline-flex h-12 items-center justify-center rounded-xl bg-white px-6 text-sm font-semibold text-blue-700 hover:bg-blue-50"
           >
-            Create Your Shop
+            Start Free Trial
           </Link>
           <Link
             href="/login"
             className="inline-flex h-12 items-center justify-center rounded-xl border border-white/30 px-6 text-sm font-semibold text-white hover:bg-white/10"
           >
-            Login
+            Shopkeeper Login
           </Link>
         </div>
       </div>

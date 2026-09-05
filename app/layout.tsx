@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { SITE } from "@/lib/marketing";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE.url),
   title: {
-    default: "PrintMadeEasy | Print Shop Management Made Simple",
+    default: SITE.title,
     template: "%s | PrintMadeEasy",
   },
-  description:
-    "PrintMadeEasy helps print shops manage print orders, connect their shop computer, detect printers, and organize their daily printing workflow.",
+  description: SITE.description,
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "PrintMadeEasy | Print Shop Management Made Simple",
-    description:
-      "PrintMadeEasy helps print shops manage print orders, connect their shop computer, detect printers, and organize their daily printing workflow.",
-    url: "https://clauras.com",
-    siteName: "PrintMadeEasy",
+    title: SITE.title,
+    description: SITE.description,
+    url: SITE.url,
+    siteName: SITE.name,
     type: "website",
   },
 };

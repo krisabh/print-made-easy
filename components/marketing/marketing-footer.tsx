@@ -1,24 +1,16 @@
 import Link from "next/link";
 import { Mail, MessageCircle } from "lucide-react";
 
-import { SITE } from "@/lib/marketing";
-
-const PRODUCT_LINKS = [
-  { href: "/features", label: "Features" },
-  { href: "/how-it-works", label: "How It Works" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/how-it-works", label: "Windows Agent" },
-] as const;
-
-const COMPANY_LINKS = [
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
-  { href: "/support", label: "Support" },
-] as const;
+import {
+  FOOTER_COMPANY_LINKS,
+  FOOTER_LEGAL_LINKS,
+  FOOTER_PRODUCT_LINKS,
+  SITE,
+} from "@/lib/marketing";
 
 const ACCOUNT_LINKS = [
   { href: "/login", label: "Shopkeeper Login" },
-  { href: "/signup", label: "Create Your Shop" },
+  { href: "/signup", label: "Start Free Trial" },
 ] as const;
 
 export function MarketingFooter() {
@@ -32,15 +24,18 @@ export function MarketingFooter() {
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
             {SITE.tagline}
           </p>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            Shopkeeper software subscription · ₹199/month · 7-day free trial
+          </p>
         </div>
 
-        <FooterColumn title="Product" links={PRODUCT_LINKS} />
-        <FooterColumn title="Company" links={COMPANY_LINKS} />
+        <FooterColumn title="Product" links={FOOTER_PRODUCT_LINKS} />
+        <FooterColumn title="Company" links={FOOTER_COMPANY_LINKS} />
         <FooterColumn title="Account" links={ACCOUNT_LINKS} />
 
         <div>
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-            Contact
+            Contact Us
           </p>
           <ul className="mt-4 space-y-3 text-sm">
             <li>
@@ -74,15 +69,15 @@ export function MarketingFooter() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>© 2026 {SITE.name}. All rights reserved.</p>
           <div className="flex flex-wrap gap-4">
-            <Link href="/privacy" className="hover:text-blue-700">
-              Privacy Policy
-            </Link>
-            <Link href="/terms" className="hover:text-blue-700">
-              Terms of Service
-            </Link>
-            <Link href="/refunds" className="hover:text-blue-700">
-              Refunds &amp; Cancellations
-            </Link>
+            {FOOTER_LEGAL_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="hover:text-blue-700"
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

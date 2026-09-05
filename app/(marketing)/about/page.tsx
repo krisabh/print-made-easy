@@ -21,20 +21,22 @@ export default function AboutPage() {
             Built to Make Print Shops Simpler
           </h1>
           <p className="mt-5 text-base leading-relaxed text-slate-600">
-            PrintMadeEasy is designed to help print shops move from manual
-            print-job handling toward a more organized digital workflow.
+            PrintMadeEasy is print-shop management software for local print
+            shops. Shopkeepers subscribe to run QR-based customer print
+            submissions, a Windows Print Agent, job tracking, and printer
+            management from one dashboard.
           </p>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            We focus on simplicity, reliability, and practical automation —
-            helping small businesses adopt technology without complicated setup.
-            The product connects your shop dashboard with a Windows Agent on the
-            computer that already runs your printer.
+            Customers do not pay PrintMadeEasy — they use the shop&apos;s QR
+            code to submit documents. Pricing is ₹199/month (INR) after a 7-day
+            free trial. Uploaded documents are automatically deleted after 1
+            hour.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {[
-              ["Simplicity", "Clear steps for busy shopkeepers."],
-              ["Reliability", "Live Agent and printer status in the dashboard."],
-              ["Practical automation", "Jobs stay organized from pending to ready."],
+              ["For shopkeepers", "Software subscription paid by the print shop."],
+              ["QR + Agent workflow", "Customers submit; the Windows Agent prints."],
+              ["Clear policies", "Pricing, Terms, Refunds, and Contact are public."],
             ].map(([title, body]) => (
               <div
                 key={title}
@@ -45,12 +47,20 @@ export default function AboutPage() {
               </div>
             ))}
           </div>
-          <Link
-            href="/contact"
-            className="mt-8 inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            Contact Us
-          </Link>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/products"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Products &amp; Services
+            </Link>
+            <Link
+              href="/contact"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              Contact Us
+            </Link>
+          </div>
         </div>
       </section>
       <FinalCtaSection />

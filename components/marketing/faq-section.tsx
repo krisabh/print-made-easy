@@ -8,7 +8,11 @@ import { cn } from "@/lib/utils";
 const FAQS = [
   {
     q: "What is PrintMadeEasy?",
-    a: "PrintMadeEasy is a shopkeeper platform that helps print shops manage print jobs, connect a Windows computer to the shop, and track job status in one dashboard.",
+    a: "PrintMadeEasy is print-shop management software for shopkeepers. It helps print shops accept QR-based customer print requests, manage jobs, connect a Windows Print Agent, and track printer/agent status.",
+  },
+  {
+    q: "Who pays for PrintMadeEasy?",
+    a: "The shopkeeper (print-shop owner) pays PrintMadeEasy. Premium is ₹199 per month (INR) after a 7-day free trial. Customers who scan a shop QR code and submit documents do not pay PrintMadeEasy.",
   },
   {
     q: "Who is PrintMadeEasy for?",
@@ -43,8 +47,8 @@ const FAQS = [
     a: "Yes. After you create your shop and sign in, download the Agent from the Printers page in your dashboard. The Agent is required to connect your shop computer and process printing through PrintMadeEasy.",
   },
   {
-    q: "How do I get support?",
-    a: "Visit the Support page for getting started and troubleshooting topics, email abhiram12sep@gmail.com, or chat with us on WhatsApp.",
+    q: "How do I get support or cancel?",
+    a: "Visit Support or Contact Us, email abhiram12sep@gmail.com, or use WhatsApp. Cancellation and refund details are in the Refund & Cancellation Policy. Shopkeepers can also manage billing from My Plan / Billing in the dashboard.",
   },
 ] as const;
 

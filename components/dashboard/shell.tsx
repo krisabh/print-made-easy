@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { logoutAction } from "@/app/auth/actions";
+import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 import { Button } from "@/components/ui/button";
 import { AgentStatusBadge } from "@/components/dashboard/agent-status-badge";
 import { cn } from "@/lib/utils";
@@ -152,6 +153,7 @@ export function DashboardShell({
           </header>
 
           <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>
+          <DashboardFooter />
         </div>
       </div>
     </div>

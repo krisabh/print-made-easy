@@ -47,7 +47,7 @@ const TOPICS = [
   {
     icon: Headphones,
     title: "Account & Subscription",
-    body: "Manage trial and Premium access from your shop Settings after you sign in.",
+    body: "Manage trial and Premium access from My Plan / Billing after you sign in. See Pricing and the Refund & Cancellation Policy for details.",
   },
 ] as const;
 

@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { SITE } from "@/lib/marketing";
+
 export const metadata: Metadata = {
-  title: "Refunds & Cancellations",
+  title: "Refund & Cancellation Policy",
   description:
-    "Refund and cancellation policy for PrintMadeEasy Premium (₹199/month).",
+    "Refund and cancellation policy for PrintMadeEasy Premium (₹199/month) for print-shop owners.",
+  alternates: {
+    canonical: "/refunds",
+  },
 };
 
 export default function RefundsPage() {
@@ -12,35 +18,50 @@ export default function RefundsPage() {
     <section className="bg-white py-14">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-          Refunds &amp; Cancellations
+          Refund &amp; Cancellation Policy
         </h1>
         <p className="mt-2 text-sm text-slate-500">Last updated: September 5, 2026</p>
 
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
-            PrintMadeEasy is a software subscription for print shop owners
+            This policy explains how shopkeepers can cancel PrintMadeEasy
+            Premium, what happens after cancellation, how the free trial works,
+            and how refunds and billing questions are handled.
+          </p>
+          <p>
+            PrintMadeEasy is a software subscription for print-shop owners
             (shopkeepers). Customers who upload documents to a shop do not pay
             PrintMadeEasy through this billing system.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
-            PrintMadeEasy Premium
+            Subscription and trial
           </h2>
           <p>
             Premium is priced at{" "}
-            <span className="font-medium text-slate-800">₹199 (INR) per month</span>{" "}
-            after a 7-day free trial. Payment is collected from the shopkeeper
-            for access to PrintMadeEasy Premium features.
+            <span className="font-medium text-slate-800">
+              ₹{PREMIUM_PLAN.amountInr} (INR) per month
+            </span>{" "}
+            after a{" "}
+            <span className="font-medium text-slate-800">7-day free trial</span>.
+            The trial lets you evaluate PrintMadeEasy before purchasing Premium.
+            If you do not pay for Premium after the trial ends, Premium access
+            ends according to the product&apos;s entitlement rules.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
-            Cancellations
+            How to cancel
           </h2>
           <p>
-            You may stop renewing Premium at any time from{" "}
+            You may cancel or stop renewing Premium at any time from{" "}
             <span className="font-medium text-slate-800">My Plan / Billing</span>{" "}
-            in your shopkeeper dashboard (or by contacting us if you need help).
+            in your shopkeeper dashboard. If you need help, contact us using the
+            details below.
           </p>
+
+          <h2 className="pt-2 text-base font-semibold text-slate-900">
+            What happens after cancellation
+          </h2>
           <p>
             For one-time monthly payments, Premium access continues until the end
             of the paid period you already purchased. After that period ends,
@@ -51,9 +72,13 @@ export default function RefundsPage() {
             cancellation typically takes effect at the end of the current paid
             period, and you keep access until that date.
           </p>
+          <p>
+            Cancellation stops future Premium renewals for that billing path. It
+            does not by itself create an automatic refund for time already paid.
+          </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
-            Refunds
+            Refund policy
           </h2>
           <p>
             Because Premium provides immediate digital access for a defined
@@ -64,27 +89,44 @@ export default function RefundsPage() {
             verified duplicate charge or a clear billing error).
           </p>
           <p>
-            The 7-day free trial is intended so you can evaluate PrintMadeEasy
-            before purchasing Premium.
+            We do not promise automatic refunds for unused days within a paid
+            month, change of mind after purchase, or shop downtime caused by
+            local printers, Windows, internet, or Agent setup issues.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
-            How to request help
+            Failed or incomplete payments
+          </h2>
+          <p>
+            If a payment attempt fails or is not completed, Premium access is not
+            granted (or not renewed) for that unpaid period. You may retry
+            payment from My Plan / Billing when you are ready. Pending or failed
+            payment attempts do not create a completed charge that requires a
+            refund.
+          </p>
+
+          <h2 className="pt-2 text-base font-semibold text-slate-900">
+            Billing disputes and questions
           </h2>
           <p>
             For billing questions, cancellation help, or a refund request related
-            to a billing error, contact us through the{" "}
+            to a suspected billing error, contact us through the{" "}
             <Link href="/contact" className="font-medium text-blue-700 hover:underline">
-              Contact
+              Contact Us
             </Link>{" "}
-            page. Please include your shop name or shop code and the payment date
-            so we can review your request.
+            page, email{" "}
+            <a href={SITE.emailHref} className="font-medium text-blue-700 hover:underline">
+              {SITE.email}
+            </a>
+            , or WhatsApp via the contact details on that page. Please include
+            your shop name or shop code and the payment date so we can review
+            your request.
           </p>
 
           <p className="pt-2">
             Related pages:{" "}
             <Link href="/terms" className="font-medium text-blue-700 hover:underline">
-              Terms of Service
+              Terms &amp; Conditions
             </Link>
             {" · "}
             <Link href="/pricing" className="font-medium text-blue-700 hover:underline">
@@ -93,6 +135,10 @@ export default function RefundsPage() {
             {" · "}
             <Link href="/privacy" className="font-medium text-blue-700 hover:underline">
               Privacy Policy
+            </Link>
+            {" · "}
+            <Link href="/products" className="font-medium text-blue-700 hover:underline">
+              Products &amp; Services
             </Link>
           </p>
         </div>

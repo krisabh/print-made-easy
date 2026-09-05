@@ -11,6 +11,16 @@ import {
   PricingSection,
   ProblemSection,
 } from "@/components/marketing/sections";
+import type { Metadata } from "next";
+import { SITE } from "@/lib/marketing";
+
+export const metadata: Metadata = {
+  title: "Home",
+  description: SITE.description,
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default function HomePage() {
   return (
