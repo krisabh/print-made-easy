@@ -31,6 +31,7 @@ async function ensurePrintablePdf(
   jobNumber: string,
   fileId: string,
   orientation: PrintableOrientation,
+  marginPt: number,
 ) {
   const ext = extension.toLowerCase();
   if (ext === "pdf") {
@@ -39,7 +40,12 @@ async function ensurePrintablePdf(
 
   if (ext === "png" || ext === "jpg" || ext === "jpeg") {
     const bytes = await fs.readFile(sourcePath);
-    const pdfBytes = await createImagePrintablePdf(bytes, ext, orientation);
+    const pdfBytes = await createImagePrintablePdf(
+      bytes,
+      ext,
+      orientation,
+      marginPt,
+    );
     const outPath = getTempFilePath(`job-${jobNumber}-${fileId}-converted.pdf`);
     await fs.writeFile(outPath, pdfBytes);
     return outPath;
@@ -102,10 +108,13 @@ async function printCloudJob(job: PendingJob, printerName: string) {
         claimedJob.jobNumber,
         file.id,
         plan.imageOrientation,
+        plan.imageMarginPt,
       );
       if (printablePath !== localPath) {
         localFiles.push(printablePath);
       }
+
+      const isPdf = file.fileExtension.toLowerCase() === "pdf";
 
       // PrintJob.copies remains the print-count source of truth (matches pricing).
       await printPdfFile(printablePath, printerName, {
@@ -113,6 +122,9 @@ async function printCloudJob(job: PendingJob, printerName: string) {
         printMode: claimedJob.printMode,
         printType: claimedJob.printType,
         orientation: plan.sumatraOrientation,
+        scale: plan.scale,
+        pages: isPdf ? plan.pages : undefined,
+        paperSize: plan.paperSize,
       });
 
       await reportFilePrinted(job.id, file.id);

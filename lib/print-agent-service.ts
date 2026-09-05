@@ -26,6 +26,8 @@ export async function upsertShopPrinter(input: {
     });
   }
 
+  // Intentionally omit colorSupported on update so heartbeat never overwrites
+  // the shopkeeper's manual capability. New rows get schema default false.
   return prisma.printer.upsert({
     where: {
       shopId_printerName: {
@@ -45,9 +47,107 @@ export async function upsertShopPrinter(input: {
       printerModel: input.printerModel ?? null,
       status: input.status,
       isDefault: input.isDefault,
+      colorSupported: false,
       lastSeen: new Date(),
     },
   });
+}
+
+export type ShopPrinterCapability = {
+  printerName: string;
+  colorSupported: boolean;
+  isDefault: boolean;
+  status: string;
+};
+
+export async function listShopPrinterCapabilities(
+  shopId: string,
+): Promise<ShopPrinterCapability[]> {
+  const rows = await prisma.printer.findMany({
+    where: { shopId },
+    orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
+    select: {
+      printerName: true,
+      colorSupported: true,
+      isDefault: true,
+      status: true,
+    },
+  });
+  return rows;
+}
+
+/**
+ * Persist manual color capability for one printer in the authenticated shop.
+ * Does not change isDefault or selectedPrinter semantics.
+ * Creates the Printer row if missing (so capability can be set before/without a racey heartbeat).
+ */
+export async function setShopPrinterColorSupported(input: {
+  shopId: string;
+  printerName: string;
+  colorSupported: boolean;
+  status?: string;
+}) {
+  const printerName = input.printerName.trim();
+  if (!printerName) {
+    return { ok: false as const, error: "invalid_name" as const };
+  }
+
+  const existing = await prisma.printer.findUnique({
+    where: {
+      shopId_printerName: {
+        shopId: input.shopId,
+        printerName,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    const created = await prisma.printer.create({
+      data: {
+        shopId: input.shopId,
+        printerName,
+        colorSupported: input.colorSupported,
+        isDefault: false,
+        status: (input.status || "unknown").toLowerCase(),
+        lastSeen: new Date(),
+      },
+      select: {
+        printerName: true,
+        colorSupported: true,
+        isDefault: true,
+        status: true,
+      },
+    });
+    return { ok: true as const, printer: created };
+  }
+
+  const updated = await prisma.printer.update({
+    where: { id: existing.id },
+    data: { colorSupported: input.colorSupported },
+    select: {
+      printerName: true,
+      colorSupported: true,
+      isDefault: true,
+      status: true,
+    },
+  });
+
+  return { ok: true as const, printer: updated };
+}
+
+/**
+ * Customer-facing capability: does the shop's current default printer support Color?
+ * No default printer → false (safe). Does not expose printer names/IDs.
+ */
+export async function getShopDefaultColorSupported(
+  shopId: string,
+): Promise<boolean> {
+  const printer = await prisma.printer.findFirst({
+    where: { shopId, isDefault: true },
+    select: { colorSupported: true },
+  });
+  return printer?.colorSupported === true;
 }
 
 export async function listPendingJobsForShop(shopId: string) {

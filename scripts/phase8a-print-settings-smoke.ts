@@ -54,6 +54,7 @@ async function main() {
     paperSize: "A4",
     scale: "fit",
     margins: "normal",
+    pageRange: "all",
   });
   const resolvedValid = resolvePrintSettings(valid, { fallbackCopies: 3 });
   assert.equal(resolvedValid.source, "v1");
@@ -115,7 +116,7 @@ async function main() {
   );
   console.log("PASS invalid copies → safe fallback");
 
-  // Unknown fields must not crash
+  // Unknown fields must not crash; known pageRange is accepted
   const withExtra = resolvePrintSettings({
     v: 1,
     orientation: "landscape",
@@ -128,7 +129,8 @@ async function main() {
   });
   assert.equal(withExtra.source, "v1");
   assert.equal(withExtra.settings?.orientation, "landscape");
-  console.log("PASS unknown fields ignored");
+  assert.equal(withExtra.settings?.pageRange, "1-3");
+  console.log("PASS unknown fields ignored; pageRange accepted");
 
   // 7. PrintJob.copies remains pricing SOT — printSettings.copies must not affect cost
   const rates = {

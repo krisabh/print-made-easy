@@ -8,6 +8,11 @@ export type ShopUploadContext = {
   shopId: string;
   shopCode: string;
   shopName: string;
+  /**
+   * Whether the shop's current default printer supports Color.
+   * Derived server-side from Printer.isDefault; never trust the client.
+   */
+  colorSupported: boolean;
   pricing: {
     bwSingle: number;
     bwDouble: number;

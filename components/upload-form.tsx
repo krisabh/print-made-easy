@@ -1,18 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Check, FileText, Loader2, Minus, Plus, Upload, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Loader2, Minus, Plus, Upload, X } from "lucide-react";
 
 import { submitPrintJobAction } from "@/app/upload/[shopCode]/actions";
 import { CustomerDocumentPrivacyNotice } from "@/components/customer-document-privacy-notice";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  extensionFromFileName,
+  jobHasUnsupportedAutoPrint,
+  resolveJobPrintCategory,
+  type AggregatePrintFileCategory,
+} from "@/lib/print-file-category";
+import { isValidPageRange } from "@/lib/print-settings";
 import { calculatePrintCost } from "@/lib/pricing-service";
 import type { ShopUploadContext, UploadSuccessData } from "@/types";
 
 type PrintMode = "BW" | "COLOR";
-type PrintType = "SINGLE" | "DOUBLE";
 type PrintOrientation = "portrait" | "landscape";
+type PrintScale = "fit" | "noscale";
+type PrintMargins = "normal" | "none";
+type PagesMode = "all" | "custom";
 type JobLiveStatus =
   | "PENDING"
   | "PRINTING"
@@ -35,8 +44,39 @@ const MAX_COPIES = 100;
 const STATUS_POLL_MS = 3000;
 
 function getExtension(fileName: string) {
-  const parts = fileName.split(".");
-  return parts.length > 1 ? (parts.pop() as string).toLowerCase() : "";
+  return extensionFromFileName(fileName);
+}
+
+async function suggestOrientationFromImage(
+  file: File,
+): Promise<PrintOrientation | null> {
+  if (!file.type.startsWith("image/") && !/\.(png|jpe?g)$/i.test(file.name)) {
+    return null;
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    const orientation = await new Promise<PrintOrientation | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (!img.naturalWidth || !img.naturalHeight) {
+          resolve(null);
+          return;
+        }
+        resolve(
+          img.naturalWidth >= img.naturalHeight ? "landscape" : "portrait",
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
+    return orientation;
+  } catch {
+    return null;
+  }
 }
 
 function statusLabel(status: JobLiveStatus) {
@@ -152,16 +192,24 @@ function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  columns,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  columns?: 1 | 2 | 3;
 }) {
+  const cols = columns ?? (options.length === 1 ? 1 : options.length === 3 ? 3 : 2);
   return (
     <fieldset>
       <legend className="mb-2 text-sm font-medium text-slate-800">{label}</legend>
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+      <div
+        className={[
+          "grid gap-2 rounded-xl bg-slate-100 p-1",
+          cols === 3 ? "grid-cols-3" : cols === 1 ? "grid-cols-1" : "grid-cols-2",
+        ].join(" ")}
+      >
         {options.map((option) => {
           const selected = value === option.value;
           return (
@@ -192,17 +240,29 @@ type UploadFormProps = {
 
 export function UploadForm({ shop }: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const orientationTouchedRef = useRef(false);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [copies, setCopies] = useState(1);
   const [orientation, setOrientation] = useState<PrintOrientation>("portrait");
   const [printMode, setPrintMode] = useState<PrintMode>("BW");
-  const [printType, setPrintType] = useState<PrintType>("SINGLE");
+  const [scale, setScale] = useState<PrintScale>("fit");
+  const [margins, setMargins] = useState<PrintMargins>("normal");
+  const [pagesMode, setPagesMode] = useState<PagesMode>("all");
+  const [pageRange, setPageRange] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [success, setSuccess] = useState<UploadSuccessData | null>(null);
   const [liveStatus, setLiveStatus] = useState<JobLiveStatus>("PENDING");
   const [isPending, startTransition] = useTransition();
+
+  // If Color is not available for the current default printer, keep BW.
+  useEffect(() => {
+    if (!shop.colorSupported && printMode === "COLOR") {
+      setPrintMode("BW");
+    }
+  }, [shop.colorSupported, printMode]);
 
   useEffect(() => {
     if (!success?.jobId) return;
@@ -243,7 +303,29 @@ export function UploadForm({ shop }: UploadFormProps) {
 
   const billablePages = totalPages * copies;
 
-  // Rates come from PrintPrice (fetched once on page load). Formula from pricing-service.
+  // Derived from current files — never an independent source of truth.
+  const aggregateFileCategory: AggregatePrintFileCategory = useMemo(
+    () => resolveJobPrintCategory(files.map((f) => f.file)),
+    [files],
+  );
+
+  const hasDocxNotice = useMemo(
+    () => jobHasUnsupportedAutoPrint(files.map((f) => f.file)),
+    [files],
+  );
+
+  // Mixed jobs: drop auto-orientation; Portrait unless customer chose explicitly.
+  useEffect(() => {
+    if (
+      aggregateFileCategory === "MIXED" &&
+      !orientationTouchedRef.current &&
+      orientation !== "portrait"
+    ) {
+      setOrientation("portrait");
+    }
+  }, [aggregateFileCategory, orientation]);
+
+  // Pricing always uses SINGLE (Phase C product rule).
   const estimatedPrice = useMemo(() => {
     if (files.length === 0 || totalPages === 0) {
       return shop.pricing.minimumCharge;
@@ -254,9 +336,9 @@ export function UploadForm({ shop }: UploadFormProps) {
       totalPages,
       copies,
       printMode,
-      printType,
+      "SINGLE",
     );
-  }, [shop.pricing, files.length, totalPages, copies, printMode, printType]);
+  }, [shop.pricing, files.length, totalPages, copies, printMode]);
 
   const currentStep: 1 | 2 | 3 =
     files.length === 0 ? 1 : copies >= 1 ? 3 : 2;
@@ -290,7 +372,21 @@ export function UploadForm({ shop }: UploadFormProps) {
       status: getExtension(file.name) === "pdf" ? "counting" : "ready",
     }));
 
-    setFiles((current) => [...current, ...prepared]);
+    const nextFiles = [...files, ...prepared];
+    setFiles(nextFiles);
+
+    // Auto-orientation only for a single-image job (not mixed / multi-file).
+    const nextCategory = resolveJobPrintCategory(nextFiles.map((f) => f.file));
+    if (
+      !orientationTouchedRef.current &&
+      nextCategory === "IMAGE" &&
+      nextFiles.length === 1
+    ) {
+      const hint = await suggestOrientationFromImage(prepared[0].file);
+      if (hint && !orientationTouchedRef.current) {
+        setOrientation(hint);
+      }
+    }
 
     for (const item of prepared) {
       if (item.status !== "counting") continue;
@@ -326,8 +422,13 @@ export function UploadForm({ shop }: UploadFormProps) {
     setFiles([]);
     setCopies(1);
     setOrientation("portrait");
+    orientationTouchedRef.current = false;
     setPrintMode("BW");
-    setPrintType("SINGLE");
+    setScale("fit");
+    setMargins("normal");
+    setPagesMode("all");
+    setPageRange("");
+    setMoreOpen(false);
     setFileError(null);
     setFormError(null);
   }
@@ -348,14 +449,42 @@ export function UploadForm({ shop }: UploadFormProps) {
       setFormError("Please choose Portrait or Landscape.");
       return;
     }
+    if (aggregateFileCategory === "DOCUMENT" && pagesMode === "custom") {
+      const trimmed = pageRange.trim();
+      if (!trimmed || !isValidPageRange(trimmed) || trimmed.toLowerCase() === "all") {
+        setFormError("Please enter a valid page range (e.g. 1-5 or 1,3,7).");
+        setMoreOpen(true);
+        return;
+      }
+    }
     if (isPending) return;
 
     const formData = new FormData();
     formData.set("shopCode", shop.shopCode);
     formData.set("copies", String(copies));
     formData.set("orientation", orientation);
-    formData.set("printMode", printMode);
-    formData.set("printType", printType);
+    formData.set("printMode", shop.colorSupported ? printMode : "BW");
+    // Category-specific fields; server re-derives category from actual files.
+    if (aggregateFileCategory === "DOCUMENT") {
+      formData.set("scale", scale);
+      formData.set("margins", "normal");
+      formData.set("pagesMode", pagesMode);
+      formData.set(
+        "pageRange",
+        pagesMode === "custom" ? pageRange.trim() : "",
+      );
+    } else if (aggregateFileCategory === "IMAGE") {
+      formData.set("scale", "fit");
+      formData.set("margins", margins);
+      formData.set("pagesMode", "all");
+      formData.set("pageRange", "");
+    } else {
+      // MIXED / NONE: only job-safe defaults
+      formData.set("scale", "fit");
+      formData.set("margins", "normal");
+      formData.set("pagesMode", "all");
+      formData.set("pageRange", "");
+    }
     files.forEach((item) => formData.append("files", item.file));
 
     startTransition(async () => {
@@ -578,7 +707,10 @@ export function UploadForm({ shop }: UploadFormProps) {
             <SegmentedControl
               label="Orientation"
               value={orientation}
-              onChange={setOrientation}
+              onChange={(value) => {
+                orientationTouchedRef.current = true;
+                setOrientation(value);
+              }}
               options={[
                 { value: "portrait", label: "Portrait" },
                 { value: "landscape", label: "Landscape" },
@@ -629,25 +761,135 @@ export function UploadForm({ shop }: UploadFormProps) {
               </div>
             </div>
 
+            {aggregateFileCategory === "IMAGE" ? (
+              <div>
+                <p className="mb-1 text-sm font-medium text-slate-800">Image fitting</p>
+                <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  Fit to page
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Keeps the full image visible — no crop, no stretch.
+                  </span>
+                </p>
+              </div>
+            ) : null}
+
             <SegmentedControl
               label="Print mode"
               value={printMode}
               onChange={setPrintMode}
-              options={[
-                { value: "BW", label: "Black & White" },
-                { value: "COLOR", label: "Color" },
-              ]}
+              options={
+                shop.colorSupported
+                  ? [
+                      { value: "BW", label: "Black & White" },
+                      { value: "COLOR", label: "Color" },
+                    ]
+                  : [{ value: "BW", label: "Black & White" }]
+              }
             />
 
-            <SegmentedControl
-              label="Print type"
-              value={printType}
-              onChange={setPrintType}
-              options={[
-                { value: "SINGLE", label: "Single Side" },
-                { value: "DOUBLE", label: "Double Side" },
-              ]}
-            />
+            <div className="border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left text-sm font-medium text-slate-700 hover:text-slate-900"
+                aria-expanded={moreOpen}
+              >
+                <span>More print options</span>
+                <ChevronDown
+                  className={[
+                    "size-4 shrink-0 transition-transform",
+                    moreOpen ? "rotate-180" : "",
+                  ].join(" ")}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {moreOpen ? (
+                <div className="mt-3 space-y-4">
+                  {aggregateFileCategory === "DOCUMENT" ? (
+                    <>
+                      <SegmentedControl
+                        label="Pages"
+                        value={pagesMode}
+                        onChange={setPagesMode}
+                        options={[
+                          { value: "all", label: "All pages" },
+                          { value: "custom", label: "Custom range" },
+                        ]}
+                      />
+                      {pagesMode === "custom" ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="pageRange">Page range</Label>
+                          <input
+                            id="pageRange"
+                            name="pageRange"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="e.g. 1-5 or 1,3,7"
+                            value={pageRange}
+                            onChange={(event) => setPageRange(event.target.value)}
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
+                            aria-describedby="pageRangeHelp"
+                          />
+                          <p id="pageRangeHelp" className="text-xs text-slate-500">
+                            Examples: 1-5 · 1,3,7 · 2-4,8. Pricing still uses all pages.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                        <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                          A4
+                        </p>
+                      </div>
+
+                      <SegmentedControl
+                        label="Scale"
+                        value={scale}
+                        onChange={setScale}
+                        options={[
+                          { value: "fit", label: "Fit to page" },
+                          { value: "noscale", label: "Actual size" },
+                        ]}
+                      />
+                    </>
+                  ) : aggregateFileCategory === "IMAGE" ? (
+                    <>
+                      <div>
+                        <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                        <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                          A4
+                        </p>
+                      </div>
+                      <SegmentedControl
+                        label="Margins"
+                        value={margins}
+                        onChange={setMargins}
+                        options={[
+                          { value: "normal", label: "Normal" },
+                          { value: "none", label: "None" },
+                        ]}
+                      />
+                    </>
+                  ) : (
+                    <div>
+                      <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                      <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                        A4
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {hasDocxNotice ? (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+                Word files (.docx) are accepted, but automatic printing may not be available.
+                The shop can help print them at the counter.
+              </p>
+            ) : null}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -681,12 +923,6 @@ export function UploadForm({ shop }: UploadFormProps) {
                 <dt className="text-slate-500">Print mode</dt>
                 <dd className="font-medium text-slate-900">
                   {printMode === "BW" ? "Black & White" : "Color"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Print type</dt>
-                <dd className="font-medium text-slate-900">
-                  {printType === "SINGLE" ? "Single Side" : "Double Side"}
                 </dd>
               </div>
             </dl>

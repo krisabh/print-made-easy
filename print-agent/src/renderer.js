@@ -5,13 +5,19 @@
   const agentDot = document.getElementById("agentDot");
   const printerStatus = document.getElementById("printerStatus");
   const printerDot = document.getElementById("printerDot");
+  const printerPausedNote = document.getElementById("printerPausedNote");
   const connectionMeta = document.getElementById("connectionMeta");
+  const headerPill = document.getElementById("headerPill");
+  const agentFooter = document.getElementById("agentFooter");
   const message = document.getElementById("message");
   const connectMessage = document.getElementById("connectMessage");
   const openAtLogin = document.getElementById("openAtLogin");
   const testPrintBtn = document.getElementById("testPrintBtn");
   const refreshBtn = document.getElementById("refreshBtn");
   const dashboardBtn = document.getElementById("dashboardBtn");
+  const colorList = document.getElementById("colorList");
+  const colorEmpty = document.getElementById("colorEmpty");
+  const connectCard = document.getElementById("connectCard");
 
   const connectHint = document.getElementById("connectHint");
   const pairingUrlInput = document.getElementById("pairingUrlInput");
@@ -19,6 +25,7 @@
   const pairSuccess = document.getElementById("pairSuccess");
 
   let connecting = false;
+  let colorBusy = false;
 
   function setMessage(text, ok = true) {
     message.textContent = text;
@@ -35,14 +42,127 @@
     connectMessage.className = "message";
   }
 
-  async function refresh() {
-    const state = await window.printAgent.getState();
+  function renderColorSupport(state) {
+    const paired = Boolean(state.paired || (state.config && state.config.paired));
+    const detected = state.printers || [];
+    const capabilities = state.printerCapabilities || [];
+    const selectedPrinter =
+      (state.config && state.config.selectedPrinter) || null;
+
+    const byName = new Map();
+    for (const row of capabilities) {
+      byName.set(row.printerName, {
+        name: row.printerName,
+        colorSupported: Boolean(row.colorSupported),
+        status: row.status || "unknown",
+        fromServer: true,
+      });
+    }
+    for (const printer of detected) {
+      const existing = byName.get(printer.name);
+      byName.set(printer.name, {
+        name: printer.name,
+        colorSupported: existing
+          ? Boolean(existing.colorSupported)
+          : false,
+        status: printer.status || (existing && existing.status) || "Unknown",
+        fromServer: Boolean(existing && existing.fromServer),
+      });
+    }
+    if (selectedPrinter && !byName.has(selectedPrinter)) {
+      byName.set(selectedPrinter, {
+        name: selectedPrinter,
+        colorSupported: false,
+        status: "Unavailable",
+        fromServer: false,
+      });
+    }
+
+    const rows = Array.from(byName.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    colorList.innerHTML = "";
+    if (!paired || rows.length === 0) {
+      colorEmpty.style.display = "block";
+      colorEmpty.textContent = paired
+        ? "No printers to configure yet."
+        : "Connect the Agent and detect printers to configure color support.";
+      return;
+    }
+
+    colorEmpty.style.display = "none";
+    for (const row of rows) {
+      const wrap = document.createElement("div");
+      wrap.className = "color-row";
+
+      const left = document.createElement("div");
+      left.className = "name";
+      left.innerHTML = `${escapeHtml(row.name)}<div class="meta-line">${escapeHtml(
+        String(row.status),
+      )}</div>`;
+
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = Boolean(row.colorSupported);
+      checkbox.disabled = colorBusy;
+      checkbox.setAttribute("aria-label", `Supports color for ${row.name}`);
+      checkbox.addEventListener("change", async () => {
+        if (colorBusy) return;
+        colorBusy = true;
+        checkbox.disabled = true;
+        try {
+          const updated = await window.printAgent.setPrinterColor(
+            row.name,
+            checkbox.checked,
+          );
+          checkbox.checked = Boolean(updated.colorSupported);
+          setMessage(
+            updated.colorSupported
+              ? `${row.name}: Supports Color ON`
+              : `${row.name}: Supports Color OFF`,
+          );
+          // Soft UI refresh only — avoid stacked detect/heartbeat loops.
+          await refresh({ light: true });
+        } catch (error) {
+          checkbox.checked = !checkbox.checked;
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Could not update color support.",
+            false,
+          );
+        } finally {
+          colorBusy = false;
+          checkbox.disabled = false;
+        }
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode("Supports Color"));
+      wrap.appendChild(left);
+      wrap.appendChild(label);
+      colorList.appendChild(wrap);
+    }
+  }
+
+  async function refresh(options) {
+    const light = Boolean(options && options.light);
+    const state = await window.printAgent.getState(
+      light ? { light: true } : undefined,
+    );
     const printers = state.printers || [];
     const config = state.config || {};
     const selectedPrinter = config.selectedPrinter || null;
+    const version = state.agentVersion || "1.2.0";
+
+    if (agentFooter) {
+      agentFooter.textContent = `PrintMadeEasy Agent ${version}`;
+    }
 
     printerSelect.innerHTML = "";
-    if (printers.length === 0) {
+    if (printers.length === 0 && !selectedPrinter) {
       printerEmpty.style.display = "block";
       const option = document.createElement("option");
       option.value = "";
@@ -50,13 +170,25 @@
       printerSelect.appendChild(option);
     } else {
       printerEmpty.style.display = "none";
+
+      // Keep configured default visible even when Windows no longer detects it.
+      const names = new Set(printers.map((p) => p.name));
+      if (selectedPrinter && !names.has(selectedPrinter)) {
+        const missing = document.createElement("option");
+        missing.value = selectedPrinter;
+        missing.textContent = `${selectedPrinter} (Unavailable)`;
+        missing.selected = true;
+        printerSelect.appendChild(missing);
+      }
+
       for (const printer of printers) {
         const option = document.createElement("option");
         option.value = printer.name;
-        option.textContent = printer.isDefault
+        const isSelected = printer.name === selectedPrinter;
+        option.textContent = isSelected
           ? `${printer.name} (Default)`
           : printer.name;
-        if (printer.name === selectedPrinter) {
+        if (isSelected) {
           option.selected = true;
         }
         printerSelect.appendChild(option);
@@ -66,44 +198,79 @@
     const paired = Boolean(state.paired || config.paired);
     const online =
       state.connection && state.connection.status === "Connected";
+
     agentStatus.textContent = paired
       ? online
-        ? "Agent Online"
-        : "Agent Running (offline)"
-      : "Not Connected";
+        ? "Online"
+        : "Running (offline)"
+      : "Not connected";
     agentDot.className = `dot ${paired && online ? "ok" : paired ? "warn" : "bad"}`;
 
+    if (headerPill) {
+      headerPill.textContent = paired
+        ? online
+          ? "Connected"
+          : "Offline"
+        : "Not connected";
+      headerPill.className = `pill ${
+        paired && online ? "ok" : paired ? "warn" : "bad"
+      }`;
+    }
+
+    if (connectCard) {
+      // Keep connect card visible so shopkeeper can re-pair if needed.
+      connectCard.style.display = "block";
+    }
+
+    const available = state.selectedPrinterAvailable !== false;
     const pStatus = String(state.selectedPrinterStatus || "Unknown");
     const pLower = pStatus.toLowerCase();
-    printerStatus.textContent =
-      pLower === "online"
-        ? "Ready"
-        : pLower === "offline"
-          ? "Offline / Unavailable"
-          : pStatus;
+    const printerMissing =
+      Boolean(selectedPrinter) && available === false;
+
+    if (printerMissing) {
+      printerStatus.textContent = "Unavailable";
+      if (printerPausedNote) printerPausedNote.classList.add("show");
+    } else if (pLower === "online") {
+      printerStatus.textContent = "Online";
+      if (printerPausedNote) printerPausedNote.classList.remove("show");
+    } else if (pLower === "offline") {
+      printerStatus.textContent = "Offline";
+      if (printerPausedNote) printerPausedNote.classList.remove("show");
+    } else {
+      printerStatus.textContent = pStatus;
+      if (printerPausedNote) printerPausedNote.classList.remove("show");
+    }
+
     printerDot.className = `dot ${
-      pLower === "online" ? "ok" : pLower === "offline" ? "bad" : "warn"
+      printerMissing || pLower === "offline"
+        ? "bad"
+        : pLower === "online"
+          ? "ok"
+          : "warn"
     }`;
 
     const shopLabel = config.shopName
       ? `${config.shopName} (${config.shopCode || "—"})`
       : config.shopCode || "—";
     connectionMeta.textContent = paired
-      ? `Shop: ${shopLabel} · Agent: ${config.agentId || "—"} · ${
-          online
-            ? "Heartbeat OK"
-            : (state.connection && state.connection.message) ||
-              "Waiting for backend"
-        }`
+      ? online
+        ? `Shop: ${shopLabel} · Synced`
+        : `Shop: ${shopLabel} · ${
+            (state.connection && state.connection.message) ||
+            "Waiting for backend"
+          }`
       : "Paste the connection link from Dashboard → Printers.";
 
     openAtLogin.checked = Boolean(config.openAtLogin);
 
     if (connectHint) {
       connectHint.textContent = paired
-        ? "This Agent is paired. Paste a new connection link to reconnect to another shop."
+        ? "This Agent is paired. Paste a new connection link only if you need to reconnect to another shop."
         : "Paste the connection link from Dashboard → Printers.";
     }
+
+    renderColorSupport(state);
   }
 
   function showPairSuccess(result) {
@@ -118,6 +285,7 @@
     const done = document.createElement("button");
     done.type = "button";
     done.textContent = "Done";
+    done.className = "secondary";
     done.style.marginTop = "10px";
     done.addEventListener("click", () => {
       pairSuccess.classList.add("hidden");
@@ -174,8 +342,9 @@
   });
 
   printerSelect.addEventListener("change", async () => {
+    if (!printerSelect.value) return;
     await window.printAgent.setPrinter(printerSelect.value);
-    setMessage(`Printer set to ${printerSelect.value}`);
+    setMessage(`Default printer set to ${printerSelect.value}`);
     await refresh();
   });
 
@@ -230,7 +399,7 @@
 
   if (window.printAgent && typeof window.printAgent.onRefresh === "function") {
     window.printAgent.onRefresh(() => {
-      refresh().catch(() => undefined);
+      refresh({ light: true }).catch(() => undefined);
     });
   }
 
@@ -238,9 +407,10 @@
     setMessage("Unable to load Agent status.", false);
   });
 
+  // Light UI poll — background heartbeat already syncs cloud every 5s.
   setInterval(() => {
-    if (!connecting) {
-      refresh().catch(() => undefined);
+    if (!connecting && !colorBusy) {
+      refresh({ light: true }).catch(() => undefined);
     }
-  }, 5000);
+  }, 12_000);
 })();

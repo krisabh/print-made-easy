@@ -4,7 +4,11 @@ import { z } from "zod";
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { logError } from "@/lib/log";
 import { authenticateAgent } from "@/lib/print-agent-auth";
-import { upsertShopPrinter } from "@/lib/print-agent-service";
+import {
+  listShopPrinterCapabilities,
+  setShopPrinterColorSupported,
+  upsertShopPrinter,
+} from "@/lib/print-agent-service";
 import { prisma } from "@/lib/prisma";
 
 const heartbeatSchema = z.object({
@@ -18,6 +22,13 @@ const heartbeatSchema = z.object({
       }),
     )
     .max(50)
+    .optional(),
+  /** Explicit shopkeeper capability change (does not reset others). */
+  colorUpdate: z
+    .object({
+      printerName: z.string().trim().min(1).max(255),
+      colorSupported: z.boolean(),
+    })
     .optional(),
 });
 
@@ -40,6 +51,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (parsed.data.selectedPrinter) {
+      // Authoritative shop default from Agent config — even if the printer is
+      // temporarily absent from the detected list (do not promote another).
+      // colorSupported is never written here (preserve / default false on create).
       await upsertShopPrinter({
         shopId: shop.id,
         printerName: parsed.data.selectedPrinter,
@@ -50,20 +64,35 @@ export async function POST(request: NextRequest) {
 
     if (parsed.data.printers?.length) {
       for (const printer of parsed.data.printers) {
+        const isSelected =
+          Boolean(parsed.data.selectedPrinter) &&
+          printer.name === parsed.data.selectedPrinter;
         await upsertShopPrinter({
           shopId: shop.id,
           printerName: printer.name,
           status: (printer.status || "unknown").toLowerCase(),
-          isDefault: printer.name === parsed.data.selectedPrinter,
+          // Never mark a non-selected detected printer as default.
+          isDefault: isSelected,
         });
       }
     }
 
+    if (parsed.data.colorUpdate) {
+      await setShopPrinterColorSupported({
+        shopId: shop.id,
+        printerName: parsed.data.colorUpdate.printerName,
+        colorSupported: parsed.data.colorUpdate.colorSupported,
+      });
+    }
+
     void runDocumentCleanupIfDue();
+
+    const printers = await listShopPrinterCapabilities(shop.id);
 
     return Response.json({
       ok: true,
       serverTime: new Date().toISOString(),
+      printers,
     });
   } catch (error) {
     logError("agent_heartbeat_failed", error);

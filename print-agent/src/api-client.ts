@@ -52,12 +52,31 @@ function authHeaders() {
 }
 
 async function parseJson(response: Response) {
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({} as Record<string, unknown>));
   if (!response.ok) {
-    throw new Error(data.error || `Request failed (${response.status})`);
+    const message =
+      typeof data === "object" &&
+      data &&
+      typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : `Request failed (${response.status})`;
+    throw new Error(message);
   }
   return data;
 }
+
+export type PrinterCapabilityRow = {
+  printerName: string;
+  colorSupported: boolean;
+  isDefault: boolean;
+  status: string;
+};
+
+export type HeartbeatResult = {
+  ok: boolean;
+  serverTime: string;
+  printers?: PrinterCapabilityRow[];
+};
 
 function setupSecretHeaders(): Record<string, string> {
   const secret =
@@ -107,6 +126,7 @@ export async function sendHeartbeat(input: {
   selectedPrinter?: string | null;
   printerStatus?: string;
   printers?: Array<{ name: string; status: string }>;
+  colorUpdate?: { printerName: string; colorSupported: boolean };
 }) {
   return withAuthLock(async () => {
     const response = await fetch(`${baseUrl()}/api/print-agent/heartbeat`, {
@@ -116,9 +136,76 @@ export async function sendHeartbeat(input: {
         selectedPrinter: input.selectedPrinter || undefined,
         printerStatus: input.printerStatus || undefined,
         printers: input.printers,
+        colorUpdate: input.colorUpdate,
       }),
     });
-    return parseJson(response);
+    return parseJson(response) as Promise<HeartbeatResult>;
+  });
+}
+
+/**
+ * Persist manual Supports Color (server is source of truth).
+ * Tries PATCH, then POST, then heartbeat colorUpdate (older hosts / undeployed PATCH route).
+ */
+export async function setPrinterColorSupported(input: {
+  printerName: string;
+  colorSupported: boolean;
+  printers?: Array<{ name: string; status: string }>;
+  selectedPrinter?: string | null;
+  printerStatus?: string;
+}) {
+  return withAuthLock(async () => {
+    const body = {
+      printerName: input.printerName,
+      colorSupported: input.colorSupported,
+    };
+
+    const tryMethod = async (method: "PATCH" | "POST") => {
+      const response = await fetch(`${baseUrl()}/api/print-agent/printers`, {
+        method,
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      return response;
+    };
+
+    let response = await tryMethod("PATCH");
+    if (response.status === 404 || response.status === 405) {
+      response = await tryMethod("POST");
+    }
+
+    if (response.ok) {
+      return parseJson(response) as Promise<PrinterCapabilityRow>;
+    }
+
+    // Production may not have /printers yet — use heartbeat colorUpdate (deployed with web).
+    if (response.status === 404 || response.status === 405) {
+      const heartbeat = await fetch(`${baseUrl()}/api/print-agent/heartbeat`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          selectedPrinter: input.selectedPrinter || undefined,
+          printerStatus: input.printerStatus || undefined,
+          printers: input.printers,
+          colorUpdate: {
+            printerName: input.printerName,
+            colorSupported: input.colorSupported,
+          },
+        }),
+      });
+      const data = (await parseJson(heartbeat)) as HeartbeatResult;
+      const row = data.printers?.find(
+        (printer) => printer.printerName === input.printerName,
+      );
+      if (!row || row.colorSupported !== input.colorSupported) {
+        throw new Error(
+          "Color setting was not saved. Deploy the latest PrintMadeEasy web app, then try again.",
+        );
+      }
+      return row;
+    }
+
+    return parseJson(response) as Promise<PrinterCapabilityRow>;
   });
 }
 

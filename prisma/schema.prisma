@@ -80,17 +80,19 @@ model PrintPrice {
 }
 
 model Printer {
-  id           String    @id @default(uuid())
-  shopId       String
-  printerName  String    @db.VarChar(255)
-  printerModel String?   @db.VarChar(255)
-  printerType  String?   @db.VarChar(64)
-  isDefault    Boolean   @default(false)
-  status       String    @default("offline") @db.VarChar(64)
-  lastSeen     DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  shop         Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id             String    @id @default(uuid())
+  shopId         String
+  printerName    String    @db.VarChar(255)
+  printerModel   String?   @db.VarChar(255)
+  printerType    String?   @db.VarChar(64)
+  isDefault      Boolean   @default(false)
+  /** Manual shopkeeper setting — never auto-detected. Default false = safe (no Color UI later). */
+  colorSupported Boolean   @default(false)
+  status         String    @default("offline") @db.VarChar(64)
+  lastSeen       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  shop           Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@unique([shopId, printerName])
   @@index([shopId])

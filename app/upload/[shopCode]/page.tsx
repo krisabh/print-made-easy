@@ -1,10 +1,14 @@
 import { UploadFormLoader } from "@/components/upload-form-loader";
+import { getShopDefaultColorSupported } from "@/lib/print-agent-service";
 import {
   getShopWithPricing,
   toPricingRates,
 } from "@/lib/pricing-service";
 import { hasSubscriptionAccess } from "@/lib/subscription";
 import type { ShopUploadContext } from "@/types";
+
+/** Always resolve current default printer capability from the DB. */
+export const dynamic = "force-dynamic";
 
 type UploadPageProps = {
   params: Promise<{ shopCode: string }>;
@@ -72,10 +76,13 @@ export default async function UploadPage({ params }: UploadPageProps) {
     );
   }
 
+  const colorSupported = await getShopDefaultColorSupported(shop.id);
+
   const shopContext: ShopUploadContext = {
     shopId: shop.id,
     shopCode: shop.shopCode,
     shopName: shop.shopName,
+    colorSupported,
     pricing: toPricingRates(shop.printPrice),
   };
 

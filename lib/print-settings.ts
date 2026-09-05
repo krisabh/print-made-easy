@@ -1,6 +1,5 @@
 /**
  * Web re-export of the canonical print-settings module.
- * Prefer importing from here inside the Next.js app (`@/lib/print-settings`).
  */
 export {
   PRINT_SETTINGS_VERSION,
@@ -10,6 +9,7 @@ export {
   resolvePrintSettings,
   shouldUseLegacyPrintBehavior,
   planJobPrint,
+  isValidPageRange,
   type PrintSettingsV1,
   type PrintOrientationV1,
   type PrintPaperSizeV1,

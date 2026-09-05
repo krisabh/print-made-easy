@@ -1,22 +1,19 @@
 /**
- * Canonical print-settings foundation (Phase A/B).
+ * Canonical print-settings (Phase A/B/C).
  *
- * Single source of truth for v1 defaults + safe parsing.
- * Web app imports this module; the Print Agent keeps an identical copy at
- * `print-agent/src/print-settings.ts` (packaging / rootDir constraints).
- * Keep both files byte-identical - enforced by phase8a/phase8b smoke.
+ * Web: import via @/lib/print-settings.
+ * Agent: identical copy at print-agent/src/print-settings.ts.
  *
- * PrintJob.copies remains the pricing/billing source of truth.
- * printSettings.copies is a printing instruction only and must not diverge
- * silently when settings are stored.
+ * PrintJob.copies remains pricing SOT. printSettings.copies is print-only.
  */
 
 export const PRINT_SETTINGS_VERSION = 1 as const;
 
 export type PrintOrientationV1 = "portrait" | "landscape";
 export type PrintPaperSizeV1 = "A4";
-export type PrintScaleV1 = "fit";
-export type PrintMarginsV1 = "normal";
+/** fit = Sumatra "fit"; noscale = Actual size (Sumatra noscale). */
+export type PrintScaleV1 = "fit" | "noscale";
+export type PrintMarginsV1 = "normal" | "none";
 
 export type PrintSettingsV1 = {
   v: typeof PRINT_SETTINGS_VERSION;
@@ -25,6 +22,8 @@ export type PrintSettingsV1 = {
   paperSize: PrintPaperSizeV1;
   scale: PrintScaleV1;
   margins: PrintMarginsV1;
+  /** "all" or Sumatra page list, e.g. "1-5,8". Does not affect pricing. */
+  pageRange: string;
 };
 
 /** Canonical defaults - do not duplicate elsewhere. */
@@ -35,14 +34,16 @@ export const DEFAULT_PRINT_SETTINGS_V1: PrintSettingsV1 = {
   paperSize: "A4",
   scale: "fit",
   margins: "normal",
+  pageRange: "all",
 };
 
 const ORIENTATIONS = new Set<string>(["portrait", "landscape"]);
 const PAPER_SIZES = new Set<string>(["A4"]);
-const SCALES = new Set<string>(["fit"]);
-const MARGINS = new Set<string>(["normal"]);
+const SCALES = new Set<string>(["fit", "noscale"]);
+const MARGINS = new Set<string>(["normal", "none"]);
 
 const MAX_COPIES = 999;
+const PAGE_RANGE_RE = /^(\d+(-\d+)?)(,\s*\d+(-\d+)?)*$/;
 
 /**
  * Build a stored v1 settings object. Always pass PrintJob.copies so
@@ -51,21 +52,31 @@ const MAX_COPIES = 999;
 export function buildPrintSettingsV1(input: {
   copies: number;
   orientation?: PrintOrientationV1;
+  scale?: PrintScaleV1;
+  margins?: PrintMarginsV1;
+  pageRange?: string;
+  paperSize?: PrintPaperSizeV1;
 }): PrintSettingsV1 {
   const orientation: PrintOrientationV1 =
     input.orientation === "landscape" ? "landscape" : "portrait";
+  const scale: PrintScaleV1 =
+    input.scale === "noscale" ? "noscale" : "fit";
+  const margins: PrintMarginsV1 =
+    input.margins === "none" ? "none" : "normal";
+  const paperSize: PrintPaperSizeV1 =
+    input.paperSize === "A4" ? "A4" : DEFAULT_PRINT_SETTINGS_V1.paperSize;
 
   return {
     ...DEFAULT_PRINT_SETTINGS_V1,
     orientation,
+    scale,
+    margins,
+    paperSize,
+    pageRange: normalizePageRangeInput(input.pageRange),
     copies: normalizeCopies(input.copies, DEFAULT_PRINT_SETTINGS_V1.copies),
   };
 }
 
-/**
- * Build stored v1 defaults (portrait). Pass jobCopies so printSettings.copies
- * matches PrintJob.copies when settings are persisted.
- */
 export function buildDefaultPrintSettingsV1(
   jobCopies: number = DEFAULT_PRINT_SETTINGS_V1.copies,
 ): PrintSettingsV1 {
@@ -81,22 +92,13 @@ export type ResolvedPrintSettings =
   | {
       source: "v1";
       settings: PrintSettingsV1;
-      /** True when at least one field was corrected or defaulted. */
       repaired: boolean;
     };
 
 export type ResolvePrintSettingsOptions = {
-  /**
-   * When printSettings.copies is invalid/missing, prefer PrintJob.copies
-   * so the printing instruction stays aligned with pricing.
-   */
   fallbackCopies?: number;
 };
 
-/**
- * Safely parse DB/API printSettings. Never throws.
- * Unknown fields are ignored. Invalid known fields fall back to defaults.
- */
 export function resolvePrintSettings(
   raw: unknown,
   options?: ResolvePrintSettingsOptions,
@@ -122,7 +124,6 @@ export function resolvePrintSettings(
 
   const version = obj.v;
   if (version !== PRINT_SETTINGS_VERSION && version !== undefined) {
-    // Unknown version: treat as unusable (do not invent behavior).
     if (typeof version !== "number" || version !== 1) {
       return { source: "legacy", settings: null };
     }
@@ -192,6 +193,20 @@ export function resolvePrintSettings(
     repaired = true;
   }
 
+  let pageRange = DEFAULT_PRINT_SETTINGS_V1.pageRange;
+  if (obj.pageRange === undefined) {
+    // Pre-Phase-C v1 objects omit pageRange — default "all" without treating as broken.
+    pageRange = "all";
+  } else {
+    const normalized = tryNormalizePageRange(obj.pageRange);
+    if (normalized === null) {
+      repaired = true;
+      pageRange = "all";
+    } else {
+      pageRange = normalized;
+    }
+  }
+
   return {
     source: "v1",
     repaired,
@@ -202,64 +217,100 @@ export function resolvePrintSettings(
       paperSize,
       scale,
       margins,
+      pageRange,
     },
   };
 }
 
-/** True when Agent / printer path should keep pre-settings behavior. */
 export function shouldUseLegacyPrintBehavior(
   resolved: ResolvedPrintSettings,
 ): boolean {
   return resolved.source === "legacy";
 }
 
+/** True if string is a safe Sumatra pages token (or "all"). */
+export function isValidPageRange(value: unknown): boolean {
+  return tryNormalizePageRange(value) !== null;
+}
+
 export type JobPrintPlan = {
-  /** Image->PDF page orientation. Legacy -> portrait (today). */
   imageOrientation: PrintOrientationV1;
-  /**
-   * Sumatra orientation flag. Undefined = omit (legacy / portrait default).
-   * Only "landscape" is passed for v1 landscape jobs.
-   */
   sumatraOrientation: "landscape" | undefined;
+  /** Sumatra scale. Legacy jobs use fit (today). */
+  scale: PrintScaleV1;
+  /** Undefined means all pages. */
+  pages: string | undefined;
+  /** Image conversion margin in PDF points. */
+  imageMarginPt: number;
+  paperSize: PrintPaperSizeV1;
 };
 
 /**
  * Resolve how the Agent should print from optional printSettings.
- * Never throws. Legacy/malformed -> today's portrait behavior.
+ * Never throws. Legacy/malformed -> today's behavior.
  */
 export function planJobPrint(
   rawSettings: unknown,
   jobCopies: number,
 ): JobPrintPlan {
+  const legacy: JobPrintPlan = {
+    imageOrientation: "portrait",
+    sumatraOrientation: undefined,
+    scale: "fit",
+    pages: undefined,
+    imageMarginPt: 24,
+    paperSize: "A4",
+  };
+
   try {
     const resolved = resolvePrintSettings(rawSettings, {
       fallbackCopies: jobCopies,
     });
 
     if (shouldUseLegacyPrintBehavior(resolved) || !resolved.settings) {
-      return {
-        imageOrientation: "portrait",
-        sumatraOrientation: undefined,
-      };
+      return legacy;
     }
 
-    if (resolved.settings.orientation === "landscape") {
-      return {
-        imageOrientation: "landscape",
-        sumatraOrientation: "landscape",
-      };
-    }
-
+    const s = resolved.settings;
     return {
-      imageOrientation: "portrait",
-      sumatraOrientation: undefined,
+      imageOrientation: s.orientation === "landscape" ? "landscape" : "portrait",
+      sumatraOrientation:
+        s.orientation === "landscape" ? "landscape" : undefined,
+      scale: s.scale === "noscale" ? "noscale" : "fit",
+      pages: s.pageRange === "all" ? undefined : s.pageRange,
+      imageMarginPt: s.margins === "none" ? 0 : 24,
+      paperSize: "A4",
     };
   } catch {
-    return {
-      imageOrientation: "portrait",
-      sumatraOrientation: undefined,
-    };
+    return legacy;
   }
+}
+
+function tryNormalizePageRange(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return "all";
+  if (trimmed.toLowerCase() === "all") return "all";
+  if (!PAGE_RANGE_RE.test(trimmed)) return null;
+
+  const parts = trimmed.split(",").map((p) => p.trim());
+  for (const part of parts) {
+    if (part.includes("-")) {
+      const [a, b] = part.split("-").map((n) => Number(n));
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < 1) {
+        return null;
+      }
+      if (a > b) return null;
+    } else {
+      const n = Number(part);
+      if (!Number.isInteger(n) || n < 1) return null;
+    }
+  }
+  return parts.join(",");
+}
+
+function normalizePageRangeInput(value: string | undefined): string {
+  return tryNormalizePageRange(value ?? "all") ?? "all";
 }
 
 function tryNormalizeCopies(value: unknown): number | null {

@@ -1,9 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("printAgent", {
-  getState: () => ipcRenderer.invoke("agent:get-state"),
+  getState: (options?: { light?: boolean }) =>
+    ipcRenderer.invoke("agent:get-state", options),
   setPrinter: (printerName: string) =>
     ipcRenderer.invoke("agent:set-printer", printerName),
+  setPrinterColor: (printerName: string, colorSupported: boolean) =>
+    ipcRenderer.invoke("agent:set-printer-color", {
+      printerName,
+      colorSupported,
+    }),
   testPrint: () => ipcRenderer.invoke("agent:test-print"),
   setOpenAtLogin: (enabled: boolean) =>
     ipcRenderer.invoke("agent:set-open-at-login", enabled),
