@@ -31,10 +31,16 @@ export function MarketingFooter({ authenticated = false }: MarketingFooterProps)
           <p className="text-sm font-bold tracking-[0.12em] text-blue-700 uppercase">
             {SITE.name}
           </p>
+          <p className="mt-1 text-xs font-medium text-slate-600">
+            A {SITE.parentCompany} product
+          </p>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
             {SITE.tagline}
           </p>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            {SITE.identityLine}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
             Shopkeeper software subscription · ₹199/month · 7-day free trial
           </p>
         </div>

@@ -23,7 +23,8 @@ export default function PrivacyPage() {
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
             PrintMadeEasy ({SITE.url}) provides print-shop management software
-            for shopkeepers. This Privacy Policy explains what information we
+            for shopkeepers. PrintMadeEasy is a product of Clauras, operated by
+            Ramyad Enterprises. This Privacy Policy explains what information we
             process to operate the service.
           </p>
 
@@ -65,10 +66,14 @@ export default function PrivacyPage() {
             For privacy questions, use{" "}
             <Link href="/contact" className="font-medium text-blue-700 hover:underline">
               Contact Us
-            </Link>{" "}
-            or email{" "}
+            </Link>
+            , email{" "}
             <a href={SITE.emailHref} className="font-medium text-blue-700 hover:underline">
               {SITE.email}
+            </a>
+            , or call{" "}
+            <a href={SITE.phoneHref} className="font-medium text-blue-700 hover:underline">
+              {SITE.phone}
             </a>
             .
           </p>

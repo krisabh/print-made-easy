@@ -1,14 +1,24 @@
 export const SITE = {
   name: "PrintMadeEasy",
+  parentCompany: "Clauras",
+  legalName: "Ramyad Enterprises",
   tagline:
     "Print-shop management software for local shops — QR print requests, Windows Agent, and organized jobs.",
+  /** Concise public hierarchy for footers and compact UI. */
+  identityLine:
+    "PrintMadeEasy — A Clauras product, powered by Ramyad Enterprises.",
+  /** Preferred relationship sentence for legal/about pages. */
+  relationship:
+    "PrintMadeEasy is a product of Clauras, operated by Ramyad Enterprises.",
   title: "PrintMadeEasy | Print Shop Management Software",
   description:
-    "PrintMadeEasy is software for print-shop owners. Shopkeepers subscribe for ₹199/month after a 7-day free trial. Customers scan the shop QR code to submit documents for printing — they do not pay PrintMadeEasy. Uploaded documents are deleted automatically after 1 hour.",
+    "PrintMadeEasy, a Clauras product operated by Ramyad Enterprises, is software for print-shop owners. Shopkeepers subscribe for ₹199/month after a 7-day free trial. Customers scan the shop QR code to submit documents for printing — they do not pay PrintMadeEasy. Uploaded documents are deleted automatically after 1 hour.",
   url: "https://clauras.com",
-  email: "abhiram12sep@gmail.com",
-  emailHref: "mailto:abhiram12sep@gmail.com",
-  whatsappDisplay: "+91 8618089513",
+  email: "clauras.ai@gmail.com",
+  emailHref: "mailto:clauras.ai@gmail.com",
+  phone: "8618089513",
+  phoneHref: "tel:8618089513",
+  whatsappDisplay: "8618089513",
   whatsappHref: "https://wa.me/918618089513",
   whatsappLabel: "Chat with us on WhatsApp",
 } as const;

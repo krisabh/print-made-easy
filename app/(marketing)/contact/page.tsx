@@ -7,7 +7,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Contact Us",
   description:
-    "Contact PrintMadeEasy about your print shop subscription, Windows Agent setup, billing questions, or product support.",
+    "Contact PrintMadeEasy, a Clauras product operated by Ramyad Enterprises, for shop subscription, Windows Agent, billing, or product support.",
   alternates: {
     canonical: "/contact",
   },
@@ -24,12 +24,37 @@ export default function ContactPage() {
           Contact Us
         </h1>
         <p className="mt-4 text-base leading-relaxed text-slate-600">
-          Reach PrintMadeEasy for product questions, shopkeeper onboarding,
-          Windows Agent help, or billing and cancellation questions. We support
-          print-shop owners who subscribe to PrintMadeEasy software.
+          PrintMadeEasy is a SaaS product from Clauras, operated by Ramyad
+          Enterprises. Reach us for shopkeeper onboarding, Windows Agent help,
+          or billing and cancellation questions.
         </p>
 
         <div className="mt-8 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Business / Legal Name
+            </p>
+            <p className="mt-1 text-base font-medium text-slate-900">
+              {SITE.legalName}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Parent Company
+            </p>
+            <p className="mt-1 text-base font-medium text-slate-900">
+              {SITE.parentCompany}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Product
+            </p>
+            <p className="mt-1 text-base font-medium text-slate-900">{SITE.name}</p>
+          </div>
+
           <div>
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
               Email
@@ -44,6 +69,15 @@ export default function ContactPage() {
 
           <div>
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Phone
+            </p>
+            <a
+              href={SITE.phoneHref}
+              className="mt-1 inline-block text-base font-medium text-blue-700 hover:underline"
+            >
+              {SITE.phone}
+            </a>
+            <p className="mt-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
               WhatsApp
             </p>
             <p className="mt-1 text-sm text-slate-600">{SITE.whatsappDisplay}</p>

@@ -6,7 +6,7 @@ import { FinalCtaSection } from "@/components/marketing/sections";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "PrintMadeEasy is designed to help print shops move from manual print-job handling toward a more organized digital workflow.",
+    "PrintMadeEasy is a Clauras product operated by Ramyad Enterprises — print-shop management software for local shops.",
 };
 
 export default function AboutPage() {
@@ -25,6 +25,11 @@ export default function AboutPage() {
             shops. Shopkeepers subscribe to run QR-based customer print
             submissions, a Windows Print Agent, job tracking, and printer
             management from one dashboard.
+          </p>
+          <p className="mt-4 text-base leading-relaxed text-slate-600">
+            Clauras is the parent company behind PrintMadeEasy. PrintMadeEasy is
+            a SaaS product designed to help local print shops manage customer
+            print orders, and is operated by Ramyad Enterprises.
           </p>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
             Customers do not pay PrintMadeEasy — they use the shop&apos;s QR

@@ -75,7 +75,8 @@ export default function ProductsPage() {
             Products &amp; Services
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            PrintMadeEasy is software for print-shop owners — not a marketplace
+            PrintMadeEasy is a SaaS product from Clauras, operated by Ramyad
+            Enterprises — software for print-shop owners, not a marketplace
             selling prints to end customers.
           </p>
         </div>

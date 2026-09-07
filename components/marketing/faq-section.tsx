@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
+import { SITE } from "@/lib/marketing";
 import { cn } from "@/lib/utils";
 
 const FAQS = [
@@ -48,7 +49,7 @@ const FAQS = [
   },
   {
     q: "How do I get support or cancel?",
-    a: "Visit Support or Contact Us, email abhiram12sep@gmail.com, or use WhatsApp. Cancellation and refund details are in the Refund & Cancellation Policy. Shopkeepers can also manage billing from My Plan / Billing in the dashboard.",
+    a: `Visit Support or Contact Us, email ${SITE.email}, or use WhatsApp. Cancellation and refund details are in the Refund & Cancellation Policy. Shopkeepers can also manage billing from My Plan / Billing in the dashboard.`,
   },
 ] as const;
 
