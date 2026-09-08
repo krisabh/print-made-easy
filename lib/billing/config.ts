@@ -2,8 +2,9 @@ import type { BillingMode, BillingProviderId } from "@/lib/billing/types";
 
 export function getBillingProviderId(): BillingProviderId {
   const raw = (process.env.BILLING_PROVIDER || "cashfree").trim().toLowerCase();
+  if (raw === "payu") return "payu";
   if (raw === "cashfree") return "cashfree";
-  // Unknown providers fall back to cashfree until adapters exist.
+  // Unknown providers fall back to cashfree (never silently treat as PayU).
   return "cashfree";
 }
 

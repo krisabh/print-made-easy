@@ -256,7 +256,10 @@ export function SaasPricingPlans({
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         checkoutSessionId?: string;
-        checkoutKind?: "cashfree_payment" | "cashfree_subscription";
+        checkoutKind?:
+          | "cashfree_payment"
+          | "cashfree_subscription"
+          | "payu_hosted";
         environment?: "sandbox" | "production";
       };
 
@@ -265,6 +268,12 @@ export function SaasPricingPlans({
       }
 
       setNotice("Redirecting to payment…");
+
+      if (data.checkoutKind === "payu_hosted") {
+        window.location.href = data.checkoutSessionId;
+        return;
+      }
+
       await loadCashfreeSdk();
       if (!window.Cashfree) {
         throw new Error("Cashfree checkout is unavailable.");

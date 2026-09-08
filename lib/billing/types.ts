@@ -1,6 +1,6 @@
 import type { PREMIUM_PLAN } from "@/lib/billing/plan";
 
-export type BillingProviderId = "cashfree";
+export type BillingProviderId = "cashfree" | "payu";
 
 export type BillingMode = "ONE_TIME" | "SUBSCRIPTION";
 
@@ -12,7 +12,8 @@ export type PaymentStatus =
 
 export type CheckoutKind =
   | "cashfree_payment"
-  | "cashfree_subscription";
+  | "cashfree_subscription"
+  | "payu_hosted";
 
 export type NormalizedBillingEventType =
   | "PAYMENT_SUCCEEDED"
@@ -68,6 +69,8 @@ export type CreateOneTimeCheckoutInput = {
   currency: string;
   /** Merchant order id chosen by BillingService (opaque to provider). */
   providerOrderId: string;
+  /** Shop street address — required by PayU billingDetails.address1. */
+  addressLine1?: string;
 };
 
 export type CreateOneTimeCheckoutResult = {

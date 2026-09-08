@@ -5,10 +5,12 @@ import { PREMIUM_PLAN } from "@/lib/billing/plan";
 import { getPaymentProviderAdapter } from "@/lib/billing/registry";
 import type {
   BillingCheckoutResponse,
+  BillingProviderId,
   CreateCheckoutCustomer,
   NormalizedBillingEvent,
 } from "@/lib/billing/types";
 import { addMonths, buildMerchantOrderId, CASHFREE_PROVIDER } from "@/lib/cashfree";
+import { PAYU_PROVIDER } from "@/lib/payu";
 import { prisma } from "@/lib/prisma";
 import {
   canInitiatePremiumCheckout,
@@ -18,6 +20,17 @@ import {
   releasePremiumCheckoutClaim,
   toPublicSubscriptionView,
 } from "@/lib/subscription";
+
+/** Ledger / DB provider string for BillingPayment.provider (uppercase). */
+export function toLedgerProvider(providerId: BillingProviderId): string {
+  return providerId === "payu" ? PAYU_PROVIDER : CASHFREE_PROVIDER;
+}
+
+export function ledgerProviderToBillingId(
+  ledgerProvider: string,
+): BillingProviderId {
+  return ledgerProvider === PAYU_PROVIDER ? "payu" : "cashfree";
+}
 
 /**
  * Premium period extension rule (ONE_TIME):
@@ -50,6 +63,7 @@ export async function createBillingCheckout(input: {
   shopCode: string;
   customer: CreateCheckoutCustomer;
   returnUrl: string;
+  addressLine1?: string;
   now?: Date;
 }): Promise<
   | { ok: true; checkout: BillingCheckoutResponse }
@@ -73,12 +87,13 @@ export async function createBillingCheckout(input: {
       };
     }
 
+    const ledgerProvider = toLedgerProvider(config.provider);
     const providerOrderId = buildMerchantOrderId(input.shopCode);
 
     await prisma.billingPayment.create({
       data: {
         shopId: input.shopId,
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         mode: "ONE_TIME",
         status: "PENDING",
         amountInr: PREMIUM_PLAN.amountInr,
@@ -97,6 +112,7 @@ export async function createBillingCheckout(input: {
         amountInr: PREMIUM_PLAN.amountInr,
         currency: PREMIUM_PLAN.currency,
         providerOrderId,
+        addressLine1: input.addressLine1,
       });
 
       return {
@@ -115,7 +131,7 @@ export async function createBillingCheckout(input: {
     } catch (error) {
       await prisma.billingPayment.updateMany({
         where: {
-          provider: CASHFREE_PROVIDER,
+          provider: ledgerProvider,
           providerOrderId,
           status: "PENDING",
         },
@@ -224,10 +240,13 @@ export async function applyNormalizedOneTimePayment(
     return { ok: true as const, result: "ignored_missing_order" as const };
   }
 
+  const billingProviderId = payment.provider || event.provider;
+  const ledgerProvider = toLedgerProvider(billingProviderId);
+
   if (event.type === "PAYMENT_FAILED" || payment.status === "FAILED") {
     await prisma.billingPayment.updateMany({
       where: {
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         providerOrderId: payment.providerOrderId,
         status: { in: ["PENDING", "FAILED"] },
       },
@@ -250,7 +269,7 @@ export async function applyNormalizedOneTimePayment(
   ) {
     await prisma.billingPayment.updateMany({
       where: {
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         providerOrderId: payment.providerOrderId,
       },
       data: {
@@ -265,7 +284,7 @@ export async function applyNormalizedOneTimePayment(
   const existing = await prisma.billingPayment.findUnique({
     where: {
       provider_providerOrderId: {
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         providerOrderId: payment.providerOrderId,
       },
     },
@@ -288,7 +307,7 @@ export async function applyNormalizedOneTimePayment(
   if (payment.providerPaymentId) {
     const priorPayment = await prisma.billingPayment.findFirst({
       where: {
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         providerPaymentId: payment.providerPaymentId,
         status: "SUCCESS",
         NOT: { id: existing.id },
@@ -356,7 +375,7 @@ export async function applyNormalizedOneTimePayment(
       data: {
         plan: "PREMIUM",
         status: "ACTIVE",
-        provider: CASHFREE_PROVIDER,
+        provider: ledgerProvider,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         cancelAtPeriodEnd: false,
@@ -417,25 +436,11 @@ export async function confirmShopOneTimePayments(
       providerPaymentId: string | null;
       paidAt?: Date | null;
       failureReason?: string | null;
+      provider?: BillingProviderId;
     }>;
   },
 ) {
   const now = options?.now || new Date();
-  const adapter = getPaymentProviderAdapter();
-  const verify =
-    options?.verify ||
-    (adapter.oneTime
-      ? (providerOrderId: string) =>
-          adapter.oneTime!.verifyOneTimePayment({ providerOrderId })
-      : null);
-
-  if (!verify) {
-    return {
-      ok: false as const,
-      result: "unsupported" as const,
-      subscription: await getPublicBillingView(shopId, now),
-    };
-  }
 
   const pending = await prisma.billingPayment.findMany({
     where: {
@@ -456,6 +461,19 @@ export async function confirmShopOneTimePayments(
     | "rejected" = pending.length ? "pending_unpaid" : "no_pending";
 
   for (const row of pending) {
+    const billingId = ledgerProviderToBillingId(row.provider);
+    const adapter = getPaymentProviderAdapter(billingId);
+    const verify =
+      options?.verify ||
+      (adapter.oneTime
+        ? (providerOrderId: string) =>
+            adapter.oneTime!.verifyOneTimePayment({ providerOrderId })
+        : null);
+
+    if (!verify) {
+      continue;
+    }
+
     let verified;
     try {
       verified = await verify(row.providerOrderId);
@@ -467,13 +485,15 @@ export async function confirmShopOneTimePayments(
       continue;
     }
 
+    const providerId = verified.provider || billingId;
+
     const applied = await applyNormalizedOneTimePayment(
       {
         type: "PAYMENT_SUCCEEDED",
-        provider: "cashfree",
+        provider: providerId,
         eventId: `confirm:${row.providerOrderId}:${verified.providerPaymentId || "none"}`,
         payment: {
-          provider: "cashfree",
+          provider: providerId,
           mode: "ONE_TIME",
           status: "SUCCESS",
           amountInr: verified.amountInr,

@@ -32,6 +32,7 @@ export async function POST() {
         phone: customerPhone,
       },
       returnUrl,
+      addressLine1: session.shop.address || undefined,
     });
 
     if (!result.ok) {

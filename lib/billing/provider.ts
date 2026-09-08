@@ -1,4 +1,5 @@
 import type {
+  BillingProviderId,
   CreateOneTimeCheckoutInput,
   CreateOneTimeCheckoutResult,
   CreateSubscriptionCheckoutInput,
@@ -32,7 +33,7 @@ export interface SubscriptionPaymentProvider {
 export type WebhookNormalizeResult =
   | { ok: true; event: NormalizedBillingEvent; duplicate?: false }
   | { ok: true; duplicate: true; eventId: string; eventType: string }
-  | { ok: false; status: 400 | 401; error: string };
+  | { ok: false; status: 400 | 401 | 500; error: string };
 
 export interface WebhookNormalizer {
   /**
@@ -49,7 +50,7 @@ export interface WebhookNormalizer {
 }
 
 export type PaymentProviderAdapter = {
-  id: "cashfree";
+  id: BillingProviderId;
   oneTime?: OneTimePaymentProvider;
   subscription?: SubscriptionPaymentProvider;
   /** Normalizes Payment Gateway (one-time) webhooks. */
