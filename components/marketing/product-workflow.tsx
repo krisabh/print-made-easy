@@ -321,51 +321,119 @@ export function PrivacyWorkflowSection() {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-base font-semibold text-slate-900">
-              Why Shopkeepers Love the Workflow
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <p className="text-xs font-semibold tracking-[0.14em] text-blue-700 uppercase">
+              For print shops
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
+              Why print shops use PrintMadeEasy
             </h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-600">
-              <li>
-                <span className="font-semibold text-slate-900">Less manual work</span>
-                <br />
-                Customers submit documents themselves.
-              </li>
-              <li>
-                <span className="font-semibold text-slate-900">Less storage</span>
-                <br />
-                Documents are automatically removed after 1 hour.
-              </li>
-              <li>
-                <span className="font-semibold text-slate-900">Better visibility</span>
-                <br />
-                Track print jobs from one dashboard.
-              </li>
+            <ul className="mt-5 space-y-3.5">
+              {[
+                {
+                  title: "Less rush at the counter",
+                  body: "Customers can upload documents from their phones instead of waiting to transfer files at the counter.",
+                },
+                {
+                  title: "No document storage burden",
+                  body: "Documents are temporary. Print jobs are automatically deleted after 1 hour.",
+                },
+                {
+                  title: "Privacy-focused",
+                  body: "Customer documents are handled only for the printing process and are not kept permanently.",
+                },
+                {
+                  title: "Less manual file handling",
+                  body: "No need to repeatedly transfer files through USB drives, messaging apps or other manual methods.",
+                },
+                {
+                  title: "Multiple printers, one Agent",
+                  body: "The Agent can detect multiple printers connected to the shop computer.",
+                },
+                {
+                  title: "You control the default printer",
+                  body: "Choose which detected printer should handle print jobs.",
+                },
+                {
+                  title: "Simple customer experience",
+                  body: "Customers scan your QR code, upload their document and submit the print job.",
+                },
+                {
+                  title: "Better shop workflow",
+                  body: "Reduce unnecessary back-and-forth between customers and staff.",
+                },
+              ].map((item) => (
+                <li key={item.title} className="flex gap-2.5 text-sm">
+                  <CheckCircle2
+                    className="mt-0.5 size-4 shrink-0 text-emerald-600"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <span className="font-semibold text-slate-900">
+                      {item.title}
+                    </span>
+                    <span className="mt-0.5 block leading-relaxed text-slate-600">
+                      {item.body}
+                    </span>
+                  </span>
+                </li>
+              ))}
             </ul>
           </article>
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-base font-semibold text-slate-900">
-              Why Customers Love It
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <p className="text-xs font-semibold tracking-[0.14em] text-blue-700 uppercase">
+              For customers
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
+              Why customers use PrintMadeEasy
             </h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-600">
-              <li>
-                <span className="font-semibold text-slate-900">
-                  No long wait at the computer
-                </span>
-                <br />
-                Scan and submit your document from your phone.
-              </li>
-              <li>
-                <span className="font-semibold text-slate-900">Easy status tracking</span>
-                <br />
-                Know where your print job stands with live status updates.
-              </li>
-              <li>
-                <span className="font-semibold text-slate-900">Privacy minded</span>
-                <br />
-                Uploaded documents are automatically deleted after 1 hour.
-              </li>
+            <ul className="mt-5 space-y-3.5">
+              {[
+                {
+                  title: "No app required",
+                  body: "Scan the shop QR code and upload your document from your phone.",
+                },
+                {
+                  title: "Avoid the queue",
+                  body: "Send your document before reaching the counter or while waiting.",
+                },
+                {
+                  title: "No USB or WhatsApp transfer",
+                  body: "Upload directly through the shop's print page.",
+                },
+                {
+                  title: "Privacy-focused",
+                  body: "Your document is temporary and automatically deleted after 1 hour.",
+                },
+                {
+                  title: "Simple print options",
+                  body: "Choose the important print settings without dealing with complicated software.",
+                },
+                {
+                  title: "Convenient from your phone",
+                  body: "Print documents directly from your phone without needing a computer.",
+                },
+                {
+                  title: "Faster shop experience",
+                  body: "Spend less time transferring files and waiting at the counter.",
+                },
+              ].map((item) => (
+                <li key={item.title} className="flex gap-2.5 text-sm">
+                  <CheckCircle2
+                    className="mt-0.5 size-4 shrink-0 text-emerald-600"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <span className="font-semibold text-slate-900">
+                      {item.title}
+                    </span>
+                    <span className="mt-0.5 block leading-relaxed text-slate-600">
+                      {item.body}
+                    </span>
+                  </span>
+                </li>
+              ))}
             </ul>
           </article>
         </div>

@@ -410,32 +410,36 @@ export function PricingSection() {
             Simple pricing for growing print shops
           </h2>
           <p className="mt-4 text-base text-slate-600">
+            Every new shopkeeper gets a 7-day Premium trial with signup. After
+            that,{" "}
             <span className="font-medium text-slate-800">PrintMadeEasy</span>{" "}
             Premium is{" "}
             <span className="font-medium text-slate-800">
               ₹{PREMIUM_PLAN.amountInr}/month (INR)
-            </span>{" "}
-            after a 7-day free trial. Only shopkeepers pay PrintMadeEasy —
-            customers who submit documents via the shop QR code do not pay
-            PrintMadeEasy.
+            </span>
+            . Only shopkeepers pay PrintMadeEasy — customers who submit
+            documents via the shop QR code do not pay PrintMadeEasy.
           </p>
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold text-blue-700">Start Free</p>
-            <h3 className="mt-2 text-2xl font-semibold text-slate-900">
+        <div className="mx-auto mt-10 grid max-w-4xl gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <article className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6 shadow-sm">
+            <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase">
+              Included with signup
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
               7-day free trial
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Included when you create your shop.
+              Try all Premium features for 7 days with no payment required. Your
+              trial starts automatically when you sign up.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {[
-                "Full access to shop features",
-                "Connect your Windows Agent",
-                "Manage print jobs",
-                "Printer status in the dashboard",
+                "Full access to Premium features",
+                "No payment details required",
+                "Cancel anytime",
+                "Trial starts automatically on signup",
               ].map((item) => (
                 <li key={item} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
@@ -443,12 +447,9 @@ export function PricingSection() {
                 </li>
               ))}
             </ul>
-            <Link
-              href="/signup"
-              className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50"
-            >
-              Start Free Trial
-            </Link>
+            <p className="mt-5 text-sm font-medium text-emerald-800">
+              Not a separate paid plan
+            </p>
           </article>
 
           <article className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm ring-1 ring-blue-100">
@@ -463,15 +464,17 @@ export function PricingSection() {
               </span>
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Paid by the shopkeeper after the free trial for full Premium
-              access. Customers do not pay PrintMadeEasy.
+              Everything you need to simplify printing at your shop. Paid by the
+              shopkeeper after the free trial. Customers do not pay
+              PrintMadeEasy.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {[
-                "Add printers and manage jobs",
-                "Windows Agent connectivity",
-                "Dashboard job tracking",
-                "Cancel anytime from My Plan / Billing",
+                "Upload and print customer jobs",
+                "Multiple printers detected by one Agent",
+                "Choose your default printer",
+                "Customer documents deleted after 1 hour",
+                "Pay monthly. Renew manually when your period ends.",
               ].map((item) => (
                 <li key={item} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />

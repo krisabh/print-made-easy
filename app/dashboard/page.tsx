@@ -1,10 +1,15 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { ShopSetupChecklist } from "@/components/dashboard/shop-setup-checklist";
 import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { SubscriptionStatusCard } from "@/components/dashboard/subscription-status-card";
 import {
   getDashboardSummary,
   getShopJobs,
 } from "@/lib/dashboard-service";
+import {
+  getShopAgentStatus,
+  listShopPrintersWithLiveStatus,
+} from "@/lib/print-agent-service";
 import { requireDashboardSession } from "@/lib/require-product-access";
 import {
   getShopSubscription,
@@ -15,11 +20,24 @@ export default async function DashboardPage() {
   const { session, access } = await requireDashboardSession();
   const { shop } = session;
 
-  const [summary, jobs, subscription] = await Promise.all([
-    getDashboardSummary(shop.id),
-    getShopJobs({ shopId: shop.id, date: "today", status: "ALL" }),
-    getShopSubscription(shop.id),
-  ]);
+  const [summary, jobs, subscription, agentStatus, printers] =
+    await Promise.all([
+      getDashboardSummary(shop.id),
+      getShopJobs({ shopId: shop.id, date: "today", status: "ALL" }),
+      getShopSubscription(shop.id),
+      getShopAgentStatus(shop.id),
+      listShopPrintersWithLiveStatus(shop.id),
+    ]);
+
+  const agentConnected = Boolean(agentStatus?.connected);
+  const printerDetected = printers.length > 0;
+  const defaultPrinter =
+    printers.find((printer) => printer.isDefault) ?? null;
+  const defaultPrinterSelected = Boolean(
+    defaultPrinter?.printerName || agentStatus?.printerName,
+  );
+  const defaultPrinterName =
+    defaultPrinter?.printerName || agentStatus?.printerName || null;
 
   return (
     <div className="space-y-5">
@@ -33,6 +51,12 @@ export default async function DashboardPage() {
       <SubscriptionStatusCard
         subscription={toPublicSubscriptionView(subscription)}
         showGraceWarning={access.isGracePeriod}
+      />
+      <ShopSetupChecklist
+        agentConnected={agentConnected}
+        printerDetected={printerDetected}
+        defaultPrinterSelected={defaultPrinterSelected}
+        defaultPrinterName={defaultPrinterName}
       />
       <JobsBoard
         initialJobs={jobs}

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Ban,
   Check,
-  Headphones,
   Lock,
   ShieldCheck,
   Sparkles,
@@ -24,20 +23,23 @@ type SaasPricingPlansProps = {
   billingMode: BillingMode;
 };
 
-const START_FREE_FEATURES = [
-  "Full access to all features",
-  "Add your printers",
-  "Upload and print jobs",
-  "Priority support",
+const TRIAL_INCLUDED_FEATURES = [
+  "Full access to Premium features",
+  "No payment details required",
+  "Cancel anytime",
+  "Your trial starts automatically when you sign up",
 ];
 
 const PREMIUM_FEATURES = [
-  "Add up to 10 printers",
-  "All premium features included",
-  "Upload and print unlimited jobs",
-  "Advanced analytics",
-  "Priority support",
-  "Automatic updates",
+  "Continue using PrintMadeEasy after your free trial",
+  "Upload and print customer jobs",
+  "Multiple printers detected by one Agent",
+  "Choose your default printer",
+  "Advanced print settings",
+  "Print from customer QR uploads",
+  "Customer documents automatically deleted after 1 hour",
+  "Privacy-focused document handling",
+  "Print job management and status tracking",
 ];
 
 declare global {
@@ -359,7 +361,7 @@ export function SaasPricingPlans({
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-3xl">
       <header className="mx-auto max-w-2xl text-center">
         <p className="text-xs font-semibold tracking-[0.16em] text-blue-600 uppercase">
           PrintMadeEasy
@@ -368,13 +370,14 @@ export function SaasPricingPlans({
           Simple, transparent pricing
         </h2>
         <p className="mt-3 text-base text-slate-500 sm:text-lg">
-          Choose the plan that fits your printing business
+          New shops get a 7-day Premium trial with signup. Continue with Premium
+          for ₹{premiumPriceInr}/month when the trial ends.
         </p>
       </header>
 
       {subscription ? (
         <div
-          className={`mx-auto mt-8 max-w-xl rounded-2xl border px-4 py-5 text-left sm:px-5 ${
+          className={`mx-auto mt-8 rounded-2xl border px-4 py-5 text-left sm:px-5 ${
             pastDue || expired
               ? "border-amber-200 bg-amber-50"
               : subscription.hasAccess
@@ -461,9 +464,14 @@ export function SaasPricingPlans({
             </>
           )}
           {trialActive ? (
-            <p className="mt-2 text-sm font-medium text-emerald-700">
-              Trial is active
-            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-medium text-emerald-700">
+                Trial is active
+              </p>
+              <p className="text-sm text-emerald-800/90">
+                Your 7-day free trial is included with signup.
+              </p>
+            </div>
           ) : null}
           {confirming ? (
             <p className="mt-2 text-sm text-slate-500">
@@ -484,87 +492,73 @@ export function SaasPricingPlans({
       ) : null}
 
       {notice ? (
-        <p className="mx-auto mt-4 max-w-xl rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-700">
+        <p className="mx-auto mt-4 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-700">
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p className="mx-auto mt-4 max-w-xl rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-700">
+        <p className="mx-auto mt-4 rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-700">
           {error}
         </p>
       ) : null}
 
-      <div className="mt-10 grid items-stretch gap-6 lg:grid-cols-2 lg:gap-8">
-        <article className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <p className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold tracking-wide text-emerald-700 uppercase">
-            7-Day Free Trial
-          </p>
-          <h3 className="mt-4 text-2xl font-semibold text-slate-900">Start Free</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Try all premium features, risk-free
-          </p>
-          <p className="mt-6 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            7 Days Free Trial
-          </p>
-          {trialActive ? (
-            <p className="mt-2 text-sm font-medium text-emerald-700">
-              {subscription?.daysRemaining === 1
-                ? "1 day remaining"
-                : `${subscription?.daysRemaining ?? 0} days remaining`}
-            </p>
-          ) : trialEnded ? (
-            <p className="mt-2 text-sm font-medium text-amber-700">
-              Trial ended · Subscribe to continue
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">
-              Explore PrintMadeEasy with your shop before you subscribe.
-            </p>
-          )}
-
-          <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-            <p className="text-sm font-semibold text-emerald-800">
-              No payment details required
-            </p>
-            <p className="mt-1 text-sm text-emerald-700">
-              Try everything for 7 days. Cancel anytime.
-            </p>
+      <div className="mt-8 space-y-5">
+        <article className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase">
+                Included with signup
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                7-Day Free Trial
+              </h3>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+              Not a separate plan
+            </span>
           </div>
-
-          <ul className="mt-6 space-y-3">
-            {START_FREE_FEATURES.map((feature) => (
-              <li key={feature} className="flex items-start gap-3 text-sm text-slate-700">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+          <p className="mt-2 text-sm text-slate-600">
+            Try all Premium features for 7 days with no payment required.
+          </p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {TRIAL_INCLUDED_FEATURES.map((feature) => (
+              <li
+                key={feature}
+                className="flex items-start gap-2 text-sm text-slate-700"
+              >
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600 ring-1 ring-emerald-100">
                   <Check className="size-3.5" aria-hidden="true" />
                 </span>
                 {feature}
               </li>
             ))}
           </ul>
-
-          <div className="mt-8 flex flex-1 flex-col justify-end">
-            <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-50 text-sm font-semibold text-emerald-800">
-              {trialActive ? "Trial in progress" : "Included with signup"}
-            </div>
-            <p className="mt-3 text-center text-sm text-slate-400">
-              No card required to get started
-            </p>
-          </div>
+          <p className="mt-4 text-sm font-semibold text-emerald-800">
+            {trialActive
+              ? "Your trial is already active"
+              : trialEnded
+                ? "Your free trial has ended"
+                : premiumActive ||
+                    cancelAtPeriodEnd ||
+                    cancelledUntilPeriodEnd
+                  ? "You already moved past the free trial"
+                  : "Your trial starts automatically when you sign up"}
+          </p>
         </article>
 
-        <article className="relative flex flex-col rounded-3xl border-2 border-blue-600 bg-white p-6 shadow-md sm:p-8 lg:-mt-2 lg:mb-[-8px]">
+        <article className="relative rounded-3xl border-2 border-blue-600 bg-white p-6 shadow-md sm:p-8">
           <p className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold tracking-wide text-white uppercase">
-            Recommended
+            Paid plan
           </p>
           <div className="flex items-center gap-2 text-blue-600">
             <Sparkles className="size-4" aria-hidden="true" />
             <p className="text-xs font-semibold tracking-[0.14em] uppercase">
-              For growing shops
+              After your free trial
             </p>
           </div>
           <h3 className="mt-4 text-2xl font-semibold text-slate-900">Premium</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Everything you need to grow your business
+            Everything you need to simplify printing at your shop.
           </p>
           <p className="mt-6 text-4xl font-semibold tracking-tight text-slate-900">
             ₹{premiumPriceInr}
@@ -606,9 +600,12 @@ export function SaasPricingPlans({
             </p>
           )}
 
-          <ul className="mt-8 space-y-3">
+          <ul className="mt-6 space-y-2.5">
             {PREMIUM_FEATURES.map((feature) => (
-              <li key={feature} className="flex items-start gap-3 text-sm text-slate-700">
+              <li
+                key={feature}
+                className="flex items-start gap-3 text-sm text-slate-700"
+              >
                 <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                   <Check className="size-3.5" aria-hidden="true" />
                 </span>
@@ -617,7 +614,7 @@ export function SaasPricingPlans({
             ))}
           </ul>
 
-          <div className="mt-8 flex flex-1 flex-col justify-end">
+          <div className="mt-8">
             {planCta.kind === "premium_active" ? (
               <div className="space-y-2">
                 <div className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-50 text-sm font-semibold text-blue-800">
@@ -659,7 +656,7 @@ export function SaasPricingPlans({
         </article>
       </div>
 
-      <section className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-10 grid gap-3 sm:grid-cols-3">
         <TrustItem
           icon={ShieldCheck}
           title="Secure Payments"
@@ -676,20 +673,15 @@ export function SaasPricingPlans({
         />
         <TrustItem
           icon={Lock}
-          title="100% Safe"
-          text="Your data is always protected."
-        />
-        <TrustItem
-          icon={Headphones}
-          title="24/7 Support"
-          text="We're here to help."
+          title="Privacy-focused"
+          text="Documents are automatically deleted after 1 hour."
         />
       </section>
 
       <p className="mt-8 text-center text-sm text-slate-500">
         {billingMode === "ONE_TIME"
-          ? "All plans include 7-day free trial · Renew manually each month"
-          : "All plans include 7-day free trial • Cancel anytime"}
+          ? "7-day free trial included with signup · Renew manually each month"
+          : "7-day free trial included with signup · Cancel anytime"}
       </p>
     </div>
   );
