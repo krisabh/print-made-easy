@@ -37,10 +37,10 @@ async function main() {
     assert.equal(WINDOWS_AGENT_DOWNLOAD.href, "/api/agent/download");
     assert.equal(
       WINDOWS_AGENT_DOWNLOAD.fileName,
-      "PrintMadeEasy-Agent-Setup-1.0.0.exe",
+      "PrintMadeEasy-Agent-Setup-1.3.0.exe",
     );
-    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.0.0");
-    console.log("1 PASS dashboard download href is the server endpoint");
+    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.3.0");
+    console.log("1 PASS dashboard download metadata is Agent 1.3.0");
 
     const missingEnv = resolveWindowsAgentInstallerPath("");
     assert.equal(missingEnv.ok, false);
@@ -63,6 +63,16 @@ async function main() {
     assert.equal(rejectedBody.includes("DO-NOT-SERVE"), false);
     assert.equal(rejectedBody.includes(wrongName), false);
     console.log("3 PASS non-installer path is refused");
+
+    const staleName = path.join(
+      tmpRoot,
+      "PrintMadeEasy-Agent-Setup-1.0.0.exe",
+    );
+    await writeFile(staleName, "STALE-INSTALLER");
+    const staleRejected = resolveWindowsAgentInstallerPath(staleName);
+    assert.equal(staleRejected.ok, false);
+    if (!staleRejected.ok) assert.equal(staleRejected.status, 500);
+    console.log("3b PASS stale 1.0.0 basename is refused");
 
     const missingFile = resolveWindowsAgentInstallerPath(
       path.join(tmpRoot, "missing", WINDOWS_AGENT_DOWNLOAD.fileName),
@@ -93,6 +103,10 @@ async function main() {
     assert.equal(
       okRes.headers.get("Content-Disposition"),
       `attachment; filename="${WINDOWS_AGENT_DOWNLOAD.fileName}"`,
+    );
+    assert.equal(
+      okRes.headers.get("X-Agent-Version"),
+      WINDOWS_AGENT_DOWNLOAD.version,
     );
     assert.equal(okRes.headers.get("Content-Length"), String(payload.length));
     assert.equal(okRes.body != null, true);
