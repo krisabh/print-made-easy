@@ -474,6 +474,9 @@ export function PricingSection() {
                 "Multiple printers detected by one Agent",
                 "Choose your default printer",
                 "Customer documents deleted after 1 hour",
+                "Job tracking & status history",
+                "Revenue reports",
+                "Priority support",
                 "Pay monthly. Renew manually when your period ends.",
               ].map((item) => (
                 <li key={item} className="flex gap-2">

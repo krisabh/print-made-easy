@@ -40,8 +40,10 @@ const PREMIUM_FEATURES = [
   "Customer documents automatically deleted after 1 hour",
   "Privacy-focused document handling",
   "Print job management and status tracking",
+  "Job tracking & status history",
+  "Revenue reports",
+  "Priority support",
 ];
-
 declare global {
   interface Window {
     Cashfree?: (options: { mode: string }) => {
