@@ -3,7 +3,12 @@ import fs from "fs/promises";
 
 import { loadConfig } from "./config";
 import { printPdfFile } from "./printer-service";
-import { deleteFileSafe, getTempFilePath } from "./storage-service";
+import {
+  deleteFileSafe,
+  getTempFilePath,
+  markLocalFileActive,
+  unmarkLocalFileActive,
+} from "./storage-service";
 
 export async function runTestPrint(printerName: string) {
   if (!printerName) {
@@ -57,10 +62,12 @@ export async function runTestPrint(printerName: string) {
   const bytes = await pdf.save();
   const tempPath = getTempFilePath(`test-print-${Date.now()}.pdf`);
   await fs.writeFile(tempPath, bytes);
+  markLocalFileActive(tempPath);
 
   try {
     await printPdfFile(tempPath, printerName);
   } finally {
-    deleteFileSafe(tempPath);
+    deleteFileSafe(tempPath, { reason: "test print cleanup" });
+    unmarkLocalFileActive(tempPath);
   }
 }

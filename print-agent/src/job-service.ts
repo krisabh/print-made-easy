@@ -16,13 +16,23 @@ import {
 } from "./image-to-printable-pdf";
 import { planJobPrint } from "./print-settings";
 import { detectPrinters, printPdfFile } from "./printer-service";
-import { deleteFileSafe, getTempFilePath } from "./storage-service";
+import {
+  deleteFileSafe,
+  getTempFilePath,
+  markLocalFileActive,
+  unmarkLocalFileActive,
+} from "./storage-service";
 import { runTestPrint as runInternalTestPrint } from "./test-print";
 
 let processing = false;
 
 export async function runTestPrint(printerName: string) {
   return runInternalTestPrint(printerName);
+}
+
+function trackLocalFile(localFiles: string[], filePath: string) {
+  markLocalFileActive(filePath);
+  localFiles.push(filePath);
 }
 
 async function ensurePrintablePdf(
@@ -92,7 +102,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
     for (const file of claimedJob.files) {
       if (file.printedAt) {
         console.log(
-          `Skipping already printed file ${file.originalFileName} for ${claimedJob.jobNumber}`,
+          `Skipping already printed file ${file.id} for job ${claimedJob.jobNumber}`,
         );
         continue;
       }
@@ -100,7 +110,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       const localName = `job-${claimedJob.jobNumber}-${file.id}.${file.fileExtension}`;
       const localPath = getTempFilePath(localName);
       await downloadJobFile(job.id, file.id, localPath);
-      localFiles.push(localPath);
+      trackLocalFile(localFiles, localPath);
 
       const printablePath = await ensurePrintablePdf(
         localPath,
@@ -111,7 +121,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
         plan.imageMarginPt,
       );
       if (printablePath !== localPath) {
-        localFiles.push(printablePath);
+        trackLocalFile(localFiles, printablePath);
       }
 
       const isPdf = file.fileExtension.toLowerCase() === "pdf";
@@ -128,7 +138,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       });
 
       await reportFilePrinted(job.id, file.id);
-      console.log(`Printed file ${file.originalFileName}`);
+      console.log(`Printed file ${file.id} for job ${claimedJob.jobNumber}`);
     }
 
     await reportJobReady(job.id);
@@ -145,7 +155,11 @@ async function printCloudJob(job: PendingJob, printerName: string) {
     throw error;
   } finally {
     for (const localPath of localFiles) {
-      deleteFileSafe(localPath);
+      deleteFileSafe(localPath, {
+        jobNumber: job.jobNumber,
+        reason: "job cleanup",
+      });
+      unmarkLocalFileActive(localPath);
     }
   }
 }

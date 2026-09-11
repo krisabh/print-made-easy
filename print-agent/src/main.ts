@@ -30,7 +30,12 @@ import {
   normalizeConfiguredPrinter,
   resolveConfiguredPrinterSelection,
 } from "./selected-printer";
-import { cleanStaleTempFiles, ensureJobsDirectory } from "./storage-service";
+import {
+  PERIODIC_CLEANUP_INTERVAL_MS,
+  cleanPeriodicStaleTempFiles,
+  cleanStartupOrphanTempFiles,
+  ensureJobsDirectory,
+} from "./storage-service";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -40,6 +45,7 @@ let isQuitting = false;
 let closeDialogOpen = false;
 let pollTimer: NodeJS.Timeout | null = null;
 let heartbeatTimer: NodeJS.Timeout | null = null;
+let cleanupTimer: NodeJS.Timeout | null = null;
 let backgroundLoopsStarted = false;
 let syncInFlight: Promise<{
   printers: Awaited<ReturnType<typeof detectPrinters>>;
@@ -307,6 +313,7 @@ function startBackgroundLoops() {
 
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (pollTimer) clearInterval(pollTimer);
+  if (cleanupTimer) clearInterval(cleanupTimer);
 
   heartbeatTimer = setInterval(() => {
     if (!isAgentPaired()) return;
@@ -321,6 +328,15 @@ function startBackgroundLoops() {
       console.error("Job processing failed:", error);
     });
   }, 5000);
+
+  // Independent of the 5s job poll — only Agent-owned stale temp files.
+  cleanupTimer = setInterval(() => {
+    try {
+      cleanPeriodicStaleTempFiles();
+    } catch (error) {
+      console.error("Periodic temp cleanup failed:", error);
+    }
+  }, PERIODIC_CLEANUP_INTERVAL_MS);
 }
 
 function registerIpc() {
@@ -598,7 +614,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(async () => {
     ensureJobsDirectory();
-    cleanStaleTempFiles();
+    cleanStartupOrphanTempFiles();
 
     buildApplicationMenu();
     registerIpc();
@@ -628,5 +644,12 @@ if (!gotTheLock) {
     isQuitting = true;
     if (pollTimer) clearInterval(pollTimer);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (cleanupTimer) clearInterval(cleanupTimer);
+    // Best-effort: remove inactive orphans. Active print files stay protected.
+    try {
+      cleanStartupOrphanTempFiles();
+    } catch (error) {
+      console.error("Shutdown temp cleanup failed:", error);
+    }
   });
 }
