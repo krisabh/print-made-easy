@@ -4,6 +4,14 @@ import { PrintMode, PrintType } from "@prisma/client";
 import { z } from "zod";
 
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
+import {
+  cleanupIdCardArtifact,
+  composeAndSaveIdCardPdf,
+  composeIdCardPdfInMemory,
+  JOB_MODE_ID_CARD_FRONT_BACK,
+  parseSubmitJobMode,
+  validateIdCardFormFiles,
+} from "@/lib/id-card-upload";
 import { createPrintJob } from "@/lib/job-service";
 import { logError, logInfo } from "@/lib/log";
 import { getShopDefaultColorSupported } from "@/lib/print-agent-service";
@@ -21,7 +29,11 @@ import {
 } from "@/lib/print-settings";
 import { resolveJobPrintCategory } from "@/lib/print-file-category";
 import { hasSubscriptionAccess } from "@/lib/subscription";
-import { saveUploadFiles, validateUploadFiles } from "@/lib/upload-service";
+import {
+  saveUploadFiles,
+  type SavedUploadFile,
+  validateUploadFiles,
+} from "@/lib/upload-service";
 import type { ApiResponse, UploadSuccessData } from "@/types";
 
 const submitSchema = z.object({
@@ -43,6 +55,17 @@ const submitSchema = z.object({
 function toFriendlyError(message: string) {
   const lower = message.toLowerCase();
 
+  if (
+    lower.includes("front of the id") ||
+    lower.includes("back of the id") ||
+    lower.includes("only front and back") ||
+    lower.includes("one front and one back") ||
+    lower.includes("id card uploads must be") ||
+    (lower.includes("id card") && lower.includes("jpeg or png")) ||
+    (lower.includes("id card") && lower.includes("could not be read"))
+  ) {
+    return message;
+  }
   if (lower.includes("not allowed") || lower.includes("file type")) {
     return "This file type is not supported.";
   }
@@ -68,6 +91,8 @@ function toFriendlyError(message: string) {
 export async function submitPrintJobAction(
   formData: FormData,
 ): Promise<ApiResponse<UploadSuccessData>> {
+  let idCardArtifact: SavedUploadFile | null = null;
+
   try {
     // Intentionally ignore any client printType / DOUBLE — new jobs are SINGLE only.
     const parsed = submitSchema.safeParse({
@@ -88,14 +113,7 @@ export async function submitPrintJobAction(
       };
     }
 
-    const files = formData
-      .getAll("files")
-      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-
-    const fileError = validateUploadFiles(files);
-    if (fileError) {
-      return { success: false, error: toFriendlyError(fileError) };
-    }
+    const jobMode = parseSubmitJobMode(formData.get("jobMode"));
 
     const shop = await getShopWithPricing(parsed.data.shopCode);
 
@@ -126,6 +144,94 @@ export async function submitPrintJobAction(
     }
     if (!colorSupported) {
       printMode = PrintMode.BW;
+    }
+
+    const rates = toPricingRates(shop.printPrice);
+    const forcedPrintType = PrintType.SINGLE;
+
+    // --- Isolated ID Card Front + Back path (Phase B) ---
+    if (jobMode === JOB_MODE_ID_CARD_FRONT_BACK) {
+      const sides = validateIdCardFormFiles(formData);
+      if (!sides.ok) {
+        return { success: false, error: sides.error };
+      }
+
+      try {
+        idCardArtifact = await composeAndSaveIdCardPdf(sides.front, sides.back);
+      } catch (composeError) {
+        logError("id_card_compose_failed", composeError);
+        return {
+          success: false,
+          error: toFriendlyError(
+            composeError instanceof Error
+              ? composeError.message
+              : "Unable to create ID card print file.",
+          ),
+        };
+      }
+
+      // Authoritative: composed artifact is exactly one A4 page.
+      const totalPages = 1;
+      const totalPrice = calculatePrintCost(
+        rates,
+        totalPages,
+        parsed.data.copies,
+        printMode,
+        forcedPrintType,
+      );
+
+      // Portrait PDF — force print-safe settings; Agent prints a normal PDF.
+      const printSettings = buildPrintSettingsV1({
+        copies: parsed.data.copies,
+        orientation: "portrait",
+        scale: "fit",
+        margins: "normal",
+        pageRange: "all",
+        paperSize: "A4",
+      });
+
+      try {
+        const job = await createPrintJob({
+          shopId: shop.id,
+          copies: parsed.data.copies,
+          totalPages,
+          printMode,
+          printType: forcedPrintType,
+          totalPrice,
+          printSettings,
+          files: [idCardArtifact],
+        });
+
+        idCardArtifact = null; // ownership transferred to job / retention
+
+        logInfo("job_created", `${job.jobNumber} shop=${shop.shopCode} id_card`);
+        void runDocumentCleanupIfDue();
+
+        return {
+          success: true,
+          data: {
+            jobId: job.id,
+            jobNumber: job.jobNumber,
+            totalPrice: Number(job.totalPrice),
+            totalPages,
+            copies: parsed.data.copies,
+          },
+        };
+      } catch (jobError) {
+        await cleanupIdCardArtifact(idCardArtifact);
+        idCardArtifact = null;
+        throw jobError;
+      }
+    }
+
+    // --- Existing normal upload path (unchanged behavior) ---
+    const files = formData
+      .getAll("files")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+
+    const fileError = validateUploadFiles(files);
+    if (fileError) {
+      return { success: false, error: toFriendlyError(fileError) };
     }
 
     let pageRange = "all";
@@ -163,10 +269,8 @@ export async function submitPrintJobAction(
 
     const savedFiles = await saveUploadFiles(files);
     const totalPages = savedFiles.reduce((sum, file) => sum + file.totalPages, 0);
-    const rates = toPricingRates(shop.printPrice);
 
     // Pricing: full document pages × copies × SINGLE rates. Page range does not change price.
-    const forcedPrintType = PrintType.SINGLE;
     const totalPrice = calculatePrintCost(
       rates,
       totalPages,
@@ -209,6 +313,7 @@ export async function submitPrintJobAction(
       },
     };
   } catch (error) {
+    await cleanupIdCardArtifact(idCardArtifact);
     logError("job_create_failed", error);
     return {
       success: false,
@@ -216,3 +321,70 @@ export async function submitPrintJobAction(
     };
   }
 }
+
+export type IdCardPreviewData = {
+  /** Base64-encoded PDF bytes (in-memory only; never persisted). */
+  pdfBase64: string;
+  pageCount: 1;
+  widthPt: number;
+  heightPt: number;
+};
+
+/**
+ * Optional ID-card print preview (Phase E1).
+ * Same normalize + generateIdCardA4Pdf path as submit — no PrintJob, storage, or billing.
+ */
+export async function previewIdCardPdfAction(
+  formData: FormData,
+): Promise<ApiResponse<IdCardPreviewData>> {
+  try {
+    const shopCodeRaw = formData.get("shopCode");
+    const shopCode =
+      typeof shopCodeRaw === "string" ? shopCodeRaw.trim() : "";
+    if (!shopCode || shopCode.length > 64 || !/^[A-Za-z0-9_-]+$/.test(shopCode)) {
+      return { success: false, error: "Invalid shop code." };
+    }
+
+    const shop = await getShopWithPricing(shopCode);
+    if (!shop) {
+      return {
+        success: false,
+        error: "Sorry, this print shop link is no longer available.",
+      };
+    }
+
+    const shopHasAccess = await hasSubscriptionAccess(shop.id);
+    if (!shopHasAccess) {
+      return {
+        success: false,
+        error:
+          "This print shop is temporarily unavailable. Please try again later.",
+      };
+    }
+
+    const sides = validateIdCardFormFiles(formData);
+    if (!sides.ok) {
+      return { success: false, error: sides.error };
+    }
+
+    const composed = await composeIdCardPdfInMemory(sides.front, sides.back);
+
+    return {
+      success: true,
+      data: {
+        pdfBase64: Buffer.from(composed.pdfBytes).toString("base64"),
+        pageCount: 1,
+        widthPt: composed.widthPt,
+        heightPt: composed.heightPt,
+      },
+    };
+  } catch (error) {
+    logError("id_card_preview_failed", error);
+    return {
+      success: false,
+      error:
+        "Preview couldn't be generated. You can still submit the print job.",
+    };
+  }
+}
+

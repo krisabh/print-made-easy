@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 
 import { PDFDocument } from "pdf-lib";
 
-import { getUploadDir } from "@/lib/storage";
+import { getStoredFilePath, getUploadDir } from "@/lib/storage";
 
 const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
 const MAX_FILES = 10;
@@ -93,4 +93,48 @@ export async function saveUploadFiles(files: File[]): Promise<SavedUploadFile[]>
   }
 
   return savedFiles;
+}
+
+/**
+ * Persist server-generated PDF bytes using the same upload directory convention.
+ * Does not accept client-chosen paths.
+ */
+export async function saveGeneratedPdfFile(options: {
+  pdfBytes: Uint8Array;
+  originalFileName?: string;
+  totalPages?: number;
+}): Promise<SavedUploadFile> {
+  const uploadDir = getUploadDir();
+  await mkdir(uploadDir, { recursive: true });
+
+  const storedFileName = `${randomUUID()}.pdf`;
+  const destination = path.join(uploadDir, storedFileName);
+  const buffer = Buffer.from(options.pdfBytes);
+  await writeFile(destination, buffer);
+
+  const totalPages =
+    typeof options.totalPages === "number" &&
+    Number.isFinite(options.totalPages) &&
+    options.totalPages > 0
+      ? Math.floor(options.totalPages)
+      : 1;
+
+  return {
+    originalFileName: sanitizeOriginalFileName(
+      options.originalFileName ?? "id-card-a4.pdf",
+    ),
+    storedFileName,
+    fileExtension: "pdf",
+    fileSize: buffer.byteLength,
+    totalPages,
+  };
+}
+
+/** Best-effort delete of a stored upload (orphan cleanup). */
+export async function deleteStoredUploadFile(storedFileName: string) {
+  try {
+    await unlink(getStoredFilePath(storedFileName));
+  } catch {
+    // File may already be gone
+  }
 }

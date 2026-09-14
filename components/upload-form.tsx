@@ -1,12 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Check, ChevronDown, FileText, Loader2, Minus, Plus, Upload, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  CreditCard,
+  Eye,
+  FileText,
+  Loader2,
+  Minus,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react";
 
-import { submitPrintJobAction } from "@/app/upload/[shopCode]/actions";
+import {
+  previewIdCardPdfAction,
+  submitPrintJobAction,
+} from "@/app/upload/[shopCode]/actions";
 import { CustomerDocumentPrivacyNotice } from "@/components/customer-document-privacy-notice";
+import {
+  buildNormalPreviewPages,
+  PrintPreviewDialog,
+  revokePreviewPages,
+  type NormalPreviewFile,
+} from "@/components/print-preview-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  buildIdCardPreviewFormData,
+  buildIdCardSubmitFormData,
+  idCardBillablePages,
+  isIdCardImageFile,
+  JOB_MODE_ID_CARD_FRONT_BACK,
+  JOB_MODE_NORMAL,
+  validateIdCardClientSides,
+  type SubmitJobMode,
+} from "@/lib/id-card-client";
 import {
   extensionFromFileName,
   jobHasUnsupportedAutoPrint,
@@ -36,7 +66,14 @@ type SelectedFile = {
   status: "ready" | "counting" | "error";
 };
 
+type IdCardSideSelection = {
+  file: File;
+  previewUrl: string;
+};
+
 const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
+const ID_CARD_ACCEPT =
+  "image/jpeg,image/png,.jpg,.jpeg,.png";
 const MAX_FILES = 10;
 const MAX_FILE_SIZE_MB = 20;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -234,6 +271,101 @@ function SegmentedControl<T extends string>({
   );
 }
 
+function IdCardSideSlot({
+  label,
+  description,
+  selection,
+  inputId,
+  errorId,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  description: string;
+  selection: IdCardSideSelection | null;
+  inputId: string;
+  errorId?: string;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <Label htmlFor={inputId} className="text-sm font-semibold text-slate-900">
+            {label}
+          </Label>
+          <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+        </div>
+        {selection ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+            aria-label={`Remove ${label.toLowerCase()} image`}
+          >
+            <X className="size-4" />
+          </button>
+        ) : null}
+      </div>
+
+      {selection ? (
+        <div className="mt-3 flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selection.previewUrl}
+            alt=""
+            className="size-14 shrink-0 rounded-lg border border-slate-200 object-cover bg-white"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-slate-900">
+              {selection.file.name}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {formatBytes(selection.file.size)}
+            </p>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              Replace photo
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="mt-3 flex min-h-20 w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-center hover:border-blue-400 hover:bg-blue-50/40"
+          aria-describedby={errorId}
+        >
+          <Upload className="size-4 text-blue-600" aria-hidden="true" />
+          <span className="mt-2 text-sm font-medium text-slate-800">
+            Tap to add photo
+          </span>
+          <span className="mt-0.5 text-xs text-slate-500">JPEG or PNG</span>
+        </button>
+      )}
+
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        accept={ID_CARD_ACCEPT}
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) onPick(file);
+        }}
+      />
+    </div>
+  );
+}
+
 type UploadFormProps = {
   shop: ShopUploadContext;
 };
@@ -241,7 +373,14 @@ type UploadFormProps = {
 export function UploadForm({ shop }: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const orientationTouchedRef = useRef(false);
+  const [jobMode, setJobMode] = useState<SubmitJobMode>(JOB_MODE_NORMAL);
   const [files, setFiles] = useState<SelectedFile[]>([]);
+  const [idCardFront, setIdCardFront] = useState<IdCardSideSelection | null>(
+    null,
+  );
+  const [idCardBack, setIdCardBack] = useState<IdCardSideSelection | null>(
+    null,
+  );
   const [copies, setCopies] = useState(1);
   const [orientation, setOrientation] = useState<PrintOrientation>("portrait");
   const [printMode, setPrintMode] = useState<PrintMode>("BW");
@@ -256,6 +395,22 @@ export function UploadForm({ shop }: UploadFormProps) {
   const [success, setSuccess] = useState<UploadSuccessData | null>(null);
   const [liveStatus, setLiveStatus] = useState<JobLiveStatus>("PENDING");
   const [isPending, startTransition] = useTransition();
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+  const [previewPages, setPreviewPages] = useState<
+    ReturnType<typeof buildNormalPreviewPages>
+  >([]);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
+  const [previewSettingsNote, setPreviewSettingsNote] = useState<string | null>(
+    null,
+  );
+  const [isPreviewPending, startPreviewTransition] = useTransition();
+
+  const isIdCardMode = jobMode === JOB_MODE_ID_CARD_FRONT_BACK;
+  const idCardReady = Boolean(idCardFront && idCardBack);
 
   // If Color is not available for the current default printer, keep BW.
   useEffect(() => {
@@ -296,23 +451,45 @@ export function UploadForm({ shop }: UploadFormProps) {
     };
   }, [success, shop.shopCode]);
 
-  const totalPages = useMemo(
-    () => files.reduce((sum, item) => sum + (item.status === "ready" ? item.pages : 0), 0),
-    [files],
-  );
+  useEffect(() => {
+    return () => {
+      if (idCardFront?.previewUrl) URL.revokeObjectURL(idCardFront.previewUrl);
+      if (idCardBack?.previewUrl) URL.revokeObjectURL(idCardBack.previewUrl);
+    };
+    // Intentionally only on unmount — side updates revoke previous URLs in setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalPages = useMemo(() => {
+    if (isIdCardMode) {
+      return idCardReady ? idCardBillablePages() : 0;
+    }
+    return files.reduce(
+      (sum, item) => sum + (item.status === "ready" ? item.pages : 0),
+      0,
+    );
+  }, [isIdCardMode, idCardReady, files]);
 
   const billablePages = totalPages * copies;
 
   // Derived from current files — never an independent source of truth.
   const aggregateFileCategory: AggregatePrintFileCategory = useMemo(
-    () => resolveJobPrintCategory(files.map((f) => f.file)),
-    [files],
+    () =>
+      isIdCardMode
+        ? "NONE"
+        : resolveJobPrintCategory(files.map((f) => f.file)),
+    [isIdCardMode, files],
   );
 
   const hasDocxNotice = useMemo(
-    () => jobHasUnsupportedAutoPrint(files.map((f) => f.file)),
-    [files],
+    () =>
+      isIdCardMode
+        ? false
+        : jobHasUnsupportedAutoPrint(files.map((f) => f.file)),
+    [isIdCardMode, files],
   );
+
+  const showOptions = isIdCardMode ? idCardReady : files.length > 0;
 
   // Mixed jobs: drop auto-orientation; Portrait unless customer chose explicitly.
   useEffect(() => {
@@ -326,7 +503,21 @@ export function UploadForm({ shop }: UploadFormProps) {
   }, [aggregateFileCategory, orientation]);
 
   // Pricing always uses SINGLE (Phase C product rule).
+  // ID-card mode estimates 1 composed A4 page (server remains authoritative).
   const estimatedPrice = useMemo(() => {
+    if (isIdCardMode) {
+      if (!idCardReady) {
+        return shop.pricing.minimumCharge;
+      }
+      return calculatePrintCost(
+        shop.pricing,
+        idCardBillablePages(),
+        copies,
+        printMode,
+        "SINGLE",
+      );
+    }
+
     if (files.length === 0 || totalPages === 0) {
       return shop.pricing.minimumCharge;
     }
@@ -338,12 +529,94 @@ export function UploadForm({ shop }: UploadFormProps) {
       printMode,
       "SINGLE",
     );
-  }, [shop.pricing, files.length, totalPages, copies, printMode]);
+  }, [
+    isIdCardMode,
+    idCardReady,
+    shop.pricing,
+    files.length,
+    totalPages,
+    copies,
+    printMode,
+  ]);
 
-  const currentStep: 1 | 2 | 3 =
-    files.length === 0 ? 1 : copies >= 1 ? 3 : 2;
+  const currentStep: 1 | 2 | 3 = !showOptions ? 1 : copies >= 1 ? 3 : 2;
+
+  function clearIdCardSides() {
+    setIdCardFront((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setIdCardBack((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  }
+
+  function selectJobMode(next: SubmitJobMode) {
+    if (next === jobMode) return;
+    closePreview();
+    setFileError(null);
+    setFormError(null);
+    setMoreOpen(false);
+    if (next === JOB_MODE_ID_CARD_FRONT_BACK) {
+      setFiles([]);
+      orientationTouchedRef.current = false;
+      setOrientation("portrait");
+      setScale("fit");
+      setMargins("normal");
+      setPagesMode("all");
+      setPageRange("");
+    } else {
+      clearIdCardSides();
+    }
+    setJobMode(next);
+  }
+
+  function assignIdCardSide(
+    side: "front" | "back",
+    file: File,
+  ) {
+    if (!isIdCardImageFile(file)) {
+      setFileError("ID card uploads must be JPEG or PNG images.");
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setFileError("File size must be less than 20 MB.");
+      return;
+    }
+    setFileError(null);
+    const previewUrl = URL.createObjectURL(file);
+    const next: IdCardSideSelection = { file, previewUrl };
+    if (side === "front") {
+      setIdCardFront((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return next;
+      });
+    } else {
+      setIdCardBack((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return next;
+      });
+    }
+  }
+
+  function clearIdCardSide(side: "front" | "back") {
+    if (side === "front") {
+      setIdCardFront((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return null;
+      });
+    } else {
+      setIdCardBack((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return null;
+      });
+    }
+    setFileError(null);
+  }
 
   async function addFiles(incoming: File[]) {
+    if (jobMode === JOB_MODE_ID_CARD_FRONT_BACK) return;
     if (incoming.length === 0) return;
 
     if (files.length + incoming.length > MAX_FILES) {
@@ -417,9 +690,12 @@ export function UploadForm({ shop }: UploadFormProps) {
   }
 
   function resetForm() {
+    closePreview();
     setSuccess(null);
     setLiveStatus("PENDING");
+    setJobMode(JOB_MODE_NORMAL);
     setFiles([]);
+    clearIdCardSides();
     setCopies(1);
     setOrientation("portrait");
     orientationTouchedRef.current = false;
@@ -433,9 +709,172 @@ export function UploadForm({ shop }: UploadFormProps) {
     setFormError(null);
   }
 
+  function releasePreviewResources() {
+    if (previewPdfUrl) {
+      URL.revokeObjectURL(previewPdfUrl);
+    }
+    revokePreviewPages(previewPages);
+    setPreviewPdfUrl(null);
+    setPreviewPages([]);
+    setPreviewPageIndex(0);
+    setPreviewError(null);
+    setPreviewLoading(false);
+    setPreviewSettingsNote(null);
+  }
+
+  function closePreview() {
+    setPreviewOpen(false);
+    releasePreviewResources();
+  }
+
+  function openNormalPreview() {
+    if (files.length === 0) {
+      setFileError("Please upload at least one document.");
+      return;
+    }
+
+    releasePreviewResources();
+
+    const normalFiles: NormalPreviewFile[] = files.map((f) => ({
+      id: f.id,
+      file: f.file,
+    }));
+    const pageCounts: Record<string, number> = {};
+    for (const f of files) {
+      pageCounts[f.id] = f.status === "ready" ? f.pages : 1;
+    }
+    const pages = buildNormalPreviewPages(normalFiles, pageCounts);
+    const previewable = pages.filter((p) => p.kind !== "unavailable");
+    const onlyUnsupported =
+      pages.length > 0 && previewable.length === 0;
+
+    const notes: string[] = [];
+    if (aggregateFileCategory === "DOCUMENT" && pagesMode === "custom") {
+      const trimmed = pageRange.trim();
+      if (trimmed) {
+        notes.push(`Print will use page range: ${trimmed}.`);
+      }
+    }
+    if (copies > 1) {
+      notes.push("Copies do not duplicate preview pages.");
+    }
+    if (pages.some((p) => p.kind === "unavailable") && previewable.length > 0) {
+      notes.push("Some files can't be previewed; Submit still works.");
+    }
+
+    setPreviewPages(pages);
+    setPreviewPageIndex(0);
+    setPreviewSettingsNote(notes.length ? notes.join(" ") : null);
+    setPreviewOpen(true);
+
+    if (onlyUnsupported) {
+      setPreviewError("Preview isn't available for this file type.");
+    }
+  }
+
+  function openIdCardPreview() {
+    const sideError = validateIdCardClientSides(
+      idCardFront?.file,
+      idCardBack?.file,
+    );
+    if (sideError) {
+      setFileError(sideError);
+      return;
+    }
+    if (!idCardFront || !idCardBack) return;
+
+    releasePreviewResources();
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewSettingsNote(
+      copies > 1 ? "Copies do not duplicate the preview sheet." : null,
+    );
+
+    const formData = buildIdCardPreviewFormData({
+      shopCode: shop.shopCode,
+      front: idCardFront.file,
+      back: idCardBack.file,
+    });
+
+    startPreviewTransition(async () => {
+      try {
+        const result = await previewIdCardPdfAction(formData);
+        if (!result.success || !result.data) {
+          setPreviewError(
+            result.error ??
+              "Preview couldn't be generated. You can still submit the print job.",
+          );
+          setPreviewLoading(false);
+          return;
+        }
+        const binary = atob(result.data.pdfBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        setPreviewPdfUrl(url);
+        setPreviewLoading(false);
+      } catch {
+        setPreviewError(
+          "Preview couldn't be generated. You can still submit the print job.",
+        );
+        setPreviewLoading(false);
+      }
+    });
+  }
+
+  function handlePreviewClick() {
+    setFormError(null);
+    if (isIdCardMode) {
+      openIdCardPreview();
+    } else {
+      openNormalPreview();
+    }
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
+
+    if (isIdCardMode) {
+      const sideError = validateIdCardClientSides(
+        idCardFront?.file,
+        idCardBack?.file,
+      );
+      if (sideError) {
+        setFileError(sideError);
+        return;
+      }
+      if (!Number.isInteger(copies) || copies < 1 || copies > MAX_COPIES) {
+        setFormError("Copies must be between 1 and 100.");
+        return;
+      }
+      if (isPending || !idCardFront || !idCardBack) return;
+
+      const formData = buildIdCardSubmitFormData({
+        shopCode: shop.shopCode,
+        copies,
+        printMode: shop.colorSupported ? printMode : "BW",
+        front: idCardFront.file,
+        back: idCardBack.file,
+      });
+
+      startTransition(async () => {
+        const result = await submitPrintJobAction(formData);
+        if (!result.success || !result.data) {
+          setFormError(
+            result.error ??
+              "Something went wrong while uploading. Please try again.",
+          );
+          return;
+        }
+        setSuccess(result.data);
+        setLiveStatus("PENDING");
+      });
+      return;
+    }
 
     if (files.length === 0) {
       setFileError("Please upload at least one document.");
@@ -594,102 +1033,185 @@ export function UploadForm({ shop }: UploadFormProps) {
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-3">
           <h2 className="text-base font-semibold text-slate-900">Upload your documents</h2>
-          <p className="mt-0.5 text-sm text-slate-500">PDF, JPG, PNG or DOCX</p>
-        </div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              inputRef.current?.click();
-            }
-          }}
-          onClick={() => inputRef.current?.click()}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault();
-            setIsDragging(false);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            setIsDragging(false);
-            void addFiles(Array.from(event.dataTransfer.files));
-          }}
-          className={[
-            "flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-8 text-center transition-colors",
-            isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/40",
-          ].join(" ")}
-          aria-label="Upload documents"
-        >
-          <div className="flex size-12 items-center justify-center rounded-full bg-white shadow-sm">
-            <Upload className="size-5 text-blue-600" aria-hidden="true" />
-          </div>
-          <p className="mt-3 text-sm font-medium text-slate-800">
-            Tap to upload or drag files here
+          <p className="mt-0.5 text-sm text-slate-500">
+            {isIdCardMode
+              ? "Front and back on one A4 sheet"
+              : "PDF, JPG, PNG or DOCX"}
           </p>
-          <p className="mt-1 text-xs text-slate-500">Maximum 20 MB per file · up to 10 files</p>
-          <span className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white">
-            Upload Files
-          </span>
         </div>
 
-        <input
-          ref={inputRef}
-          id="files"
-          type="file"
-          multiple
-          className="sr-only"
-          accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={(event) => {
-            void addFiles(Array.from(event.target.files ?? []));
-            event.target.value = "";
-          }}
-        />
+        <div className="mb-4 space-y-2">
+          <p className="text-sm font-medium text-slate-800">Print type</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => selectJobMode(JOB_MODE_NORMAL)}
+              aria-pressed={jobMode === JOB_MODE_NORMAL}
+              className={[
+                "flex min-h-14 items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+                jobMode === JOB_MODE_NORMAL
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300",
+              ].join(" ")}
+            >
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
+                <FileText className="size-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-900">
+                  Normal Print
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Upload a document or image
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => selectJobMode(JOB_MODE_ID_CARD_FRONT_BACK)}
+              aria-pressed={isIdCardMode}
+              className={[
+                "flex min-h-14 items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+                isIdCardMode
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300",
+              ].join(" ")}
+            >
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
+                <CreditCard className="size-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-900">
+                  ID Card — Front &amp; Back
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Print both sides on one A4 sheet
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
 
-        {files.length > 0 && (
-          <ul className="mt-4 space-y-2">
-            {files.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3"
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <FileText className="size-4" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900">
-                    {item.file.name}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {getExtension(item.file.name).toUpperCase()} · {formatBytes(item.file.size)}
-                    {" · "}
-                    {item.status === "counting"
-                      ? "Counting pages…"
-                      : `${item.pages} page${item.pages === 1 ? "" : "s"}`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeFile(item.id)}
-                  className="flex size-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label={`Remove ${item.file.name}`}
-                >
-                  <X className="size-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
+        {isIdCardMode ? (
+          <div className="space-y-3">
+            <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+              Front + back will be automatically resized and placed on one A4
+              sheet.
+            </p>
+            <IdCardSideSlot
+              label="Front side"
+              description="Photo of the front of the card"
+              selection={idCardFront}
+              inputId="id-card-front"
+              onPick={(file) => assignIdCardSide("front", file)}
+              onClear={() => clearIdCardSide("front")}
+            />
+            <IdCardSideSlot
+              label="Back side"
+              description="Photo of the back of the card"
+              selection={idCardBack}
+              inputId="id-card-back"
+              onPick={(file) => assignIdCardSide("back", file)}
+              onClear={() => clearIdCardSide("back")}
+            />
+          </div>
+        ) : (
+          <>
+            <div
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  inputRef.current?.click();
+                }
+              }}
+              onClick={() => inputRef.current?.click()}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+                void addFiles(Array.from(event.dataTransfer.files));
+              }}
+              className={[
+                "flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-8 text-center transition-colors",
+                isDragging
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/40",
+              ].join(" ")}
+              aria-label="Upload documents"
+            >
+              <div className="flex size-12 items-center justify-center rounded-full bg-white shadow-sm">
+                <Upload className="size-5 text-blue-600" aria-hidden="true" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-slate-800">
+                Tap to upload or drag files here
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Maximum 20 MB per file · up to 10 files</p>
+              <span className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white">
+                Upload Files
+              </span>
+            </div>
+
+            <input
+              ref={inputRef}
+              id="files"
+              type="file"
+              multiple
+              className="sr-only"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => {
+                void addFiles(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
+
+            {files.length > 0 && (
+              <ul className="mt-4 space-y-2">
+                {files.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3"
+                  >
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                      <FileText className="size-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {item.file.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {getExtension(item.file.name).toUpperCase()} · {formatBytes(item.file.size)}
+                        {" · "}
+                        {item.status === "counting"
+                          ? "Counting pages…"
+                          : `${item.pages} page${item.pages === 1 ? "" : "s"}`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(item.id)}
+                      className="flex size-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label={`Remove ${item.file.name}`}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
 
         {fileError && (
@@ -699,23 +1221,35 @@ export function UploadForm({ shop }: UploadFormProps) {
         )}
       </section>
 
-      {files.length > 0 && (
+      {showOptions && (
         <>
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-base font-semibold text-slate-900">Print options</h2>
 
-            <SegmentedControl
-              label="Orientation"
-              value={orientation}
-              onChange={(value) => {
-                orientationTouchedRef.current = true;
-                setOrientation(value);
-              }}
-              options={[
-                { value: "portrait", label: "Portrait" },
-                { value: "landscape", label: "Landscape" },
-              ]}
-            />
+            {!isIdCardMode ? (
+              <SegmentedControl
+                label="Orientation"
+                value={orientation}
+                onChange={(value) => {
+                  orientationTouchedRef.current = true;
+                  setOrientation(value);
+                }}
+                options={[
+                  { value: "portrait", label: "Portrait" },
+                  { value: "landscape", label: "Landscape" },
+                ]}
+              />
+            ) : (
+              <div>
+                <p className="mb-1 text-sm font-medium text-slate-800">Layout</p>
+                <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  Portrait A4
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Front on top, back below — fixed for ID cards.
+                  </span>
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="copies">Copies</Label>
@@ -761,7 +1295,7 @@ export function UploadForm({ shop }: UploadFormProps) {
               </div>
             </div>
 
-            {aggregateFileCategory === "IMAGE" ? (
+            {!isIdCardMode && aggregateFileCategory === "IMAGE" ? (
               <div>
                 <p className="mb-1 text-sm font-medium text-slate-800">Image fitting</p>
                 <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-700">
@@ -787,102 +1321,111 @@ export function UploadForm({ shop }: UploadFormProps) {
               }
             />
 
-            <div className="border-t border-slate-100 pt-3">
-              <button
-                type="button"
-                onClick={() => setMoreOpen((open) => !open)}
-                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left text-sm font-medium text-slate-700 hover:text-slate-900"
-                aria-expanded={moreOpen}
-              >
-                <span>More print options</span>
-                <ChevronDown
-                  className={[
-                    "size-4 shrink-0 transition-transform",
-                    moreOpen ? "rotate-180" : "",
-                  ].join(" ")}
-                  aria-hidden="true"
-                />
-              </button>
+            {!isIdCardMode ? (
+              <div className="border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((open) => !open)}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left text-sm font-medium text-slate-700 hover:text-slate-900"
+                  aria-expanded={moreOpen}
+                >
+                  <span>More print options</span>
+                  <ChevronDown
+                    className={[
+                      "size-4 shrink-0 transition-transform",
+                      moreOpen ? "rotate-180" : "",
+                    ].join(" ")}
+                    aria-hidden="true"
+                  />
+                </button>
 
-              {moreOpen ? (
-                <div className="mt-3 space-y-4">
-                  {aggregateFileCategory === "DOCUMENT" ? (
-                    <>
-                      <SegmentedControl
-                        label="Pages"
-                        value={pagesMode}
-                        onChange={setPagesMode}
-                        options={[
-                          { value: "all", label: "All pages" },
-                          { value: "custom", label: "Custom range" },
-                        ]}
-                      />
-                      {pagesMode === "custom" ? (
-                        <div className="space-y-2">
-                          <Label htmlFor="pageRange">Page range</Label>
-                          <input
-                            id="pageRange"
-                            name="pageRange"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="e.g. 1-5 or 1,3,7"
-                            value={pageRange}
-                            onChange={(event) => setPageRange(event.target.value)}
-                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
-                            aria-describedby="pageRangeHelp"
-                          />
-                          <p id="pageRangeHelp" className="text-xs text-slate-500">
-                            Examples: 1-5 · 1,3,7 · 2-4,8. Pricing still uses all pages.
+                {moreOpen ? (
+                  <div className="mt-3 space-y-4">
+                    {aggregateFileCategory === "DOCUMENT" ? (
+                      <>
+                        <SegmentedControl
+                          label="Pages"
+                          value={pagesMode}
+                          onChange={setPagesMode}
+                          options={[
+                            { value: "all", label: "All pages" },
+                            { value: "custom", label: "Custom range" },
+                          ]}
+                        />
+                        {pagesMode === "custom" ? (
+                          <div className="space-y-2">
+                            <Label htmlFor="pageRange">Page range</Label>
+                            <input
+                              id="pageRange"
+                              name="pageRange"
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="e.g. 1-5 or 1,3,7"
+                              value={pageRange}
+                              onChange={(event) => setPageRange(event.target.value)}
+                              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
+                              aria-describedby="pageRangeHelp"
+                            />
+                            <p id="pageRangeHelp" className="text-xs text-slate-500">
+                              Examples: 1-5 · 1,3,7 · 2-4,8. Pricing still uses all pages.
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <div>
+                          <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                          <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                            A4
                           </p>
                         </div>
-                      ) : null}
 
+                        <SegmentedControl
+                          label="Scale"
+                          value={scale}
+                          onChange={setScale}
+                          options={[
+                            { value: "fit", label: "Fit to page" },
+                            { value: "noscale", label: "Actual size" },
+                          ]}
+                        />
+                      </>
+                    ) : aggregateFileCategory === "IMAGE" ? (
+                      <>
+                        <div>
+                          <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                          <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                            A4
+                          </p>
+                        </div>
+                        <SegmentedControl
+                          label="Margins"
+                          value={margins}
+                          onChange={setMargins}
+                          options={[
+                            { value: "normal", label: "Normal" },
+                            { value: "none", label: "None" },
+                          ]}
+                        />
+                      </>
+                    ) : (
                       <div>
                         <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
                         <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
                           A4
                         </p>
                       </div>
-
-                      <SegmentedControl
-                        label="Scale"
-                        value={scale}
-                        onChange={setScale}
-                        options={[
-                          { value: "fit", label: "Fit to page" },
-                          { value: "noscale", label: "Actual size" },
-                        ]}
-                      />
-                    </>
-                  ) : aggregateFileCategory === "IMAGE" ? (
-                    <>
-                      <div>
-                        <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
-                        <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
-                          A4
-                        </p>
-                      </div>
-                      <SegmentedControl
-                        label="Margins"
-                        value={margins}
-                        onChange={setMargins}
-                        options={[
-                          { value: "normal", label: "Normal" },
-                          { value: "none", label: "None" },
-                        ]}
-                      />
-                    </>
-                  ) : (
-                    <div>
-                      <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
-                      <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
-                        A4
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div>
+                <p className="mb-1 text-sm font-medium text-slate-800">Paper size</p>
+                <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-800">
+                  A4
+                </p>
+              </div>
+            )}
 
             {hasDocxNotice ? (
               <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
@@ -895,12 +1438,21 @@ export function UploadForm({ shop }: UploadFormProps) {
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-base font-semibold text-slate-900">Price summary</h2>
             <dl className="mt-4 space-y-2.5 text-sm">
+              {isIdCardMode ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">ID card sides</dt>
+                  <dd className="font-medium text-slate-900">Front + Back</dd>
+                </div>
+              ) : (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Documents</dt>
+                  <dd className="font-medium text-slate-900">{files.length}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Documents</dt>
-                <dd className="font-medium text-slate-900">{files.length}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Total pages</dt>
+                <dt className="text-slate-500">
+                  {isIdCardMode ? "Print sheets" : "Total pages"}
+                </dt>
                 <dd className="font-medium text-slate-900">{totalPages}</dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -916,7 +1468,11 @@ export function UploadForm({ shop }: UploadFormProps) {
               <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Orientation</dt>
                 <dd className="font-medium text-slate-900">
-                  {orientation === "portrait" ? "Portrait" : "Landscape"}
+                  {isIdCardMode
+                    ? "Portrait"
+                    : orientation === "portrait"
+                      ? "Portrait"
+                      : "Landscape"}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -948,23 +1504,86 @@ export function UploadForm({ shop }: UploadFormProps) {
             </p>
           )}
 
-          <Button
-            type="submit"
-            size="lg"
-            disabled={isPending}
-            className="h-12 w-full bg-blue-600 text-base text-white hover:bg-blue-700 disabled:opacity-70"
-          >
-            {isPending ? (
-              <>
-                <Loader2 className="animate-spin" aria-hidden="true" />
-                Printing…
-              </>
-            ) : (
-              "Print"
-            )}
-          </Button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              disabled={
+                isPending ||
+                isPreviewPending ||
+                (isIdCardMode ? !idCardReady : files.length === 0)
+              }
+              onClick={handlePreviewClick}
+              className="h-12 w-full border-slate-300 text-base text-slate-800 hover:bg-slate-50 disabled:opacity-70"
+            >
+              {isPreviewPending || previewLoading ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Preview…
+                </>
+              ) : (
+                <>
+                  <Eye className="size-4" aria-hidden="true" />
+                  Preview
+                </>
+              )}
+            </Button>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={isPending}
+              className="h-12 w-full bg-blue-600 text-base text-white hover:bg-blue-700 disabled:opacity-70"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Printing…
+                </>
+              ) : (
+                "Submit Print Job"
+              )}
+            </Button>
+          </div>
         </>
       )}
+
+      <PrintPreviewDialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          if (!open) closePreview();
+          else setPreviewOpen(true);
+        }}
+        title={isIdCardMode ? "ID Card Preview" : "Print Preview"}
+        description={
+          isIdCardMode
+            ? "One A4 portrait sheet · Preview only — nothing is submitted yet."
+            : undefined
+        }
+        loading={previewLoading || isPreviewPending}
+        error={previewError}
+        pdfUrl={previewPdfUrl}
+        pages={previewPages}
+        pageIndex={previewPageIndex}
+        onPageIndexChange={setPreviewPageIndex}
+        printMode={shop.colorSupported ? printMode : "BW"}
+        orientation={isIdCardMode ? "portrait" : orientation}
+        margins={
+          isIdCardMode
+            ? "normal"
+            : aggregateFileCategory === "IMAGE"
+              ? margins
+              : "normal"
+        }
+        scale={
+          isIdCardMode
+            ? "fit"
+            : aggregateFileCategory === "DOCUMENT"
+              ? scale
+              : "fit"
+        }
+        settingsNote={previewSettingsNote}
+      />
     </form>
   );
 }
