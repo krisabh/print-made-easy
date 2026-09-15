@@ -2,8 +2,11 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { logError } from "@/lib/log";
-import { authenticateAgent } from "@/lib/print-agent-auth";
-import { setShopPrinterColorSupported } from "@/lib/print-agent-service";
+import { authenticateAgentContext } from "@/lib/print-agent-auth";
+import {
+  PrinterOwnershipError,
+  setShopPrinterColorSupported,
+} from "@/lib/print-agent-service";
 
 const bodySchema = z.object({
   printerName: z.string().trim().min(1).max(255),
@@ -11,8 +14,8 @@ const bodySchema = z.object({
 });
 
 async function handleColorUpdate(request: NextRequest) {
-  const shop = await authenticateAgent(request);
-  if (!shop) {
+  const auth = await authenticateAgentContext(request);
+  if (!auth) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -26,7 +29,8 @@ async function handleColorUpdate(request: NextRequest) {
   }
 
   const result = await setShopPrinterColorSupported({
-    shopId: shop.id,
+    shopId: auth.shop.id,
+    agentDeviceId: auth.agentDeviceId,
     printerName: parsed.data.printerName,
     colorSupported: parsed.data.colorSupported,
   });
@@ -51,6 +55,9 @@ export async function PATCH(request: NextRequest) {
   try {
     return await handleColorUpdate(request);
   } catch (error) {
+    if (error instanceof PrinterOwnershipError) {
+      return Response.json({ error: error.message }, { status: 403 });
+    }
     logError("agent_printer_color_update_failed", error);
     return Response.json(
       { error: "Unable to update printer capability." },
@@ -66,6 +73,9 @@ export async function POST(request: NextRequest) {
   try {
     return await handleColorUpdate(request);
   } catch (error) {
+    if (error instanceof PrinterOwnershipError) {
+      return Response.json({ error: error.message }, { status: 403 });
+    }
     logError("agent_printer_color_update_failed", error);
     return Response.json(
       { error: "Unable to update printer capability." },

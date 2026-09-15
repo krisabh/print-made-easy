@@ -32,7 +32,7 @@ async function main() {
       address: "Demo Address",
       printPrice: {
         create: {
-          bwSingle: 2,
+          bwSingle: 5,
           bwDouble: 1.5,
           colorSingle: 10,
           colorDouble: 8,
@@ -60,7 +60,7 @@ async function main() {
     update: {},
     create: {
       shopId: shop.id,
-      bwSingle: 2,
+      bwSingle: 5,
       bwDouble: 1.5,
       colorSingle: 10,
       colorDouble: 8,

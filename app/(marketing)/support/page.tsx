@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   Cable,
   CircleHelp,
@@ -92,7 +93,19 @@ export default function SupportPage() {
 
           <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-6">
             <h2 className="text-xl font-semibold text-slate-900">Need help?</h2>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <p className="mt-2 text-sm text-slate-600">
+              Contact us or chat with us on WhatsApp.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Link
+                href="/contact"
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Contact Us
+              </Link>
+              <WhatsAppIconLink />
+            </div>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   Email
@@ -106,11 +119,14 @@ export default function SupportPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                  WhatsApp
+                  Phone
                 </p>
-                <div className="mt-2">
-                  <WhatsAppIconLink />
-                </div>
+                <a
+                  href={SITE.phoneHref}
+                  className="mt-1 inline-block text-sm font-medium text-blue-700 hover:text-blue-800"
+                >
+                  {SITE.phone}
+                </a>
               </div>
             </div>
           </div>

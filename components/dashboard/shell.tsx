@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   CreditCard,
+  Headset,
   IndianRupee,
   LayoutDashboard,
   ListOrdered,
@@ -20,6 +21,8 @@ import { logoutAction } from "@/app/auth/actions";
 import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 import { Button } from "@/components/ui/button";
 import { AgentStatusBadge } from "@/components/dashboard/agent-status-badge";
+import { DashboardBrandTrust } from "@/components/marketing/company-identity";
+import { WhatsAppFloatingButton } from "@/components/marketing/whatsapp-floating-button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -30,6 +33,7 @@ const NAV = [
   { href: "/dashboard/print-pricing", label: "Print Pricing", icon: IndianRupee },
   { href: "/dashboard/pricing", label: "My Plan / Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Profile", icon: UserRound },
+  { href: "/contact", label: "Contact Us", icon: Headset },
 ];
 
 type DashboardShellProps = {
@@ -48,6 +52,7 @@ export function DashboardShell({
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/contact") return pathname === "/contact";
     return pathname.startsWith(href);
   }
 
@@ -56,16 +61,20 @@ export function DashboardShell({
       {NAV.map((item) => {
         const Icon = item.icon;
         const active = isActive(item.href);
+        const isContact = item.href === "/contact";
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setOpen(false)}
             className={cn(
-              "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+              "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+              isContact ? "font-bold" : "font-medium",
               active
                 ? "bg-blue-600 text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                : isContact
+                  ? "text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -90,10 +99,8 @@ export function DashboardShell({
       <div className="mx-auto flex min-h-screen max-w-7xl">
         <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white p-5 lg:block">
           <div className="mb-8">
-            <p className="text-xs font-semibold tracking-wide text-blue-600 uppercase">
-              PrintMadeEasy
-            </p>
-            <p className="mt-1 text-sm text-slate-500">Shopkeeper Dashboard</p>
+            <DashboardBrandTrust />
+            <p className="mt-2 text-sm text-slate-500">Shopkeeper Dashboard</p>
           </div>
           {nav}
         </aside>
@@ -139,21 +146,31 @@ export function DashboardShell({
                   <Menu className="size-4" />
                 </Button>
                 <div>
-                  <p className="text-xs font-medium tracking-wide text-blue-600 uppercase">
+                  <DashboardBrandTrust className="hidden sm:block" />
+                  <p className="text-xs font-medium tracking-wide text-blue-600 uppercase sm:hidden">
                     PrintMadeEasy
                   </p>
-                  <h1 className="text-lg font-semibold text-slate-900">
+                  <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:mt-1.5">
                     {shopName}
                   </h1>
                   <p className="text-sm text-slate-500">Shop Code: {shopCode}</p>
                 </div>
               </div>
-              <AgentStatusBadge />
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+                <Link
+                  href="/contact"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-800 shadow-sm transition-colors hover:bg-blue-100 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                >
+                  Contact Us
+                </Link>
+                <AgentStatusBadge />
+              </div>
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>
+          <main className="flex-1 px-4 py-6 pb-24 sm:px-6 sm:pb-28">{children}</main>
           <DashboardFooter />
+          <WhatsAppFloatingButton className="bottom-5 sm:bottom-6" />
         </div>
       </div>
     </div>

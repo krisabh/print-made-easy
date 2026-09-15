@@ -23,9 +23,9 @@ export default function PrivacyPage() {
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
             PrintMadeEasy ({SITE.url}) provides print-shop management software
-            for shopkeepers. PrintMadeEasy is a product of Clauras, operated by
-            Ramyad Enterprises. This Privacy Policy explains what information we
-            process to operate the service.
+            for shopkeepers. PrintMadeEasy is a Clauras product, powered by
+            Ramyad Enterprises - Abhiram. This Privacy Policy explains what
+            information we process to operate the service.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">

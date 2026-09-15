@@ -84,12 +84,31 @@ async function registerWithPairingToken(input: {
       return { error: "Pairing credential expired.", status: 401 as const };
     }
 
+    // Feature 2 Phase 2B.1 — create/rotate THIS device's AgentDevice credential.
+    // Do NOT overwrite Shop.agentTokenHash / agentId (legacy Agents stay valid).
+    const device = await tx.agentDevice.upsert({
+      where: {
+        shopId_agentId: {
+          shopId: shop.id,
+          agentId: input.agentId,
+        },
+      },
+      create: {
+        shopId: shop.id,
+        agentId: input.agentId,
+        tokenHash: permanentHash,
+        lastSeen: now,
+      },
+      update: {
+        tokenHash: permanentHash,
+        lastSeen: now,
+      },
+      select: { id: true },
+    });
+
     await tx.shop.update({
       where: { id: shop.id },
       data: {
-        agentId: input.agentId,
-        agentTokenHash: permanentHash,
-        agentLastSeen: now,
         agentPairingUsedAt: now,
       },
     });
@@ -100,6 +119,7 @@ async function registerWithPairingToken(input: {
         shopCode: shop.shopCode,
         shopName: shop.shopName,
       },
+      agentDeviceId: device.id,
     };
   });
 
@@ -111,6 +131,7 @@ async function registerWithPairingToken(input: {
   if (input.selectedPrinter && "shop" in result && result.shop) {
     await upsertShopPrinter({
       shopId: result.shop.id,
+      agentDeviceId: result.agentDeviceId,
       printerName: input.selectedPrinter,
       status: (input.printerStatus || "online").toLowerCase(),
       isDefault: true,
@@ -132,11 +153,12 @@ async function registerWithPairingToken(input: {
 }
 
 /**
- * Register / rotate Agent token for a shop.
+ * Register Agent token for a shop.
  *
  * Paths:
- * 1) pairingToken + agentId  (secure SaaS pairing — Phase 2B-1)
- * 2) shopCode + AGENT_SETUP_SECRET (legacy/dev — preserved)
+ * 1) pairingToken + agentId — Feature 2B.1: creates/upserts AgentDevice only
+ *    (does not overwrite Shop.agentTokenHash; other devices remain valid)
+ * 2) shopCode + AGENT_SETUP_SECRET — legacy/dev: still writes Shop.agent* shim
  */
 export async function POST(request: NextRequest) {
   try {

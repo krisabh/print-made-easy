@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import type { Shop } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -40,11 +41,43 @@ export function getBearerToken(request: NextRequest) {
   return header.slice("Bearer ".length).trim() || null;
 }
 
-export async function authenticateAgent(request: NextRequest) {
-  const token = getBearerToken(request);
-  if (!token) return null;
+/**
+ * Feature 2 Phase 2B.1 — resolved Agent credential.
+ * Prefer AgentDevice token; fall back to legacy Shop.agentTokenHash.
+ */
+export type AgentAuthContext = {
+  shop: Shop;
+  /** Populated when authenticated via AgentDevice.tokenHash. */
+  agentDeviceId: string | null;
+  agentId: string | null;
+  /** true = matched Shop.agentTokenHash (pre–multi-device shim). */
+  legacy: boolean;
+};
 
+/**
+ * Resolve a Bearer agent token to shop (+ optional AgentDevice).
+ * Does not update lastSeen (heartbeat remains the sole writer of online state).
+ * Does not clear or mutate any credentials.
+ */
+export async function resolveAgentAuth(
+  token: string,
+): Promise<AgentAuthContext | null> {
   const tokenHash = hashAgentToken(token);
+
+  const device = await prisma.agentDevice.findFirst({
+    where: { tokenHash },
+    include: { shop: true },
+  });
+
+  if (device?.shop?.isActive) {
+    return {
+      shop: device.shop,
+      agentDeviceId: device.id,
+      agentId: device.agentId,
+      legacy: false,
+    };
+  }
+
   const shop = await prisma.shop.findFirst({
     where: {
       agentTokenHash: tokenHash,
@@ -53,7 +86,35 @@ export async function authenticateAgent(request: NextRequest) {
   });
 
   if (!shop) return null;
-  return shop;
+
+  return {
+    shop,
+    agentDeviceId: null,
+    agentId: shop.agentId,
+    legacy: true,
+  };
+}
+
+/**
+ * Full auth context for routes that need device identity later.
+ * Existing callers that only need the Shop should keep using authenticateAgent().
+ */
+export async function authenticateAgentContext(
+  request: NextRequest,
+): Promise<AgentAuthContext | null> {
+  const token = getBearerToken(request);
+  if (!token) return null;
+  return resolveAgentAuth(token);
+}
+
+/**
+ * Authenticate Print Agent Bearer token → Shop.
+ * Phase 2B.1: AgentDevice credentials preferred; Shop.agentTokenHash remains valid.
+ * Return type stays Shop | null so existing API routes are unchanged.
+ */
+export async function authenticateAgent(request: NextRequest) {
+  const ctx = await authenticateAgentContext(request);
+  return ctx?.shop ?? null;
 }
 
 export function isAgentOnline(

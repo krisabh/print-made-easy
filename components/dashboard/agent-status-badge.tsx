@@ -10,6 +10,11 @@ type AgentStatus = {
   printerOffline: boolean;
 };
 
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "network_error" }
+  | { kind: "ready"; status: AgentStatus };
+
 function isPrinterOnline(status: AgentStatus) {
   if (!status.connected) return false;
   if (!status.printerName) return false;
@@ -24,8 +29,36 @@ function isPrinterOnline(status: AgentStatus) {
   );
 }
 
+function agentPresentation(status: AgentStatus): {
+  tone: "ok" | "warn" | "bad" | "neutral";
+  label: string;
+  meaning: string;
+} {
+  if (status.connected) {
+    return {
+      tone: "ok",
+      label: "Agent Connected",
+      meaning: "Your shop is ready to receive and print orders.",
+    };
+  }
+  if (!status.lastSeen) {
+    return {
+      tone: "warn",
+      label: "Connect Agent",
+      meaning:
+        "Install and sign in to the PrintMadeEasy Agent to start receiving orders.",
+    };
+  }
+  return {
+    tone: "warn",
+    label: "Agent Offline",
+    meaning:
+      "Start the PrintMadeEasy Agent to receive and print customer orders.",
+  };
+}
+
 export function AgentStatusBadge() {
-  const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [state, setState] = useState<LoadState>({ kind: "loading" });
 
   useEffect(() => {
     let cancelled = false;
@@ -35,12 +68,19 @@ export function AgentStatusBadge() {
         const res = await fetch("/api/dashboard/jobs?date=today&status=ALL", {
           cache: "no-store",
         });
+        if (!res.ok) {
+          if (!cancelled) setState({ kind: "network_error" });
+          return;
+        }
         const data = await res.json();
-        if (!cancelled && data.agentStatus) {
-          setStatus(data.agentStatus);
+        if (cancelled) return;
+        if (data.agentStatus) {
+          setState({ kind: "ready", status: data.agentStatus });
+        } else {
+          setState({ kind: "network_error" });
         }
       } catch {
-        if (!cancelled) setStatus(null);
+        if (!cancelled) setState({ kind: "network_error" });
       }
     }
 
@@ -52,7 +92,7 @@ export function AgentStatusBadge() {
     };
   }, []);
 
-  if (!status) {
+  if (state.kind === "loading") {
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         <StatusPill tone="neutral" label="Checking Agent…" />
@@ -60,19 +100,44 @@ export function AgentStatusBadge() {
     );
   }
 
+  if (state.kind === "network_error") {
+    return (
+      <div className="flex max-w-xs flex-col items-end gap-1 sm:max-w-sm">
+        <StatusPill tone="bad" label="Connection issue" />
+        <p className="text-right text-[11px] leading-snug text-slate-500">
+          Unable to connect. Please check your internet connection and try
+          again.
+        </p>
+      </div>
+    );
+  }
+
+  const { status } = state;
+  const agent = agentPresentation(status);
   const printerOnline = isPrinterOnline(status);
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <StatusPill
-        tone={status.connected ? "ok" : "warn"}
-        label={status.connected ? "Agent Connected" : "Agent Offline"}
-      />
-      <StatusPill
-        tone={printerOnline ? "ok" : "bad"}
-        label={printerOnline ? "Printer Connected" : "Printer Offline"}
-        detail={status.printerName}
-      />
+    <div className="flex max-w-xs flex-col items-end gap-1 sm:max-w-md">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <StatusPill
+          tone={agent.tone}
+          label={agent.label}
+          ariaLabel={`${agent.label}. ${agent.meaning}`}
+        />
+        <StatusPill
+          tone={printerOnline ? "ok" : "bad"}
+          label={printerOnline ? "Printer Connected" : "Printer Offline"}
+          detail={status.printerName}
+          ariaLabel={
+            printerOnline
+              ? `Printer Connected${status.printerName ? `: ${status.printerName}` : ""}`
+              : `Printer Offline. Keep your printer connected and ready.`
+          }
+        />
+      </div>
+      <p className="hidden text-right text-[11px] leading-snug text-slate-500 sm:block">
+        {agent.meaning}
+      </p>
     </div>
   );
 }
@@ -81,10 +146,12 @@ function StatusPill({
   tone,
   label,
   detail,
+  ariaLabel,
 }: {
   tone: "ok" | "warn" | "bad" | "neutral";
   label: string;
   detail?: string | null;
+  ariaLabel?: string;
 }) {
   const styles = {
     ok: "bg-emerald-50 text-emerald-700 ring-emerald-200",
@@ -102,10 +169,12 @@ function StatusPill({
 
   return (
     <div
+      role="status"
+      aria-label={ariaLabel || label}
       className={`max-w-[16rem] rounded-xl px-3 py-1.5 text-xs font-medium ring-1 ${styles[tone]}`}
     >
       <span className="inline-flex items-center gap-1.5">
-        <span className={`size-2 shrink-0 rounded-full ${dot[tone]}`} />
+        <span className={`size-2 shrink-0 rounded-full ${dot[tone]}`} aria-hidden="true" />
         {label}
       </span>
       {detail ? (

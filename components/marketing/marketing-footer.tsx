@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Mail, MessageCircle } from "lucide-react";
 
+import { BrandHierarchy } from "@/components/marketing/company-identity";
 import {
   FOOTER_COMPANY_LINKS,
   FOOTER_LEGAL_LINKS,
   FOOTER_PRODUCT_LINKS,
+  getWhatsAppSupportHref,
   SITE,
 } from "@/lib/marketing";
 
@@ -28,17 +30,9 @@ export function MarketingFooter({ authenticated = false }: MarketingFooterProps)
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-1">
-          <p className="text-sm font-bold tracking-[0.12em] text-blue-700 uppercase">
-            {SITE.name}
-          </p>
-          <p className="mt-1 text-xs font-medium text-slate-600">
-            A {SITE.parentCompany} product
-          </p>
+          <BrandHierarchy />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
             {SITE.tagline}
-          </p>
-          <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            {SITE.identityLine}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
             Shopkeeper software subscription · ₹199/month · 7-day free trial
@@ -65,7 +59,7 @@ export function MarketingFooter({ authenticated = false }: MarketingFooterProps)
             </li>
             <li>
               <a
-                href={SITE.whatsappHref}
+                href={getWhatsAppSupportHref()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-slate-700 transition-colors hover:text-blue-700"

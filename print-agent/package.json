@@ -44,7 +44,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "PrintMadeEasy Agent",
       "uninstallDisplayName": "PrintMadeEasy Agent",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {

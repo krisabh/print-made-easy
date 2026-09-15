@@ -12,14 +12,85 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getStoredFilePath } from "@/lib/storage";
 
+export class PrinterOwnershipError extends Error {
+  constructor(message = "Invalid printer ownership.") {
+    super(message);
+    this.name = "PrinterOwnershipError";
+  }
+}
+
+/**
+ * Set AgentDevice.localDefaultPrinterId after ownership validation.
+ * Printer must belong to the same AgentDevice and Shop.
+ */
+export async function setAgentDeviceLocalDefault(input: {
+  shopId: string;
+  agentDeviceId: string;
+  printerId: string;
+}) {
+  const device = await prisma.agentDevice.findFirst({
+    where: { id: input.agentDeviceId, shopId: input.shopId },
+    select: { id: true },
+  });
+  if (!device) {
+    throw new PrinterOwnershipError(
+      "Printer AgentDevice does not belong to this Shop.",
+    );
+  }
+
+  const printer = await prisma.printer.findFirst({
+    where: {
+      id: input.printerId,
+      shopId: input.shopId,
+      agentDeviceId: input.agentDeviceId,
+    },
+    select: { id: true },
+  });
+  if (!printer) {
+    throw new PrinterOwnershipError(
+      "Default printer must belong to this AgentDevice.",
+    );
+  }
+
+  await prisma.agentDevice.update({
+    where: { id: input.agentDeviceId },
+    data: { localDefaultPrinterId: printer.id },
+  });
+
+  return printer.id;
+}
+
+/**
+ * Upsert a shop printer.
+ * - AgentDevice auth: identity is (agentDeviceId, printerName); default → localDefaultPrinterId.
+ * - Legacy Shop-token auth: identity is (shopId, printerName) among NULL rows; default → Printer.isDefault.
+ * Does not invent AgentDevice rows. Does not migrate NULL → device during heartbeat.
+ */
 export async function upsertShopPrinter(input: {
   shopId: string;
   printerName: string;
   printerModel?: string | null;
   status: string;
   isDefault: boolean;
+  /** Authenticated AgentDevice id — never trust a client-supplied value alone. */
+  agentDeviceId?: string | null;
 }) {
-  if (input.isDefault) {
+  const agentDeviceId = input.agentDeviceId?.trim() || null;
+
+  if (agentDeviceId) {
+    const device = await prisma.agentDevice.findFirst({
+      where: { id: agentDeviceId, shopId: input.shopId },
+      select: { id: true },
+    });
+    if (!device) {
+      throw new PrinterOwnershipError(
+        "Printer AgentDevice does not belong to this Shop.",
+      );
+    }
+  }
+
+  // Legacy only: shop-wide isDefault clear. Device path must never touch siblings.
+  if (input.isDefault && !agentDeviceId) {
     await prisma.printer.updateMany({
       where: { shopId: input.shopId },
       data: { isDefault: false },
@@ -28,21 +99,94 @@ export async function upsertShopPrinter(input: {
 
   // Intentionally omit colorSupported on update so heartbeat never overwrites
   // the shopkeeper's manual capability. New rows get schema default false.
-  return prisma.printer.upsert({
-    where: {
-      shopId_printerName: {
-        shopId: input.shopId,
-        printerName: input.printerName,
-      },
-    },
-    update: {
+  if (agentDeviceId) {
+    const updateData = {
+      shopId: input.shopId,
       printerModel: input.printerModel ?? undefined,
       status: input.status,
-      isDefault: input.isDefault,
       lastSeen: new Date(),
-    },
-    create: {
+    };
+    const createData = {
       shopId: input.shopId,
+      agentDeviceId,
+      printerName: input.printerName,
+      printerModel: input.printerModel ?? null,
+      status: input.status,
+      // Device rows do not use Printer.isDefault as authority.
+      isDefault: false,
+      colorSupported: false,
+      lastSeen: new Date(),
+    };
+
+    let printer;
+    try {
+      printer = await prisma.printer.upsert({
+        where: {
+          agentDeviceId_printerName: {
+            agentDeviceId,
+            printerName: input.printerName,
+          },
+        },
+        update: updateData,
+        create: createData,
+      });
+    } catch (error) {
+      // MySQL upsert races can hit the unique key on concurrent creates.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        printer = await prisma.printer.update({
+          where: {
+            agentDeviceId_printerName: {
+              agentDeviceId,
+              printerName: input.printerName,
+            },
+          },
+          data: updateData,
+        });
+      } else {
+        throw error;
+      }
+    }
+
+    if (input.isDefault) {
+      await setAgentDeviceLocalDefault({
+        shopId: input.shopId,
+        agentDeviceId,
+        printerId: printer.id,
+      });
+    }
+
+    return printer;
+  }
+
+  // Legacy shop-token path: only rows with agentDeviceId NULL.
+  const existing = await prisma.printer.findFirst({
+    where: {
+      shopId: input.shopId,
+      printerName: input.printerName,
+      agentDeviceId: null,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    return prisma.printer.update({
+      where: { id: existing.id },
+      data: {
+        printerModel: input.printerModel ?? undefined,
+        status: input.status,
+        isDefault: input.isDefault,
+        lastSeen: new Date(),
+      },
+    });
+  }
+
+  return prisma.printer.create({
+    data: {
+      shopId: input.shopId,
+      agentDeviceId: null,
       printerName: input.printerName,
       printerModel: input.printerModel ?? null,
       status: input.status,
@@ -62,7 +206,38 @@ export type ShopPrinterCapability = {
 
 export async function listShopPrinterCapabilities(
   shopId: string,
+  options?: { agentDeviceId?: string | null },
 ): Promise<ShopPrinterCapability[]> {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
+
+  if (agentDeviceId) {
+    const device = await prisma.agentDevice.findFirst({
+      where: { id: agentDeviceId, shopId },
+      select: { localDefaultPrinterId: true },
+    });
+    const rows = await prisma.printer.findMany({
+      where: { shopId, agentDeviceId },
+      orderBy: [{ printerName: "asc" }],
+      select: {
+        id: true,
+        printerName: true,
+        colorSupported: true,
+        status: true,
+      },
+    });
+    return rows
+      .map((row) => ({
+        printerName: row.printerName,
+        colorSupported: row.colorSupported,
+        status: row.status,
+        isDefault: device?.localDefaultPrinterId === row.id,
+      }))
+      .sort((a, b) => {
+        if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+        return a.printerName.localeCompare(b.printerName);
+      });
+  }
+
   const rows = await prisma.printer.findMany({
     where: { shopId },
     orderBy: [{ isDefault: "desc" }, { printerName: "asc" }],
@@ -80,24 +255,97 @@ export async function listShopPrinterCapabilities(
  * Persist manual color capability for one printer in the authenticated shop.
  * Does not change isDefault or selectedPrinter semantics.
  * Creates the Printer row if missing (so capability can be set before/without a racey heartbeat).
+ * Device auth: scopes to that AgentDevice. Legacy: agentDeviceId NULL rows only.
  */
 export async function setShopPrinterColorSupported(input: {
   shopId: string;
   printerName: string;
   colorSupported: boolean;
   status?: string;
+  agentDeviceId?: string | null;
 }) {
   const printerName = input.printerName.trim();
   if (!printerName) {
     return { ok: false as const, error: "invalid_name" as const };
   }
 
-  const existing = await prisma.printer.findUnique({
-    where: {
-      shopId_printerName: {
-        shopId: input.shopId,
-        printerName,
+  const agentDeviceId = input.agentDeviceId?.trim() || null;
+  if (agentDeviceId) {
+    const device = await prisma.agentDevice.findFirst({
+      where: { id: agentDeviceId, shopId: input.shopId },
+      select: { id: true, localDefaultPrinterId: true },
+    });
+    if (!device) {
+      throw new PrinterOwnershipError(
+        "Printer AgentDevice does not belong to this Shop.",
+      );
+    }
+
+    const existing = await prisma.printer.findUnique({
+      where: {
+        agentDeviceId_printerName: {
+          agentDeviceId,
+          printerName,
+        },
       },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      const created = await prisma.printer.create({
+        data: {
+          shopId: input.shopId,
+          agentDeviceId,
+          printerName,
+          colorSupported: input.colorSupported,
+          isDefault: false,
+          status: (input.status || "unknown").toLowerCase(),
+          lastSeen: new Date(),
+        },
+        select: {
+          id: true,
+          printerName: true,
+          colorSupported: true,
+          status: true,
+        },
+      });
+      return {
+        ok: true as const,
+        printer: {
+          printerName: created.printerName,
+          colorSupported: created.colorSupported,
+          isDefault: device.localDefaultPrinterId === created.id,
+          status: created.status,
+        },
+      };
+    }
+
+    const updated = await prisma.printer.update({
+      where: { id: existing.id },
+      data: { colorSupported: input.colorSupported },
+      select: {
+        id: true,
+        printerName: true,
+        colorSupported: true,
+        status: true,
+      },
+    });
+    return {
+      ok: true as const,
+      printer: {
+        printerName: updated.printerName,
+        colorSupported: updated.colorSupported,
+        isDefault: device.localDefaultPrinterId === updated.id,
+        status: updated.status,
+      },
+    };
+  }
+
+  const existing = await prisma.printer.findFirst({
+    where: {
+      shopId: input.shopId,
+      printerName,
+      agentDeviceId: null,
     },
     select: { id: true },
   });
@@ -106,6 +354,7 @@ export async function setShopPrinterColorSupported(input: {
     const created = await prisma.printer.create({
       data: {
         shopId: input.shopId,
+        agentDeviceId: null,
         printerName,
         colorSupported: input.colorSupported,
         isDefault: false,
@@ -150,14 +399,35 @@ export async function getShopDefaultColorSupported(
   return printer?.colorSupported === true;
 }
 
-export async function listPendingJobsForShop(shopId: string) {
-  const printingCount = await prisma.printJob.count({
-    where: { shopId, status: PrintStatus.PRINTING },
-  });
+export async function listPendingJobsForShop(
+  shopId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
 
-  // Do not hand out new work while a job is already PRINTING.
-  if (printingCount > 0) {
-    return [];
+  /**
+   * Feature 2 Phase 2E — concurrency gate:
+   * - Device auth: at most one PRINTING job per AgentDevice (other devices may print).
+   * - Legacy Shop-token: keep shop-wide single PRINTING (existing single-Agent safety).
+   */
+  if (agentDeviceId) {
+    const myPrinting = await prisma.printJob.count({
+      where: {
+        shopId,
+        status: PrintStatus.PRINTING,
+        claimedByAgentDeviceId: agentDeviceId,
+      },
+    });
+    if (myPrinting > 0) {
+      return [];
+    }
+  } else {
+    const printingCount = await prisma.printJob.count({
+      where: { shopId, status: PrintStatus.PRINTING },
+    });
+    if (printingCount > 0) {
+      return [];
+    }
   }
 
   return prisma.printJob.findMany({
@@ -199,19 +469,68 @@ export async function listPendingJobsForShop(shopId: string) {
   });
 }
 
-/** Atomic claim: PENDING → PRINTING for this shop only. */
-export async function claimJob(shopId: string, jobId: string) {
-  return prisma.$transaction(async (tx) => {
-    const alreadyPrinting = await tx.printJob.count({
-      where: {
-        shopId,
-        status: PrintStatus.PRINTING,
-        NOT: { id: jobId },
-      },
-    });
+const jobClaimInclude = {
+  files: {
+    where: { fileDeletedAt: null },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 
-    if (alreadyPrinting > 0) {
-      return null;
+/**
+ * Atomic claim: PENDING → PRINTING for this shop.
+ * Device auth: sets claimedByAgentDeviceId + claimedAt; one PRINTING per device.
+ * Legacy: claimedByAgentDeviceId stays null; shop-wide one PRINTING preserved.
+ *
+ * Phase 2F: serialize per-device (or per-shop legacy) claims with SELECT … FOR UPDATE
+ * on the AgentDevice/Shop row so the count-then-CAS gate cannot admit two PRINTING
+ * jobs for the same claimant under concurrent requests.
+ */
+export async function claimJob(
+  shopId: string,
+  jobId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
+  const claimedAt = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    if (agentDeviceId) {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM AgentDevice WHERE id = ${agentDeviceId} FOR UPDATE
+      `;
+      if (locked.length === 0) {
+        return null;
+      }
+
+      const myPrinting = await tx.printJob.count({
+        where: {
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: agentDeviceId,
+          NOT: { id: jobId },
+        },
+      });
+      if (myPrinting > 0) {
+        return null;
+      }
+    } else {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM Shop WHERE id = ${shopId} FOR UPDATE
+      `;
+      if (locked.length === 0) {
+        return null;
+      }
+
+      const alreadyPrinting = await tx.printJob.count({
+        where: {
+          shopId,
+          status: PrintStatus.PRINTING,
+          NOT: { id: jobId },
+        },
+      });
+      if (alreadyPrinting > 0) {
+        return null;
+      }
     }
 
     const updated = await tx.printJob.updateMany({
@@ -224,22 +543,70 @@ export async function claimJob(shopId: string, jobId: string) {
       data: {
         status: PrintStatus.PRINTING,
         lastError: null,
+        claimedByAgentDeviceId: agentDeviceId,
+        claimedAt,
       },
     });
 
-    if (updated.count !== 1) {
-      return null;
+    if (updated.count === 1) {
+      return tx.printJob.findFirst({
+        where: { id: jobId, shopId },
+        include: jobClaimInclude,
+      });
     }
 
+    // Idempotent retry: already PRINTING and owned by this claimant.
     return tx.printJob.findFirst({
-      where: { id: jobId, shopId },
-      include: {
-        files: {
-          where: { fileDeletedAt: null },
-          orderBy: { createdAt: "asc" },
-        },
-      },
+      where: agentDeviceId
+        ? {
+            id: jobId,
+            shopId,
+            status: PrintStatus.PRINTING,
+            claimedByAgentDeviceId: agentDeviceId,
+          }
+        : {
+            id: jobId,
+            shopId,
+            status: PrintStatus.PRINTING,
+            claimedByAgentDeviceId: null,
+          },
+      include: jobClaimInclude,
     });
+  });
+}
+
+/**
+ * Assert the authenticated Agent may act on a PRINTING job.
+ * Device auth: must own claimedByAgentDeviceId.
+ * Legacy: only jobs with null device ownership.
+ */
+export async function assertPrintJobActor(
+  shopId: string,
+  jobId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
+  return prisma.printJob.findFirst({
+    where: agentDeviceId
+      ? {
+          id: jobId,
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: agentDeviceId,
+        }
+      : {
+          id: jobId,
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: null,
+        },
+    select: {
+      id: true,
+      status: true,
+      jobNumber: true,
+      claimedByAgentDeviceId: true,
+      claimedAt: true,
+    },
   });
 }
 
@@ -247,7 +614,13 @@ export async function releaseJobToPending(
   shopId: string,
   jobId: string,
   errorMessage: string,
+  options?: { agentDeviceId?: string | null },
 ) {
+  const owned = await assertPrintJobActor(shopId, jobId, options);
+  if (!owned) {
+    return null;
+  }
+
   const job = await prisma.printJob.findFirst({
     where: { id: jobId, shopId },
     select: {
@@ -279,6 +652,8 @@ export async function releaseJobToPending(
     data: {
       status: PrintStatus.PENDING,
       printAttempts: attempts,
+      claimedByAgentDeviceId: null,
+      claimedAt: null,
       lastError: keepRetrying
         ? errorMessage
         : permanent
@@ -288,16 +663,30 @@ export async function releaseJobToPending(
   });
 }
 
-export async function markJobReady(shopId: string, jobId: string) {
+export async function markJobReady(
+  shopId: string,
+  jobId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
   const updated = await prisma.printJob.updateMany({
-    where: {
-      id: jobId,
-      shopId,
-      status: PrintStatus.PRINTING,
-    },
+    where: agentDeviceId
+      ? {
+          id: jobId,
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: agentDeviceId,
+        }
+      : {
+          id: jobId,
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: null,
+        },
     data: {
       status: PrintStatus.READY_FOR_PICKUP,
       lastError: null,
+      // Retain claimedByAgentDeviceId / claimedAt for history.
     },
   });
 
@@ -324,16 +713,9 @@ export async function markFilePrinted(
   shopId: string,
   jobId: string,
   fileId: string,
+  options?: { agentDeviceId?: string | null },
 ) {
-  const job = await prisma.printJob.findFirst({
-    where: {
-      id: jobId,
-      shopId,
-      status: PrintStatus.PRINTING,
-    },
-    select: { id: true },
-  });
-
+  const job = await assertPrintJobActor(shopId, jobId, options);
   if (!job) return null;
 
   const file = await prisma.printJobFile.findFirst({
@@ -435,6 +817,8 @@ export async function cleanupExpiredDocuments() {
     },
     data: {
       status: PrintStatus.PENDING,
+      claimedByAgentDeviceId: null,
+      claimedAt: null,
       lastError: "Recovered stale PRINTING job after Agent disconnect.",
     },
   });
@@ -445,6 +829,7 @@ export async function cleanupExpiredDocuments() {
 type HeartbeatFreshnessRow = {
   agentId: string | null;
   agentLastSeen: Date | null;
+  deviceLastSeenMax: Date | null;
   agentFresh: number | bigint;
   printerName: string | null;
   printerStatus: string | null;
@@ -499,13 +884,28 @@ function sqlIsFreshHeartbeat(column: Prisma.Sql) {
   `;
 }
 
+/**
+ * Feature 2 Phase 2D — shop Agent online if ANY AgentDevice has a fresh lastSeen,
+ * else fall back to legacy Shop.agentLastSeen. Never uses device count alone.
+ */
 async function getShopHeartbeatFreshness(shopId: string) {
   const rows = await prisma.$queryRaw<HeartbeatFreshnessRow[]>(Prisma.sql`
     SELECT
       s.agentId AS agentId,
       s.agentLastSeen AS agentLastSeen,
+      (
+        SELECT MAX(ad.lastSeen)
+        FROM AgentDevice ad
+        WHERE ad.shopId = s.id
+      ) AS deviceLastSeenMax,
       CASE
-        WHEN ${sqlIsFreshHeartbeat(Prisma.raw("s.agentLastSeen"))}
+        WHEN EXISTS (
+          SELECT 1
+          FROM AgentDevice ad
+          WHERE ad.shopId = s.id
+            AND ${sqlIsFreshHeartbeat(Prisma.raw("ad.lastSeen"))}
+        )
+        OR ${sqlIsFreshHeartbeat(Prisma.raw("s.agentLastSeen"))}
         THEN 1 ELSE 0
       END AS agentFresh,
       p.printerName AS printerName,
@@ -524,6 +924,18 @@ async function getShopHeartbeatFreshness(shopId: string) {
   return rows[0] ?? null;
 }
 
+function pickMostRecentLastSeen(
+  legacy: Date | null | undefined,
+  deviceMax: Date | null | undefined,
+): Date | null {
+  const a = legacy ? new Date(legacy).getTime() : null;
+  const b = deviceMax ? new Date(deviceMax).getTime() : null;
+  if (a == null && b == null) return null;
+  if (a == null) return new Date(b!);
+  if (b == null) return new Date(a);
+  return new Date(Math.max(a, b));
+}
+
 export async function getShopAgentStatus(shopId: string) {
   const row = await getShopHeartbeatFreshness(shopId);
   if (!row) return null;
@@ -535,10 +947,15 @@ export async function getShopAgentStatus(shopId: string) {
     printerReportFresh &&
     isReportedPrinterOnline(row.printerStatus);
 
+  const lastSeen = pickMostRecentLastSeen(
+    row.agentLastSeen,
+    row.deviceLastSeenMax,
+  );
+
   return {
     agentId: row.agentId,
     connected: agentOnline,
-    lastSeen: row.agentLastSeen ? new Date(row.agentLastSeen).toISOString() : null,
+    lastSeen: lastSeen ? lastSeen.toISOString() : null,
     printerName: row.printerName,
     printerStatus: printerOnline ? row.printerStatus : "offline",
     printerOffline: !printerOnline,
@@ -586,4 +1003,38 @@ export async function listShopPrintersWithLiveStatus(shopId: string) {
       status: online ? printer.status : "offline",
     };
   });
+}
+
+/** Safe AgentDevice summary for dashboard — never includes token/hash. */
+export type ShopAgentDeviceSummary = {
+  id: string;
+  agentId: string;
+  createdAt: string;
+  lastSeen: string | null;
+};
+
+/**
+ * Feature 2 Phase 2B.2 — list paired AgentDevices for a shop.
+ * lastSeen is device-reported; shop-level online aggregates device + legacy (Phase 2D).
+ */
+export async function listShopAgentDevices(
+  shopId: string,
+): Promise<ShopAgentDeviceSummary[]> {
+  const rows = await prisma.agentDevice.findMany({
+    where: { shopId },
+    orderBy: [{ createdAt: "asc" }],
+    select: {
+      id: true,
+      agentId: true,
+      createdAt: true,
+      lastSeen: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    agentId: row.agentId,
+    createdAt: row.createdAt.toISOString(),
+    lastSeen: row.lastSeen ? row.lastSeen.toISOString() : null,
+  }));
 }

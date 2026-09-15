@@ -87,30 +87,14 @@ async function main() {
       status: "online",
       isDefault: true,
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { colorSupported: false },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { colorSupported: false } });
     let capability = await getShopDefaultColorSupported(shop.id);
     assert.equal(capability, false);
     assert.deepEqual(customerUiShowsColor(capability), ["BW"]);
     console.log("PASS Test 1 default B&W → colorSupported=false, UI B&W only");
 
     // Test 2 — default color printer
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { colorSupported: true },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { colorSupported: true } });
     capability = await getShopDefaultColorSupported(shop.id);
     assert.equal(capability, true);
     assert.deepEqual(customerUiShowsColor(capability), ["BW", "COLOR"]);
@@ -123,47 +107,15 @@ async function main() {
       status: "online",
       isDefault: false,
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { colorSupported: false, isDefault: true },
-    });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { colorSupported: true, isDefault: false },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { colorSupported: false, isDefault: true } });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { colorSupported: true, isDefault: false } });
     // Ensure only A is default (upsert may have cleared defaults)
     await prisma.printer.updateMany({
       where: { shopId: shop.id },
       data: { isDefault: false },
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { isDefault: true, colorSupported: false },
-    });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { isDefault: false, colorSupported: true },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { isDefault: true, colorSupported: false } });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { isDefault: false, colorSupported: true } });
     capability = await getShopDefaultColorSupported(shop.id);
     assert.equal(capability, false);
     console.log("PASS Test 3 non-default color printer does not enable Color");
@@ -174,15 +126,7 @@ async function main() {
       where: { shopId: shop.id },
       data: { isDefault: false },
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { isDefault: true },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { isDefault: true } });
     assert.equal(await getShopDefaultColorSupported(shop.id), true);
     console.log("PASS Test 4 switching default flips customer capability");
 
@@ -195,15 +139,7 @@ async function main() {
     console.log("PASS Test 5 no default → colorSupported=false");
 
     // Restore A as B&W default for reject tests
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { isDefault: true, colorSupported: false },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { isDefault: true, colorSupported: false } });
 
     // Test 6 — server rejects unsupported Color
     const rejected = await submitJob(shop.shopCode, "COLOR");
@@ -216,15 +152,7 @@ async function main() {
     console.log("PASS Test 6 server rejects Color when unsupported");
 
     // Test 7 — server accepts Color when supported
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { colorSupported: true },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { colorSupported: true } });
     const accepted = await submitJob(shop.shopCode, "COLOR");
     assert.equal(accepted.success, true);
     assert.ok(accepted.data?.jobId);
@@ -236,29 +164,13 @@ async function main() {
     console.log("PASS Test 7 server accepts Color when supported");
 
     // Test 8 — stale UI: page thought Color OK, default now B&W
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { colorSupported: true, isDefault: true },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { colorSupported: true, isDefault: true } });
     // Simulate shopkeeper switch after page render
     await prisma.printer.updateMany({
       where: { shopId: shop.id },
       data: { isDefault: false },
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { isDefault: true, colorSupported: false },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { isDefault: true, colorSupported: false } });
     assert.equal(await getShopDefaultColorSupported(shop.id), false);
     const stale = await submitJob(shop.shopCode, "COLOR");
     assert.equal(stale.success, false);
@@ -266,53 +178,15 @@ async function main() {
     console.log("PASS Test 8 stale page cannot bypass Color capability");
 
     // Test 9 — default switch does not alter capability values
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-      data: { isDefault: true, colorSupported: true },
-    });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { isDefault: false, colorSupported: false },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer A", }, data: { isDefault: true, colorSupported: true } });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { isDefault: false, colorSupported: false } });
     await prisma.printer.updateMany({
       where: { shopId: shop.id },
       data: { isDefault: false },
     });
-    await prisma.printer.update({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-      data: { isDefault: true },
-    });
-    const a9 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer A",
-        },
-      },
-    });
-    const b9 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "Printer B",
-        },
-      },
-    });
+    await prisma.printer.updateMany({ where: { shopId: shop.id, printerName: "Printer B", }, data: { isDefault: true } });
+    const a9 = await prisma.printer.findFirstOrThrow({ where: { shopId: shop.id, printerName: "Printer A", } });
+    const b9 = await prisma.printer.findFirstOrThrow({ where: { shopId: shop.id, printerName: "Printer B", } });
     assert.equal(a9.isDefault, false);
     assert.equal(a9.colorSupported, true);
     assert.equal(b9.isDefault, true);

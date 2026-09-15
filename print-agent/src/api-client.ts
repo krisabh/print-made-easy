@@ -249,6 +249,78 @@ export async function registerWithPairingToken(input: {
   });
 }
 
+/**
+ * Feature 2 Phase 2B.2 — sign in with shop email/password.
+ * Creates/rotates AgentDevice credential; does not store the password.
+ */
+export async function loginWithAccount(input: {
+  email: string;
+  password: string;
+  selectedPrinter?: string | null;
+}): Promise<{
+  token: string;
+  agentId: string;
+  shop: { id: string; shopCode: string; shopName: string };
+}> {
+  return withAuthLock(async () => {
+    const config = loadConfig();
+    const apiUrl = baseUrl();
+
+    let response: Response;
+    try {
+      response = await fetch(`${apiUrl}/api/print-agent/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: input.email.trim(),
+          password: input.password,
+          agentId: config.agentId,
+        }),
+      });
+    } catch {
+      throw new Error(
+        "Unable to connect to PrintMadeEasy. Check your internet connection.",
+      );
+    }
+
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      token?: string;
+      agentId?: string;
+      shop?: { id: string; shopCode: string; shopName: string };
+    };
+
+    if (!response.ok) {
+      if (response.status === 402) {
+        throw new Error(
+          data.error || "Subscription required to connect the Print Agent.",
+        );
+      }
+      throw new Error(data.error || "Invalid email or password.");
+    }
+
+    if (!data.token || !data.shop?.shopCode) {
+      throw new Error("Invalid login response.");
+    }
+
+    updateConfig({
+      authToken: data.token,
+      shopCode: data.shop.shopCode,
+      shopName: data.shop.shopName || null,
+      apiUrl,
+      ...(input.selectedPrinter
+        ? { selectedPrinter: input.selectedPrinter }
+        : {}),
+    });
+
+    return {
+      token: data.token,
+      agentId: data.agentId || config.agentId,
+      shop: data.shop,
+    };
+  });
+}
+
 export async function ensureAgentAuthenticated(input: {
   selectedPrinter?: string | null;
   printerStatus?: string;
@@ -296,7 +368,8 @@ export async function ensureAgentAuthenticated(input: {
     if (!secret) {
       return {
         status: "Disconnected" as const,
-        message: "Not connected. Scan the dashboard QR to connect this Agent.",
+        message:
+          "Not connected. Sign in with your PrintMadeEasy email and password.",
       };
     }
 

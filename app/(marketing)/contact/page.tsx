@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BrandHierarchy } from "@/components/marketing/company-identity";
 import { WhatsAppIconLink } from "@/components/marketing/whatsapp-floating-button";
 import { SITE } from "@/lib/marketing";
 
 export const metadata: Metadata = {
   title: "Contact Us",
   description:
-    "Contact PrintMadeEasy, a Clauras product operated by Ramyad Enterprises, for shop subscription, Windows Agent, billing, or product support.",
+    "Contact PrintMadeEasy, a Clauras product powered by Ramyad Enterprises - Abhiram, for shop subscription, Windows Agent, billing, or product support.",
   alternates: {
     canonical: "/contact",
   },
@@ -23,16 +24,18 @@ export default function ContactPage() {
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
           Contact Us
         </h1>
+        <div className="mt-4">
+          <BrandHierarchy />
+        </div>
         <p className="mt-4 text-base leading-relaxed text-slate-600">
-          PrintMadeEasy is a SaaS product from Clauras, operated by Ramyad
-          Enterprises. Reach us for shopkeeper onboarding, Windows Agent help,
-          or billing and cancellation questions.
+          {SITE.relationship} Reach us for shopkeeper onboarding, Windows Agent
+          help, or billing and cancellation questions.
         </p>
 
         <div className="mt-8 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div>
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              Business / Legal Name
+              Enterprise Name
             </p>
             <p className="mt-1 text-base font-medium text-slate-900">
               {SITE.legalName}
@@ -41,7 +44,7 @@ export default function ContactPage() {
 
           <div>
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              Parent Company
+              Parent / Product Company
             </p>
             <p className="mt-1 text-base font-medium text-slate-900">
               {SITE.parentCompany}
@@ -100,7 +103,11 @@ export default function ContactPage() {
         </div>
 
         <p className="mt-6 text-sm text-slate-500">
-          Related policies:{" "}
+          Related:{" "}
+          <Link href="/about" className="font-medium text-blue-700 hover:underline">
+            About
+          </Link>
+          {" · "}
           <Link href="/refunds" className="font-medium text-blue-700 hover:underline">
             Refund &amp; Cancellation Policy
           </Link>

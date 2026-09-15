@@ -3,9 +3,10 @@ import { z } from "zod";
 
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { logError } from "@/lib/log";
-import { authenticateAgent } from "@/lib/print-agent-auth";
+import { authenticateAgentContext } from "@/lib/print-agent-auth";
 import {
   listShopPrinterCapabilities,
+  PrinterOwnershipError,
   setShopPrinterColorSupported,
   upsertShopPrinter,
 } from "@/lib/print-agent-service";
@@ -34,10 +35,12 @@ const heartbeatSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const shop = await authenticateAgent(request);
-    if (!shop) {
+    const auth = await authenticateAgentContext(request);
+    if (!auth) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
     }
+
+    const { shop, agentDeviceId } = auth;
 
     const body = await request.json().catch(() => ({}));
     const parsed = heartbeatSchema.safeParse(body);
@@ -45,17 +48,32 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Invalid heartbeat payload." }, { status: 400 });
     }
 
-    await prisma.shop.update({
-      where: { id: shop.id },
-      data: { agentLastSeen: new Date() },
-    });
+    const now = new Date();
+
+    // Feature 2 Phase 2D — device heartbeat writes AgentDevice.lastSeen only.
+    // Legacy Shop-token heartbeat writes Shop.agentLastSeen only.
+    // Do not invent AgentDevice rows; do not update sibling devices.
+    if (agentDeviceId) {
+      await prisma.agentDevice.update({
+        where: { id: agentDeviceId },
+        data: { lastSeen: now },
+      });
+    } else {
+      await prisma.shop.update({
+        where: { id: shop.id },
+        data: { agentLastSeen: now },
+      });
+    }
+
+    // Device scope always from auth — never trust a client-supplied agentDeviceId.
+    const deviceScope = agentDeviceId;
 
     if (parsed.data.selectedPrinter) {
-      // Authoritative shop default from Agent config — even if the printer is
-      // temporarily absent from the detected list (do not promote another).
-      // colorSupported is never written here (preserve / default false on create).
+      // Agent selectedPrinter → device-local default (AgentDevice) or shop-wide
+      // Printer.isDefault (legacy). Never modifies another device's default.
       await upsertShopPrinter({
         shopId: shop.id,
+        agentDeviceId: deviceScope,
         printerName: parsed.data.selectedPrinter,
         status: (parsed.data.printerStatus || "unknown").toLowerCase(),
         isDefault: true,
@@ -69,6 +87,7 @@ export async function POST(request: NextRequest) {
           printer.name === parsed.data.selectedPrinter;
         await upsertShopPrinter({
           shopId: shop.id,
+          agentDeviceId: deviceScope,
           printerName: printer.name,
           status: (printer.status || "unknown").toLowerCase(),
           // Never mark a non-selected detected printer as default.
@@ -80,6 +99,7 @@ export async function POST(request: NextRequest) {
     if (parsed.data.colorUpdate) {
       await setShopPrinterColorSupported({
         shopId: shop.id,
+        agentDeviceId: deviceScope,
         printerName: parsed.data.colorUpdate.printerName,
         colorSupported: parsed.data.colorUpdate.colorSupported,
       });
@@ -87,7 +107,11 @@ export async function POST(request: NextRequest) {
 
     void runDocumentCleanupIfDue();
 
-    const printers = await listShopPrinterCapabilities(shop.id);
+    // Device Agents only see their own capability rows (avoid sibling-name clash).
+    // Legacy Agents still receive the full shop list.
+    const printers = await listShopPrinterCapabilities(shop.id, {
+      agentDeviceId: deviceScope,
+    });
 
     return Response.json({
       ok: true,
@@ -95,6 +119,9 @@ export async function POST(request: NextRequest) {
       printers,
     });
   } catch (error) {
+    if (error instanceof PrinterOwnershipError) {
+      return Response.json({ error: error.message }, { status: 403 });
+    }
     logError("agent_heartbeat_failed", error);
     return Response.json(
       { error: "Unable to process heartbeat." },

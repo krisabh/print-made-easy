@@ -8,7 +8,7 @@ Local Windows bridge between  PrintMadeEasy and your printer.
 - Detect installed Windows printers
 - Select and remember default printer
 - Test print
-- Start with Windows (optional)
+- Start with Windows (enabled by default; can be turned off in the Agent UI)
 - Temporary job folder cleanup on startup
 
 Cloud job printing is included: the Agent polls the Next.js APIs over HTTP.

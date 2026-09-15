@@ -61,14 +61,49 @@ model Shop {
   settings               Settings?
   subscription           Subscription?
   billingPayments        BillingPayment[]
+  /**
+   * Feature 2 — multi-device Agent credentials (Phase 2B.1+).
+   * Pairing registration writes AgentDevice rows; Shop.agent* remains the legacy shim.
+   */
+  agentDevices           AgentDevice[]
 
   @@index([agentId])
   @@index([agentPairingTokenHash])
 }
 
+/**
+ * Feature 2 — multi-device Agent credential row.
+ * Phase 2B.1: pairing registration upserts this table; auth prefers tokenHash here,
+ * then falls back to Shop.agentTokenHash. tokenHash is SHA-256 hex only.
+ */
+model AgentDevice {
+  id          String     @id @default(uuid())
+  shopId      String
+  agentId     String     @db.VarChar(128)
+  tokenHash   String     @db.VarChar(128)
+  lastSeen    DateTime?
+  /**
+   * Feature 2 Phase 2C.3 — device-local default printer (AgentDevice auth).
+   * Source of truth for device-authenticated Agents.
+   * Legacy Shop-token Agents continue to use Printer.isDefault (shop-wide).
+   */
+  localDefaultPrinterId String?  @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  shop        Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  claimedJobs PrintJob[]
+  printers    Printer[]  @relation("PrinterOwnedByAgentDevice")
+  localDefaultPrinter Printer? @relation("AgentDeviceLocalDefault", fields: [localDefaultPrinterId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, agentId])
+  @@index([shopId])
+  @@index([tokenHash])
+}
+
 model PrintPrice {
   id            String   @id @default(uuid())
   shopId        String   @unique
+  /// B&W single-side rate per page (INR). New shops default to ₹5.00.
   bwSingle      Decimal  @db.Decimal(10, 2)
   bwDouble      Decimal  @db.Decimal(10, 2)
   colorSingle   Decimal  @db.Decimal(10, 2)
@@ -82,9 +117,19 @@ model PrintPrice {
 model Printer {
   id             String    @id @default(uuid())
   shopId         String
+  /**
+   * Feature 2 Phase 2C.2 — AgentDevice ownership for device-authenticated Agents.
+   * Null = legacy shop-token Agent rows (shop-scoped upsert).
+   * When set, must belong to the same Shop as shopId (enforced in upsert).
+   */
+  agentDeviceId  String?
   printerName    String    @db.VarChar(255)
   printerModel   String?   @db.VarChar(255)
   printerType    String?   @db.VarChar(64)
+  /**
+   * Shop-wide default — authoritative only for legacy Shop-token Agents.
+   * AgentDevice auth uses AgentDevice.localDefaultPrinterId instead.
+   */
   isDefault      Boolean   @default(false)
   /** Manual shopkeeper setting — never auto-detected. Default false = safe (no Color UI later). */
   colorSupported Boolean   @default(false)
@@ -92,10 +137,16 @@ model Printer {
   lastSeen       DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  shop           Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop            Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  agentDevice     AgentDevice? @relation("PrinterOwnedByAgentDevice", fields: [agentDeviceId], references: [id], onDelete: SetNull)
+  localDefaultFor AgentDevice[] @relation("AgentDeviceLocalDefault")
 
-  @@unique([shopId, printerName])
+  // Phase 2C.2: device-scoped identity. Shop-level (shopId, printerName) unique
+  // was dropped so Agent A and Agent B may both own "Canon" in the same Shop.
+  @@unique([agentDeviceId, printerName])
   @@index([shopId])
+  @@index([shopId, printerName])
+  @@index([agentDeviceId])
 }
 
 model Inventory {
@@ -127,9 +178,18 @@ model PrintJob {
   status        PrintStatus    @default(PENDING)
   printAttempts Int            @default(0)
   lastError     String?        @db.Text
+  /**
+   * Feature 2 Phase 2E — AgentDevice claim ownership while PRINTING.
+   * Set atomically on PENDING → PRINTING for device-authenticated Agents.
+   * Cleared when released/recovered to PENDING. Retained on COMPLETED/FAILED for history.
+   * Legacy Shop-token claims may leave claimedByAgentDeviceId NULL.
+   */
+  claimedByAgentDeviceId String?
+  claimedAt              DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  claimedByAgentDevice AgentDevice? @relation(fields: [claimedByAgentDeviceId], references: [id], onDelete: SetNull)
   files         PrintJobFile[]
 
   @@unique([shopId, jobSequence])
@@ -138,6 +198,7 @@ model PrintJob {
   @@index([createdAt])
   @@index([shopId])
   @@index([shopId, status])
+  @@index([claimedByAgentDeviceId])
 }
 
 model PrintJobFile {

@@ -144,10 +144,16 @@ function formatDateTimeIn(value: Date | null | undefined) {
 
 /**
  * Agent status using the same offline window as print-agent-auth (AGENT_OFFLINE_MS).
+ * Feature 2 Phase 2D: optional deviceLastSeenMax aggregates AgentDevice heartbeats
+ * with legacy Shop.agentLastSeen (freshest wins for display / online check).
  */
 export function getAdminAgentStatus(input: {
   agentId: string | null | undefined;
   agentLastSeen: Date | null | undefined;
+  /** Max AgentDevice.lastSeen for the shop (optional device-aware aggregate). */
+  deviceLastSeenMax?: Date | null | undefined;
+  /** True when the shop has at least one AgentDevice row. */
+  hasAgentDevice?: boolean;
   now?: Date;
 }): {
   status: AdminAgentStatusLabel;
@@ -155,10 +161,27 @@ export function getAdminAgentStatus(input: {
   lastSeenLabel: string | null;
 } {
   const now = input.now || new Date();
-  const lastSeen = input.agentLastSeen ?? null;
+  const legacyMs = input.agentLastSeen
+    ? new Date(input.agentLastSeen).getTime()
+    : null;
+  const deviceMs = input.deviceLastSeenMax
+    ? new Date(input.deviceLastSeenMax).getTime()
+    : null;
+  let lastSeen: Date | null = null;
+  if (legacyMs != null && deviceMs != null) {
+    lastSeen = new Date(Math.max(legacyMs, deviceMs));
+  } else if (legacyMs != null) {
+    lastSeen = new Date(legacyMs);
+  } else if (deviceMs != null) {
+    lastSeen = new Date(deviceMs);
+  }
 
   let status: AdminAgentStatusLabel;
-  if (!lastSeen && !input.agentId) {
+  if (
+    !lastSeen &&
+    !input.agentId &&
+    !input.hasAgentDevice
+  ) {
     status = "Never connected";
   } else if (!lastSeen) {
     status = "Never connected";
@@ -346,6 +369,9 @@ export async function listAdminShops(input: {
           createdAt: true,
           agentId: true,
           agentLastSeen: true,
+          agentDevices: {
+            select: { lastSeen: true },
+          },
           owner: {
             select: {
               name: true,
@@ -398,9 +424,21 @@ export async function listAdminShops(input: {
         : null;
 
       const subscription = formatAdminSubscriptionLabel(sub, now);
+      const deviceLastSeenMax = shop.agentDevices.reduce<Date | null>(
+        (max, device) => {
+          if (!device.lastSeen) return max;
+          if (!max || device.lastSeen.getTime() > max.getTime()) {
+            return device.lastSeen;
+          }
+          return max;
+        },
+        null,
+      );
       const agent = getAdminAgentStatus({
         agentId: shop.agentId,
         agentLastSeen: shop.agentLastSeen,
+        deviceLastSeenMax,
+        hasAgentDevice: shop.agentDevices.length > 0,
         now,
       });
 
@@ -440,6 +478,9 @@ export async function getAdminShopDetail(
       createdAt: true,
       agentId: true,
       agentLastSeen: true,
+      agentDevices: {
+        select: { lastSeen: true },
+      },
       owner: {
         select: {
           id: true,
@@ -515,9 +556,21 @@ export async function getAdminShopDetail(
   const access = getSubscriptionAccess(sub, now);
   const view = toPublicSubscriptionView(sub, now);
   const labelInfo = formatAdminSubscriptionLabel(sub, now);
+  const deviceLastSeenMax = shop.agentDevices.reduce<Date | null>(
+    (max, device) => {
+      if (!device.lastSeen) return max;
+      if (!max || device.lastSeen.getTime() > max.getTime()) {
+        return device.lastSeen;
+      }
+      return max;
+    },
+    null,
+  );
   const agent = getAdminAgentStatus({
     agentId: shop.agentId,
     agentLastSeen: shop.agentLastSeen,
+    deviceLastSeenMax,
+    hasAgentDevice: shop.agentDevices.length > 0,
     now,
   });
 

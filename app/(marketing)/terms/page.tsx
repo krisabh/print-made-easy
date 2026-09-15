@@ -27,7 +27,7 @@ export default function TermsPage() {
             These Terms &amp; Conditions (&quot;Terms&quot;) govern access to and
             use of PrintMadeEasy ({SITE.url}), a print-shop management software
             platform for shopkeepers and print-shop owners. PrintMadeEasy is a
-            product of Clauras and is operated by Ramyad Enterprises.
+            Clauras product, powered by Ramyad Enterprises - Abhiram.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
@@ -133,8 +133,8 @@ export default function TermsPage() {
           </h2>
           <p>
             PrintMadeEasy software, branding, and related materials remain the
-            property of Ramyad Enterprises / Clauras and their licensors, as
-            applicable. Your subscription grants
+            property of Ramyad Enterprises - Abhiram / Clauras and their
+            licensors, as applicable. Your subscription grants
             a limited right to use the PrintMadeEasy service for your shop during an active
             trial or paid period. You retain rights to content you upload,
             subject to the processing needed to provide the service.

@@ -12,7 +12,9 @@ export default async function PrintPricingPage() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Print Pricing</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Set the prices your customers pay for printing at your shop.
+          Set what customers pay for printing at your shop. Default Black &amp;
+          White is ₹5 per page. This is separate from your ₹199/month
+          PrintMadeEasy subscription.
         </p>
       </div>
 

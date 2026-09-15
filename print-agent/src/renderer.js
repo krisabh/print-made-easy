@@ -20,8 +20,11 @@
   const connectCard = document.getElementById("connectCard");
 
   const connectHint = document.getElementById("connectHint");
-  const pairingUrlInput = document.getElementById("pairingUrlInput");
-  const connectUrlBtn = document.getElementById("connectUrlBtn");
+  const loginPanel = document.getElementById("loginPanel");
+  const signedInPanel = document.getElementById("signedInPanel");
+  const loginEmail = document.getElementById("loginEmail");
+  const loginPassword = document.getElementById("loginPassword");
+  const loginBtn = document.getElementById("loginBtn");
   const pairSuccess = document.getElementById("pairSuccess");
 
   let connecting = false;
@@ -218,8 +221,17 @@
     }
 
     if (connectCard) {
-      // Keep connect card visible so shopkeeper can re-pair if needed.
       connectCard.style.display = "block";
+    }
+
+    if (loginPanel && signedInPanel) {
+      if (paired) {
+        loginPanel.style.display = "none";
+        signedInPanel.classList.remove("hidden");
+      } else {
+        loginPanel.style.display = "block";
+        signedInPanel.classList.add("hidden");
+      }
     }
 
     const available = state.selectedPrinterAvailable !== false;
@@ -260,14 +272,14 @@
             (state.connection && state.connection.message) ||
             "Waiting for backend"
           }`
-      : "Paste the connection link from Dashboard → Printers.";
+      : "Sign in with your PrintMadeEasy email and password.";
 
     openAtLogin.checked = Boolean(config.openAtLogin);
 
     if (connectHint) {
       connectHint.textContent = paired
-        ? "This Agent is paired. Paste a new connection link only if you need to reconnect to another shop."
-        : "Paste the connection link from Dashboard → Printers.";
+        ? "Signed in. Use the same account on another computer to connect it too."
+        : "Sign in with your PrintMadeEasy email and password. Use the same account on multiple computers.";
     }
 
     renderColorSupport(state);
@@ -303,43 +315,55 @@
       .replace(/"/g, "&quot;");
   }
 
-  async function connectWithUrl(url) {
+  async function loginWithAccount() {
     if (connecting) return;
     connecting = true;
     clearConnectMessage();
-    setConnectMessage("Connecting…", true);
-    connectUrlBtn.disabled = true;
+    setConnectMessage("Signing in…", true);
+    if (loginBtn) loginBtn.disabled = true;
 
     try {
-      const result = await window.printAgent.connectPairingUrl(url);
+      const email = loginEmail ? loginEmail.value.trim() : "";
+      const password = loginPassword ? loginPassword.value : "";
+      if (!email || !password) {
+        throw new Error("Enter your email and password.");
+      }
+      const result = await window.printAgent.loginAccount({ email, password });
       if (!result || result.success === false) {
         throw new Error(
           (result && result.error) ||
-            "Unable to connect to PrintMadeEasy. Check your internet connection."
+            "Unable to sign in. Check your internet connection."
         );
       }
-      setConnectMessage("Connected successfully.", true);
+      if (loginPassword) loginPassword.value = "";
+      setConnectMessage("Signed in successfully.", true);
       showPairSuccess(result);
       await refresh();
     } catch (error) {
       setConnectMessage(
-        error instanceof Error ? error.message : "Unable to connect.",
+        error instanceof Error ? error.message : "Unable to sign in.",
         false
       );
     } finally {
       connecting = false;
-      connectUrlBtn.disabled = false;
+      if (loginBtn) loginBtn.disabled = false;
     }
   }
 
-  connectUrlBtn.addEventListener("click", () => {
-    const url = pairingUrlInput.value.trim();
-    if (!url) {
-      setConnectMessage("Paste the connection link from your dashboard.", false);
-      return;
-    }
-    void connectWithUrl(url);
-  });
+  if (loginBtn) {
+    loginBtn.addEventListener("click", () => {
+      void loginWithAccount();
+    });
+  }
+
+  if (loginPassword) {
+    loginPassword.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void loginWithAccount();
+      }
+    });
+  }
 
   printerSelect.addEventListener("change", async () => {
     if (!printerSelect.value) return;
@@ -383,15 +407,15 @@
       openAtLogin.checked = Boolean(result.openAtLogin);
       setMessage(
         result.openAtLogin
-          ? "Start with Windows enabled."
-          : "Start with Windows disabled."
+          ? "Agent will start when Windows starts."
+          : "Agent will not start automatically with Windows."
       );
     } catch (error) {
       openAtLogin.checked = !openAtLogin.checked;
       setMessage(
         error instanceof Error
           ? error.message
-          : "Could not update Start with Windows.",
+          : "Could not update Windows startup setting.",
         false
       );
     }

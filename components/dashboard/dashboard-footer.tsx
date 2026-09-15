@@ -39,9 +39,14 @@ export function DashboardFooter() {
     <footer className="mt-auto border-t border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:px-6">
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <p className="text-[11px] font-semibold tracking-[0.1em] text-slate-400 uppercase">
-            {SITE.name}
-          </p>
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.1em] text-slate-400 uppercase">
+              {SITE.name}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+              {SITE.identityCompact}
+            </p>
+          </div>
           <LinkRow
             links={DASHBOARD_FOOTER_PRIMARY_LINKS}
             ariaLabel="Product and support"

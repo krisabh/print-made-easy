@@ -90,14 +90,7 @@ async function main() {
       status: "online",
       isDefault: true,
     });
-    let rowA = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    let rowA = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(rowA.colorSupported, false);
     console.log("PASS Test 1 new printer colorSupported=false");
 
@@ -109,14 +102,7 @@ async function main() {
     });
     assert.equal(setResult.ok, true);
     if (setResult.ok) assert.equal(setResult.printer.colorSupported, true);
-    rowA = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    rowA = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(rowA.colorSupported, true);
     console.log("PASS Test 2 explicit enable");
 
@@ -127,14 +113,7 @@ async function main() {
       colorSupported: false,
     });
     assert.equal(setResult.ok, true);
-    rowA = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    rowA = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(rowA.colorSupported, false);
     console.log("PASS Test 3 explicit disable");
 
@@ -165,14 +144,7 @@ async function main() {
     const hbBody = (await hb.json()) as {
       printers: Array<{ printerName: string; colorSupported: boolean }>;
     };
-    rowA = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    rowA = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(rowA.colorSupported, true);
     assert.equal(
       hbBody.printers.find((p) => p.printerName === "Printer A")
@@ -200,14 +172,7 @@ async function main() {
       ),
     );
     assert.equal(hb.status, 200);
-    rowA = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    rowA = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(rowA.colorSupported, false);
     console.log("PASS Test 5 heartbeat preserves false");
 
@@ -228,22 +193,8 @@ async function main() {
       printerName: "Printer B",
       colorSupported: false,
     });
-    const a6 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
-    const b6 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer B",
-        },
-      },
-    });
+    const a6 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
+    const b6 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer B", } });
     assert.equal(a6.colorSupported, true);
     assert.equal(b6.colorSupported, false);
     console.log("PASS Test 6 separate capabilities");
@@ -282,22 +233,8 @@ async function main() {
       ),
     );
     assert.equal(hb.status, 200);
-    const a7 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
-    const b7 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer B",
-        },
-      },
-    });
+    const a7 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
+    const b7 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer B", } });
     assert.equal(a7.isDefault, false);
     assert.equal(a7.colorSupported, true);
     assert.equal(b7.isDefault, true);
@@ -335,14 +272,7 @@ async function main() {
       ),
     );
     assert.equal(hb.status, 200);
-    const a8 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    const a8 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(a8.isDefault, true);
     assert.equal(a8.colorSupported, true);
     const stillExists = await prisma.printer.count({
@@ -368,14 +298,7 @@ async function main() {
       ),
     );
     assert.equal(hb.status, 200);
-    const a9 = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer A",
-        },
-      },
-    });
+    const a9 = await prisma.printer.findFirstOrThrow({ where: { shopId: shopA.id, printerName: "Printer A", } });
     assert.equal(a9.colorSupported, true);
     assert.equal(a9.isDefault, true);
     console.log("PASS Test 9 return keeps colorSupported=true");
@@ -407,24 +330,10 @@ async function main() {
     );
     assert.equal(cross.status, 200);
 
-    const bOnly = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shopB.id,
-          printerName: "Printer B-Only",
-        },
-      },
-    });
+    const bOnly = await prisma.printer.findFirstOrThrow({ where: { shopId: shopB.id, printerName: "Printer B-Only", } });
     assert.equal(bOnly.colorSupported, false);
 
-    const aCross = await prisma.printer.findUnique({
-      where: {
-        shopId_printerName: {
-          shopId: shopA.id,
-          printerName: "Printer B-Only",
-        },
-      },
-    });
+    const aCross = await prisma.printer.findFirst({ where: { shopId: shopA.id, printerName: "Printer B-Only", } });
     assert.equal(aCross?.colorSupported, true);
 
     // Shop B agent can update its own printer

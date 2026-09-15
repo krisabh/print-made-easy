@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -105,14 +105,14 @@
       .dot.ok { background: var(--green); }
       .dot.warn { background: var(--amber); }
       .dot.bad { background: var(--red); }
-      select, button, input[type="text"], textarea {
+      select, button, input[type="text"], input[type="email"], input[type="password"], textarea {
         width: 100%;
         min-height: 40px;
         border-radius: 9px;
         border: 1px solid var(--border);
         font: inherit;
       }
-      select, input[type="text"], textarea {
+      select, input[type="text"], input[type="email"], input[type="password"], textarea {
         padding: 8px 11px;
         background: white;
         color: var(--text);
@@ -239,7 +239,7 @@
     <div class="app">
       <header class="topbar">
         <div class="brand">PrintMadeEasy</div>
-        <div id="headerPill" class="pill">Checking…</div>
+        <div id="headerPill" class="pill">Checkingâ€¦</div>
       </header>
 
       <main>
@@ -249,24 +249,40 @@
             <span id="agentDot" class="dot ok"></span>
             <span id="agentStatus">Agent Running</span>
           </div>
-          <div class="meta" id="connectionMeta">Checking backend…</div>
+          <div class="meta" id="connectionMeta">Checking backendâ€¦</div>
         </section>
 
         <section class="card" id="connectCard">
-          <div class="label">Connect Shop</div>
+          <div class="label">Sign in</div>
           <p class="hint" id="connectHint">
-            Paste the connection link from Dashboard → Printers.
+            Sign in with your PrintMadeEasy email and password. Use the same
+            account on multiple computers.
           </p>
-          <div id="manualPanel">
-            <label class="label" for="pairingUrlInput">Connection link</label>
-            <textarea
-              id="pairingUrlInput"
-              placeholder="https://clauras.com/agent/connect?t=..."
-              aria-label="Connection link"
-            ></textarea>
-            <div class="actions" style="margin-top: 8px">
-              <button id="connectUrlBtn" type="button">Connect</button>
+          <div id="loginPanel">
+            <label class="label" for="loginEmail">Email</label>
+            <input
+              id="loginEmail"
+              type="email"
+              autocomplete="username"
+              placeholder="shop@example.com"
+              aria-label="Email"
+            />
+            <label class="label" for="loginPassword" style="margin-top: 10px"
+              >Password</label
+            >
+            <input
+              id="loginPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Password"
+              aria-label="Password"
+            />
+            <div class="actions" style="margin-top: 10px">
+              <button id="loginBtn" type="button">Login</button>
             </div>
+          </div>
+          <div id="signedInPanel" class="success-box hidden" style="margin-top: 12px">
+            Signed in to this shop. Jobs will print on the selected default printer.
           </div>
           <div id="pairSuccess" class="success-box hidden" style="margin-top: 12px"></div>
           <div id="connectMessage" class="message"></div>
@@ -316,9 +332,9 @@
           <label class="checkbox" for="openAtLogin">
             <input id="openAtLogin" type="checkbox" />
             <span>
-              <strong>Start with Windows</strong><br />
+              <strong>Start PrintMadeEasy Agent when Windows starts</strong><br />
               <span class="meta" style="margin-top: 2px">
-                Launch this Agent automatically when your PC starts.
+                Enabled by default. Uncheck to stop auto-start on the next Windows login.
               </span>
             </span>
           </label>

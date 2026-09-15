@@ -5,7 +5,7 @@ import { Readable } from "stream";
 import { NextRequest } from "next/server";
 import { PrintStatus } from "@prisma/client";
 
-import { authenticateAgent } from "@/lib/print-agent-auth";
+import { authenticateAgentContext } from "@/lib/print-agent-auth";
 import { prisma } from "@/lib/prisma";
 import { getContentType, getStoredFilePath } from "@/lib/storage";
 
@@ -15,20 +15,30 @@ type RouteContext = {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const shop = await authenticateAgent(request);
-    if (!shop) {
+    const auth = await authenticateAgentContext(request);
+    if (!auth) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
     }
 
+    const shop = auth.shop;
+    const agentDeviceId = auth.agentDeviceId;
     const { jobId } = await context.params;
     const fileId = request.nextUrl.searchParams.get("fileId");
 
     const job = await prisma.printJob.findFirst({
-      where: {
-        id: jobId,
-        shopId: shop.id,
-        status: PrintStatus.PRINTING,
-      },
+      where: agentDeviceId
+        ? {
+            id: jobId,
+            shopId: shop.id,
+            status: PrintStatus.PRINTING,
+            claimedByAgentDeviceId: agentDeviceId,
+          }
+        : {
+            id: jobId,
+            shopId: shop.id,
+            status: PrintStatus.PRINTING,
+            claimedByAgentDeviceId: null,
+          },
       include: {
         files: {
           where: {

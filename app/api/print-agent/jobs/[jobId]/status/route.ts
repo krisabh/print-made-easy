@@ -2,7 +2,10 @@ import { NextRequest } from "next/server";
 import { PrintStatus } from "@prisma/client";
 import { z } from "zod";
 
-import { authenticateAgent, MAX_PRINT_ATTEMPTS } from "@/lib/print-agent-auth";
+import {
+  authenticateAgentContext,
+  MAX_PRINT_ATTEMPTS,
+} from "@/lib/print-agent-auth";
 import {
   claimJob,
   markFilePrinted,
@@ -24,10 +27,13 @@ const statusSchema = z.object({
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const shop = await authenticateAgent(request);
-    if (!shop) {
+    const auth = await authenticateAgentContext(request);
+    if (!auth) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
     }
+
+    const shop = auth.shop;
+    const deviceScope = { agentDeviceId: auth.agentDeviceId };
 
     const { jobId } = await context.params;
     const body = await request.json();
@@ -52,7 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     if (parsed.data.status === "PRINTING") {
-      const claimed = await claimJob(shop.id, jobId);
+      const claimed = await claimJob(shop.id, jobId, deviceScope);
       if (!claimed) {
         return Response.json(
           { error: "Job could not be claimed. It may already be printing." },
@@ -96,7 +102,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
         return Response.json({ error: "fileId is required." }, { status: 400 });
       }
 
-      const file = await markFilePrinted(shop.id, jobId, parsed.data.fileId);
+      const file = await markFilePrinted(
+        shop.id,
+        jobId,
+        parsed.data.fileId,
+        deviceScope,
+      );
       if (!file) {
         return Response.json(
           { error: "File not found for this job." },
@@ -121,7 +132,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         );
       }
 
-      const updated = await markJobReady(shop.id, jobId);
+      const updated = await markJobReady(shop.id, jobId, deviceScope);
       if (!updated) {
         return Response.json({ error: "Unable to complete job." }, { status: 409 });
       }
@@ -149,6 +160,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       shop.id,
       jobId,
       parsed.data.error || "Print failed.",
+      deviceScope,
     );
 
     if (!released) {

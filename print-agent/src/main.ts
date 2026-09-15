@@ -21,6 +21,7 @@ import {
   updateConfig,
   getConfigPaths,
   isAgentPaired,
+  LOGIN_ITEM_NAME,
 } from "./config";
 import { connectWithPairingUrl, PairingError } from "./pairing";
 import { processPendingJobs, runTestPrint } from "./job-service";
@@ -182,6 +183,25 @@ async function handleWindowClose(event: Electron.Event) {
     mainWindow.hide();
   } finally {
     closeDialogOpen = false;
+  }
+}
+
+function applyOpenAtLoginSetting(enabled: boolean) {
+  // Single Windows startup mechanism: Electron login items (HKCU Run).
+  // No service, scheduled task, or elevated startup.
+  app.setLoginItemSettings({
+    openAtLogin: Boolean(enabled),
+    path: process.execPath,
+    args: [],
+    name: LOGIN_ITEM_NAME,
+  });
+}
+
+function wasOpenedAtLogin() {
+  try {
+    return Boolean(app.getLoginItemSettings().wasOpenedAtLogin);
+  } catch {
+    return false;
   }
 }
 
@@ -394,7 +414,7 @@ function registerIpc() {
         connection = {
           status: "Disconnected",
           message:
-            "Not connected. Paste the dashboard connection link to connect this Agent.",
+            "Not connected. Sign in with your PrintMadeEasy email and password.",
         };
       } else if (light) {
         connection = lastConnection;
@@ -541,10 +561,7 @@ function registerIpc() {
   });
 
   ipcMain.handle("agent:set-open-at-login", async (_event, enabled: boolean) => {
-    app.setLoginItemSettings({
-      openAtLogin: Boolean(enabled),
-      path: process.execPath,
-    });
+    applyOpenAtLoginSetting(Boolean(enabled));
     return updateConfig({ openAtLogin: Boolean(enabled) });
   });
 
@@ -588,6 +605,50 @@ function registerIpc() {
       }
     },
   );
+
+  ipcMain.handle(
+    "agent:login-account",
+    async (
+      _event,
+      input: { email?: string; password?: string },
+    ) => {
+      const email = typeof input?.email === "string" ? input.email.trim() : "";
+      const password =
+        typeof input?.password === "string" ? input.password : "";
+      if (!email || !password) {
+        throw new Error("Enter your email and password.");
+      }
+
+      const { loginWithAccount } = await import("./api-client.js");
+      const config = loadConfig();
+      try {
+        const result = await loginWithAccount({
+          email,
+          password,
+          selectedPrinter: config.selectedPrinter,
+        });
+
+        try {
+          await syncWithCloud();
+        } catch (error) {
+          console.error("Post-login sync failed:", error);
+        }
+
+        return {
+          success: true,
+          shopName: result.shop.shopName,
+          shopCode: result.shop.shopCode,
+          agentId: result.agentId,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to sign in. Check your internet connection.";
+        throw new Error(message);
+      }
+    },
+  );
 }
 
 function focusExistingAgent() {
@@ -619,13 +680,17 @@ if (!gotTheLock) {
     buildApplicationMenu();
     registerIpc();
     createTray();
-    createWindow();
 
     const config = loadConfig();
-    app.setLoginItemSettings({
-      openAtLogin: config.openAtLogin,
-      path: process.execPath,
-    });
+    applyOpenAtLoginSetting(config.openAtLogin);
+
+    // Windows login auto-start: stay in tray when already signed in.
+    // Unauthenticated first-run still shows the login UI.
+    // Manual launch always opens the UI.
+    const autoStarted = wasOpenedAtLogin();
+    if (!autoStarted || !isAgentPaired()) {
+      createWindow();
+    }
 
     if (isAgentPaired()) {
       try {

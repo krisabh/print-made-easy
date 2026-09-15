@@ -36,8 +36,9 @@ export function ShopSetupChecklist({
   const steps: Step[] = [
     {
       id: "agent",
-      title: "Install / Open PrintMadeEasy Agent",
-      description: "Run the PrintMadeEasy Agent on your shop computer.",
+      title: "Connect your PrintMadeEasy Agent",
+      description:
+        "Keep the Agent running on your computer so customer orders can reach your printer.",
       done: agentConnected,
       href: "/dashboard/printers",
       cta: "Open Printers",
@@ -47,7 +48,7 @@ export function ShopSetupChecklist({
       id: "printers",
       title: "Connect your printer",
       description:
-        "The Agent automatically detects the printers connected to this computer.",
+        "Keep your printer connected and ready. The Agent detects printers on this computer.",
       done: printerDetected,
       href: "/dashboard/printers",
       cta: "View printers",
@@ -89,8 +90,8 @@ export function ShopSetupChecklist({
             Set up your shop to accept print jobs
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Customer scans QR → uploads document → shop receives job → Agent
-            sends it to your default printer.
+            Keep internet on, keep the PrintMadeEasy Agent running, then show
+            your QR so customers can upload.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

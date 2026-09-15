@@ -8,6 +8,19 @@ export type PricingRates = {
   minimumCharge: number;
 };
 
+/** New-shop defaults. B&W single-side per page is the Phase 5 shop print price. */
+export const DEFAULT_PRINT_PRICING = {
+  bwSingle: 5,
+  bwDouble: 1.5,
+  colorSingle: 10,
+  colorDouble: 8,
+  minimumCharge: 5,
+} as const;
+
+/** Shopkeeper B&W per-page edit limits (INR). */
+export const BW_PRICE_PER_PAGE_MIN = 0.5;
+export const BW_PRICE_PER_PAGE_MAX = 100;
+
 export function toPricingRates(price: PrintPrice): PricingRates {
   return {
     bwSingle: Number(price.bwSingle),
@@ -16,6 +29,18 @@ export function toPricingRates(price: PrintPrice): PricingRates {
     colorDouble: Number(price.colorDouble),
     minimumCharge: Number(price.minimumCharge),
   };
+}
+
+/** True when value is finite and has at most 2 decimal places. */
+export function isValidMoneyAmount(value: number): boolean {
+  if (!Number.isFinite(value)) return false;
+  const cents = Math.round(value * 100);
+  return Math.abs(value * 100 - cents) < 1e-8;
+}
+
+/** Normalize to 2 decimal places for Decimal(10,2) storage. */
+export function normalizeMoneyAmount(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export async function getPricingByShopId(shopId: string): Promise<PricingRates | null> {
@@ -62,6 +87,11 @@ function getUnitPrice(
   return rates.colorDouble;
 }
 
+/**
+ * Job total at creation time.
+ * pages × copies × unitRate, floored by minimumCharge.
+ * Caller must persist the result on PrintJob.totalPrice (historical snapshot).
+ */
 export function calculatePrintCost(
   rates: PricingRates,
   totalPages: number,

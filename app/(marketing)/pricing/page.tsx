@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RegistrationDetails } from "@/components/marketing/company-identity";
 import {
   FinalCtaSection,
   PricingSection,
@@ -97,6 +98,23 @@ export default function PricingPage() {
               Terms &amp; Conditions
             </Link>
           </p>
+
+          <aside className="mt-10 max-w-xl rounded-2xl border border-slate-200 bg-[#f8fafc] p-5 sm:p-6">
+            <p className="text-xs font-semibold tracking-[0.14em] text-slate-500 uppercase">
+              Built by a registered business
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {SITE.relationship}
+            </p>
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <RegistrationDetails compact />
+            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              <Link href="/about" className="font-medium text-blue-700 hover:underline">
+                More about our business
+              </Link>
+            </p>
+          </aside>
         </div>
       </section>
       <PricingSection />

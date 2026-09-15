@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { allocateUniqueShopCode } from "@/lib/shop-code";
+import { DEFAULT_PRINT_PRICING } from "@/lib/pricing-service";
 import { createNestedTrialSubscription } from "@/lib/subscription";
 import type { ApiResponse } from "@/types";
 
@@ -35,14 +36,6 @@ const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email."),
   password: z.string().min(1, "Password is required."),
 });
-
-const DEFAULT_PRICING = {
-  bwSingle: 2,
-  bwDouble: 1.5,
-  colorSingle: 10,
-  colorDouble: 8,
-  minimumCharge: 5,
-};
 
 export async function signupAction(
   input: z.infer<typeof signupSchema>,
@@ -86,7 +79,7 @@ export async function signupAction(
           address: parsed.data.address,
           email,
           ownerId: createdUser.id,
-          printPrice: { create: DEFAULT_PRICING },
+          printPrice: { create: { ...DEFAULT_PRINT_PRICING } },
           settings: {
             create: {
               currency: "INR",

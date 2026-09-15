@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("printAgent", {
   openDashboard: () => ipcRenderer.invoke("agent:open-dashboard"),
   connectPairingUrl: (url: string) =>
     ipcRenderer.invoke("agent:connect-pairing-url", url),
+  loginAccount: (input: { email: string; password: string }) =>
+    ipcRenderer.invoke("agent:login-account", input),
   onRefresh: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("refresh-requested", listener);

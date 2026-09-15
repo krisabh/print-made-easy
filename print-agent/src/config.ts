@@ -55,8 +55,21 @@ export type AgentConfig = {
   agentId: string;
   authToken: string | null;
   selectedPrinter: string | null;
+  /** Start Agent when the Windows user logs in (enabled by default). */
   openAtLogin: boolean;
 };
+
+/** Login-item display / Run-key name — keep stable for install/uninstall. */
+export const LOGIN_ITEM_NAME = "PrintMadeEasy Agent";
+
+/**
+ * Resolve Start-with-Windows preference.
+ * Explicit false stays off; missing/undefined defaults to enabled.
+ */
+export function resolveOpenAtLogin(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  return true;
+}
 
 const APP_DIR =
   process.platform === "win32"
@@ -141,7 +154,7 @@ function getDefaultConfig(agentId: string): AgentConfig {
     agentId,
     authToken: null,
     selectedPrinter: null,
-    openAtLogin: false,
+    openAtLogin: true,
   };
 }
 
@@ -187,6 +200,12 @@ export function loadConfig(): AgentConfig {
 
     let config: AgentConfig;
 
+    const openAtLoginExplicit = Object.prototype.hasOwnProperty.call(
+      parsed,
+      "openAtLogin",
+    );
+    const openAtLogin = resolveOpenAtLogin(parsed.openAtLogin);
+
     if (paired) {
       config = {
         ...getDefaultConfig(identity.agentId),
@@ -197,7 +216,7 @@ export function loadConfig(): AgentConfig {
         agentId: identity.agentId,
         authToken: parsed.authToken ?? null,
         selectedPrinter: parsed.selectedPrinter ?? null,
-        openAtLogin: Boolean(parsed.openAtLogin),
+        openAtLogin,
       };
     } else if (isPackagedApp()) {
       config = {
@@ -209,7 +228,7 @@ export function loadConfig(): AgentConfig {
         agentId: identity.agentId,
         authToken: null,
         selectedPrinter: parsed.selectedPrinter ?? null,
-        openAtLogin: Boolean(parsed.openAtLogin),
+        openAtLogin,
       };
     } else {
       config = {
@@ -225,11 +244,12 @@ export function loadConfig(): AgentConfig {
         agentId: identity.agentId,
         authToken: null,
         selectedPrinter: parsed.selectedPrinter ?? null,
-        openAtLogin: Boolean(parsed.openAtLogin),
+        openAtLogin,
       };
     }
 
-    persistIfNeeded(config, identity.generated);
+    // Persist migrated default (missing openAtLogin → enabled) without touching agentId.
+    persistIfNeeded(config, identity.generated || !openAtLoginExplicit);
     return config;
   } catch (error) {
     console.error("Failed to read agent config:", error);

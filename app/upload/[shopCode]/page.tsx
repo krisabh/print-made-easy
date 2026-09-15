@@ -1,5 +1,8 @@
 import { UploadFormLoader } from "@/components/upload-form-loader";
-import { getShopDefaultColorSupported } from "@/lib/print-agent-service";
+import {
+  getShopAgentStatus,
+  getShopDefaultColorSupported,
+} from "@/lib/print-agent-service";
 import {
   getShopWithPricing,
   toPricingRates,
@@ -76,7 +79,11 @@ export default async function UploadPage({ params }: UploadPageProps) {
     );
   }
 
-  const colorSupported = await getShopDefaultColorSupported(shop.id);
+  const [colorSupported, agentStatus] = await Promise.all([
+    getShopDefaultColorSupported(shop.id),
+    getShopAgentStatus(shop.id),
+  ]);
+  const shopAgentOnline = Boolean(agentStatus?.connected);
 
   const shopContext: ShopUploadContext = {
     shopId: shop.id,
@@ -98,6 +105,22 @@ export default async function UploadPage({ params }: UploadPageProps) {
           </h1>
           <p className="text-sm text-slate-500">Print your documents easily</p>
         </header>
+
+        {!shopAgentOnline ? (
+          <div
+            className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3.5"
+            role="status"
+          >
+            <p className="text-sm font-semibold text-amber-950">
+              Shop temporarily unavailable
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/90">
+              This print shop is currently unavailable for printing. You can
+              still submit your order — it will print when the shop is ready.
+              Please try again later if printing is delayed.
+            </p>
+          </div>
+        ) : null}
 
         <UploadFormLoader shop={shopContext} />
       </div>

@@ -1,4 +1,5 @@
-import { SITE } from "@/lib/marketing";
+import { getWhatsAppSupportHref, SITE } from "@/lib/marketing";
+import { cn } from "@/lib/utils";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -13,15 +14,28 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-export function WhatsAppFloatingButton() {
+type FloatingProps = {
+  /** Extra bottom offset for dashboard footer safe area (shopkeeper shell). */
+  className?: string;
+};
+
+/**
+ * Floating WhatsApp support FAB.
+ * Marketing layout and dashboard shell mount this; customer upload does not.
+ */
+export function WhatsAppFloatingButton({ className }: FloatingProps = {}) {
   return (
     <a
-      href={SITE.whatsappHref}
+      href={getWhatsAppSupportHref()}
       target="_blank"
       rel="noopener noreferrer"
       title="Chat on WhatsApp"
-      aria-label="Chat on WhatsApp"
-      className="group fixed right-4 bottom-4 z-50 flex size-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg shadow-emerald-900/25 transition-transform hover:scale-105 hover:bg-[#1ebe57] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-500/40 sm:right-6 sm:bottom-6 sm:size-14"
+      aria-label={SITE.whatsappLabel}
+      className={cn(
+        "group fixed right-4 bottom-4 z-50 flex size-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg shadow-emerald-900/25 transition-transform hover:scale-105 hover:bg-[#1ebe57] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-emerald-500/40 sm:right-6 sm:bottom-6 sm:size-14",
+        "mb-[env(safe-area-inset-bottom)] mr-[env(safe-area-inset-right)]",
+        className,
+      )}
     >
       <WhatsAppIcon className="size-6 sm:size-7" />
       <span className="pointer-events-none absolute right-full mr-3 hidden whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 sm:block">
@@ -38,11 +52,11 @@ export function WhatsAppIconLink({
 }) {
   return (
     <a
-      href={SITE.whatsappHref}
+      href={getWhatsAppSupportHref()}
       target="_blank"
       rel="noopener noreferrer"
       title="Chat on WhatsApp"
-      aria-label="Chat on WhatsApp"
+      aria-label={SITE.whatsappLabel}
       className={
         className ??
         "inline-flex size-11 items-center justify-center rounded-full bg-[#25D366] text-white transition-colors hover:bg-[#1ebe57]"

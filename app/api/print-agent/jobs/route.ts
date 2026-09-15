@@ -1,19 +1,21 @@
 import { NextRequest } from "next/server";
 
-import { authenticateAgent } from "@/lib/print-agent-auth";
+import { authenticateAgentContext } from "@/lib/print-agent-auth";
 import { listPendingJobsForShop } from "@/lib/print-agent-service";
 
 export async function GET(request: NextRequest) {
   try {
-    const shop = await authenticateAgent(request);
-    if (!shop) {
+    const auth = await authenticateAgentContext(request);
+    if (!auth) {
       return Response.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    const jobs = await listPendingJobsForShop(shop.id);
+    const jobs = await listPendingJobsForShop(auth.shop.id, {
+      agentDeviceId: auth.agentDeviceId,
+    });
 
     return Response.json({
-      shopCode: shop.shopCode,
+      shopCode: auth.shop.shopCode,
       jobs: jobs.map((job) => ({
         ...job,
         createdAt: job.createdAt.toISOString(),

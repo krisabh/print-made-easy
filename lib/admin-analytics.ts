@@ -273,8 +273,8 @@ export async function getAdminAnalytics(input: {
     printModeRows,
     errorJobs,
     topShopRows,
-    onlineAgents,
-    offlineAgents,
+    onlineAgentsRows,
+    offlineAgentsRows,
   ] = await Promise.all([
     prisma.shop.count(),
     prisma.shop.count({ where: { isActive: true } }),
@@ -308,15 +308,57 @@ export async function getAdminAnalytics(input: {
       orderBy: { _sum: { totalPages: "desc" } },
       take: 10,
     }),
-    prisma.shop.count({ where: { agentId: { not: null }, agentLastSeen: { gte: onlineAfter } } }),
-    prisma.shop.count({ where: { agentId: { not: null }, agentLastSeen: { lt: onlineAfter } } }),
+    // Feature 2 Phase 2D — online = fresh AgentDevice OR fresh legacy Shop.agentLastSeen
+    prisma.$queryRaw<Array<{ c: bigint }>>`
+      SELECT COUNT(*) AS c FROM Shop s
+      WHERE EXISTS (
+        SELECT 1 FROM AgentDevice ad
+        WHERE ad.shopId = s.id
+          AND ad.lastSeen IS NOT NULL
+          AND ad.lastSeen >= ${onlineAfter}
+      )
+      OR (
+        s.agentLastSeen IS NOT NULL
+        AND s.agentLastSeen >= ${onlineAfter}
+      )
+    `,
+    prisma.$queryRaw<Array<{ c: bigint }>>`
+      SELECT COUNT(*) AS c FROM Shop s
+      WHERE (
+        EXISTS (SELECT 1 FROM AgentDevice ad WHERE ad.shopId = s.id AND ad.lastSeen IS NOT NULL)
+        OR s.agentLastSeen IS NOT NULL
+        OR s.agentId IS NOT NULL
+      )
+      AND NOT (
+        EXISTS (
+          SELECT 1 FROM AgentDevice ad
+          WHERE ad.shopId = s.id
+            AND ad.lastSeen IS NOT NULL
+            AND ad.lastSeen >= ${onlineAfter}
+        )
+        OR (
+          s.agentLastSeen IS NOT NULL
+          AND s.agentLastSeen >= ${onlineAfter}
+        )
+      )
+    `,
   ]);
+
+  const onlineAgents = Number(onlineAgentsRows[0]?.c ?? 0);
+  const offlineAgents = Number(offlineAgentsRows[0]?.c ?? 0);
 
   const topShopIds = topShopRows.map((row) => row.shopId);
   const topShopsMeta = topShopIds.length
     ? await prisma.shop.findMany({
         where: { id: { in: topShopIds } },
-        select: { id: true, shopName: true, shopCode: true, agentId: true, agentLastSeen: true },
+        select: {
+          id: true,
+          shopName: true,
+          shopCode: true,
+          agentId: true,
+          agentLastSeen: true,
+          agentDevices: { select: { lastSeen: true } },
+        },
       })
     : [];
   const topShopById = new Map(topShopsMeta.map((shop) => [shop.id, shop]));
@@ -406,9 +448,25 @@ export async function getAdminAnalytics(input: {
       const shop = topShopById.get(row.shopId);
       if (!shop) return [];
       const mode = modesByShop.get(shop.id) || { bwPages: 0, colorPages: 0 };
-      const agentStatus = !shop.agentLastSeen
+      const deviceLastSeenMax = shop.agentDevices.reduce<Date | null>(
+        (max, device) => {
+          if (!device.lastSeen) return max;
+          if (!max || device.lastSeen.getTime() > max.getTime()) {
+            return device.lastSeen;
+          }
+          return max;
+        },
+        null,
+      );
+      const freshestMs = Math.max(
+        shop.agentLastSeen?.getTime() ?? 0,
+        deviceLastSeenMax?.getTime() ?? 0,
+      );
+      const hasAnyHeartbeat =
+        Boolean(shop.agentLastSeen) || Boolean(deviceLastSeenMax);
+      const agentStatus = !hasAnyHeartbeat
         ? "Never connected"
-        : shop.agentLastSeen.getTime() >= onlineAfter.getTime()
+        : freshestMs >= onlineAfter.getTime()
           ? "Online"
           : "Offline";
       return [{

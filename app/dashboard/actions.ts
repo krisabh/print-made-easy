@@ -8,15 +8,40 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  BW_PRICE_PER_PAGE_MAX,
+  BW_PRICE_PER_PAGE_MIN,
+  isValidMoneyAmount,
+  normalizeMoneyAmount,
+} from "@/lib/pricing-service";
 import { hasSubscriptionAccess } from "@/lib/subscription";
 import type { ApiResponse } from "@/types";
 
+const moneyField = z.coerce
+  .number({ message: "Enter a valid amount." })
+  .refine((n) => Number.isFinite(n), "Enter a valid amount.")
+  .refine((n) => n >= 0, "Price cannot be negative.")
+  .refine(isValidMoneyAmount, "Use at most 2 decimal places.");
+
+const bwPriceField = z.coerce
+  .number({ message: "Enter a valid Black & White price." })
+  .refine((n) => Number.isFinite(n), "Enter a valid Black & White price.")
+  .refine(
+    (n) => n >= BW_PRICE_PER_PAGE_MIN,
+    `Black & White price must be at least ₹${BW_PRICE_PER_PAGE_MIN.toFixed(2)}.`,
+  )
+  .refine(
+    (n) => n <= BW_PRICE_PER_PAGE_MAX,
+    `Black & White price cannot exceed ₹${BW_PRICE_PER_PAGE_MAX.toFixed(2)}.`,
+  )
+  .refine(isValidMoneyAmount, "Use at most 2 decimal places.");
+
 const pricingSchema = z.object({
-  bwSingle: z.coerce.number().min(0, "Price cannot be negative."),
-  bwDouble: z.coerce.number().min(0, "Price cannot be negative."),
-  colorSingle: z.coerce.number().min(0, "Price cannot be negative."),
-  colorDouble: z.coerce.number().min(0, "Price cannot be negative."),
-  minimumCharge: z.coerce.number().min(0, "Price cannot be negative."),
+  bwSingle: bwPriceField,
+  bwDouble: moneyField,
+  colorSingle: moneyField,
+  colorDouble: moneyField,
+  minimumCharge: moneyField,
 });
 
 const settingsSchema = z.object({
@@ -58,9 +83,17 @@ export async function updatePricingAction(
       return { success: false, error: "Pricing configuration not found." };
     }
 
+    const data = {
+      bwSingle: normalizeMoneyAmount(parsed.data.bwSingle),
+      bwDouble: normalizeMoneyAmount(parsed.data.bwDouble),
+      colorSingle: normalizeMoneyAmount(parsed.data.colorSingle),
+      colorDouble: normalizeMoneyAmount(parsed.data.colorDouble),
+      minimumCharge: normalizeMoneyAmount(parsed.data.minimumCharge),
+    };
+
     await prisma.printPrice.update({
       where: { shopId: shop.id },
-      data: parsed.data,
+      data,
     });
 
     return { success: true };

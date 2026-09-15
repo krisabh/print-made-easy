@@ -185,14 +185,7 @@ async function main() {
       ),
     );
     assert.equal(hb2.status, 200);
-    const row = await prisma.printer.findUniqueOrThrow({
-      where: {
-        shopId_printerName: {
-          shopId: shop.id,
-          printerName: "New Color Printer",
-        },
-      },
-    });
+    const row = await prisma.printer.findFirstOrThrow({ where: { shopId: shop.id, printerName: "New Color Printer", } });
     assert.equal(row.colorSupported, true);
     console.log("PASS heartbeat colorUpdate persists across later heartbeats");
 

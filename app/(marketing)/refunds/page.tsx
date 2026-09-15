@@ -29,10 +29,10 @@ export default function RefundsPage() {
             and how refunds and billing questions are handled.
           </p>
           <p>
-            PrintMadeEasy, a product of Clauras operated by Ramyad Enterprises,
-            is a software subscription for print-shop owners (shopkeepers).
-            Customers who upload documents to a shop do not pay PrintMadeEasy
-            through this billing system.
+            PrintMadeEasy, a Clauras product powered by Ramyad Enterprises -
+            Abhiram, is a software subscription for print-shop owners
+            (shopkeepers). Customers who upload documents to a shop do not pay
+            PrintMadeEasy through this billing system.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">

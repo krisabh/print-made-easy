@@ -1,6 +1,9 @@
 /**
- * Phase 2B-1 smoke tests: agent pairing backend.
+ * Phase 2B-1 smoke tests: agent pairing backend (updated for AgentDevice credentials).
  * Run: npx tsx scripts/phase2b1-pairing-smoke.ts
+ *
+ * Pairing registration creates/upserts AgentDevice and does NOT overwrite
+ * Shop.agentTokenHash (Feature 2 Phase 2B.1).
  */
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
@@ -14,6 +17,7 @@ import {
   generatePairingToken,
   hashAgentToken,
   hashPairingToken,
+  resolveAgentAuth,
 } from "../lib/print-agent-auth";
 
 const prisma = new PrismaClient();
@@ -100,10 +104,23 @@ async function main() {
       where: { id: shopA.id },
       select: { agentPairingTokenHash: true },
     });
-    assert.equal(afterRotate.agentPairingTokenHash, hashPairingToken(second.pairingToken));
-    assert.notEqual(afterRotate.agentPairingTokenHash, hashPairingToken(pairingToken));
+    assert.equal(
+      afterRotate.agentPairingTokenHash,
+      hashPairingToken(second.pairingToken),
+    );
+    assert.notEqual(
+      afterRotate.agentPairingTokenHash,
+      hashPairingToken(pairingToken),
+    );
 
-    // 3) Register via pairing
+    // 3) Register via pairing → AgentDevice (Shop.agentTokenHash untouched)
+    const legacyShopHashBefore = (
+      await prisma.shop.findUniqueOrThrow({
+        where: { id: shopA.id },
+        select: { agentTokenHash: true, agentId: true },
+      })
+    ).agentTokenHash;
+
     const registerRes = await registerPost(
       asJsonRequest("http://localhost/api/print-agent/register", {
         pairingToken: second.pairingToken,
@@ -128,8 +145,29 @@ async function main() {
       },
     });
     assert.ok(afterUse.agentPairingUsedAt);
-    assert.equal(afterUse.agentTokenHash, hashAgentToken(registerBody.token!));
-    assert.equal(afterUse.agentId, `${shopA.shopCode}-AGENT-01`);
+    assert.equal(afterUse.agentTokenHash, legacyShopHashBefore);
+    assert.notEqual(
+      afterUse.agentTokenHash,
+      hashAgentToken(registerBody.token!),
+    );
+
+    const device = await prisma.agentDevice.findUniqueOrThrow({
+      where: {
+        shopId_agentId: {
+          shopId: shopA.id,
+          agentId: `${shopA.shopCode}-AGENT-01`,
+        },
+      },
+    });
+    assert.equal(device.tokenHash, hashAgentToken(registerBody.token!));
+    assert.notEqual(device.tokenHash, registerBody.token);
+
+    const auth = await resolveAgentAuth(registerBody.token!);
+    assert.ok(auth);
+    assert.equal(auth!.legacy, false);
+    assert.equal(auth!.shop.id, shopA.id);
+    assert.equal(auth!.agentDeviceId, device.id);
+    assert.equal(auth!.agentId, `${shopA.shopCode}-AGENT-01`);
 
     // 4) Reuse fails
     const reuse = await registerPost(
@@ -180,7 +218,6 @@ async function main() {
     );
     assert.equal(hb.status, 200);
 
-    // jobs route is GET
     const jobsRes = await jobsGet(
       new NextRequest("http://localhost/api/print-agent/jobs", {
         method: "GET",
@@ -204,13 +241,29 @@ async function main() {
         ),
       );
       assert.equal(legacy.status, 200);
+      const legacyBody = (await legacy.json()) as { token?: string };
+      assert.ok(legacyBody.token);
+      const shopAfterLegacy = await prisma.shop.findUniqueOrThrow({
+        where: { id: shopA.id },
+        select: { agentTokenHash: true, agentId: true },
+      });
+      assert.equal(
+        shopAfterLegacy.agentTokenHash,
+        hashAgentToken(legacyBody.token!),
+      );
+      assert.equal(shopAfterLegacy.agentId, `${shopA.shopCode}-LEGACY`);
       console.log("legacy setup-secret registration: ok");
     } else {
-      console.log("legacy setup-secret registration: skipped (no AGENT_SETUP_SECRET)");
+      console.log(
+        "legacy setup-secret registration: skipped (no AGENT_SETUP_SECRET)",
+      );
     }
 
     console.log("phase2b1-pairing-smoke: ok");
   } finally {
+    await prisma.agentDevice.deleteMany({
+      where: { shopId: { in: [shopA.id, shopB.id] } },
+    });
     await prisma.printer.deleteMany({
       where: { shopId: { in: [shopA.id, shopB.id] } },
     });

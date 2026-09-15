@@ -1,4 +1,5 @@
 import { JobsBoard } from "@/components/dashboard/jobs-board";
+import { PrintingPrerequisites } from "@/components/dashboard/printing-prerequisites";
 import { ShopSetupChecklist } from "@/components/dashboard/shop-setup-checklist";
 import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { SubscriptionStatusCard } from "@/components/dashboard/subscription-status-card";
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
     ]);
 
   const agentConnected = Boolean(agentStatus?.connected);
+  const agentEverConnected = Boolean(agentStatus?.lastSeen);
   const printerDetected = printers.length > 0;
   const defaultPrinter =
     printers.find((printer) => printer.isDefault) ?? null;
@@ -51,6 +53,10 @@ export default async function DashboardPage() {
       <SubscriptionStatusCard
         subscription={toPublicSubscriptionView(subscription)}
         showGraceWarning={access.isGracePeriod}
+      />
+      <PrintingPrerequisites
+        agentConnected={agentConnected}
+        agentEverConnected={agentEverConnected}
       />
       <ShopSetupChecklist
         agentConnected={agentConnected}
