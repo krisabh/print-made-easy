@@ -18,6 +18,17 @@
   const colorList = document.getElementById("colorList");
   const colorEmpty = document.getElementById("colorEmpty");
   const connectCard = document.getElementById("connectCard");
+  const updateBanner = document.getElementById("updateBanner");
+  const updateTitle = document.getElementById("updateTitle");
+  const updateMeta = document.getElementById("updateMeta");
+  const updateActions = document.getElementById("updateActions");
+  const updateNowBtn = document.getElementById("updateNowBtn");
+  const updateLaterBtn = document.getElementById("updateLaterBtn");
+  const updateCancelBtn = document.getElementById("updateCancelBtn");
+  const updateProgressWrap = document.getElementById("updateProgressWrap");
+  const updateProgressBar = document.getElementById("updateProgressBar");
+  const updateProgressLabel = document.getElementById("updateProgressLabel");
+  const checkUpdatesBtn = document.getElementById("checkUpdatesBtn");
 
   const connectHint = document.getElementById("connectHint");
   const loginPanel = document.getElementById("loginPanel");
@@ -29,6 +40,7 @@
 
   let connecting = false;
   let colorBusy = false;
+  let updateCheckBusy = false;
 
   function setMessage(text, ok = true) {
     message.textContent = text;
@@ -43,6 +55,157 @@
   function clearConnectMessage() {
     connectMessage.textContent = "";
     connectMessage.className = "message";
+  }
+
+  function renderUpdateState(update) {
+    if (!updateBanner || !updateTitle || !updateMeta || !updateActions) return;
+    const state = update || {};
+    const status = state.status || "idle";
+    const current = state.currentVersion || "";
+    const latest = state.latestVersion || "";
+    const notes = state.notes || "";
+    const dismissed = Boolean(state.dismissed);
+    const showAvailable =
+      status === "available" && state.updateAvailable && !dismissed;
+    const showDownloadBusy =
+      status === "downloading" || status === "verifying";
+    const showReady =
+      status === "readyToInstall" || status === "waitingForIdle";
+    const showInstalling = status === "installing";
+    const showUnavailable = status === "verificationUnavailable";
+
+    updateBanner.classList.toggle("available", showAvailable || showReady);
+    updateBanner.classList.toggle("downloading", status === "downloading");
+    updateBanner.classList.toggle("verifying", status === "verifying");
+    updateBanner.classList.toggle("ready", showReady || showInstalling);
+    updateBanner.classList.toggle("unavailable", showUnavailable);
+
+    if (updateNowBtn) {
+      updateNowBtn.style.display =
+        showAvailable || showReady ? "" : "none";
+      updateNowBtn.disabled = showDownloadBusy || showInstalling;
+      updateNowBtn.textContent = showReady ? "Update Now" : "Update Now";
+    }
+    if (updateLaterBtn) {
+      updateLaterBtn.style.display = showAvailable ? "" : "none";
+    }
+    if (updateCancelBtn) {
+      updateCancelBtn.style.display = showDownloadBusy ? "" : "none";
+      updateCancelBtn.disabled = false;
+    }
+
+    const showActions = showAvailable || showDownloadBusy || showReady;
+    updateActions.style.display = showActions ? "flex" : "none";
+
+    if (updateProgressWrap && updateProgressBar && updateProgressLabel) {
+      if (showDownloadBusy) {
+        updateProgressWrap.classList.add("show");
+        const pct = state.progressPercent;
+        if (typeof pct === "number" && Number.isFinite(pct)) {
+          updateProgressBar.classList.remove("indeterminate");
+          updateProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+          updateProgressLabel.textContent =
+            status === "verifying"
+              ? "Verifying update..."
+              : `Downloading update... ${Math.floor(pct)}%`;
+        } else {
+          updateProgressBar.classList.add("indeterminate");
+          updateProgressBar.style.width = "40%";
+          updateProgressLabel.textContent = "Downloading update...";
+        }
+      } else {
+        updateProgressWrap.classList.remove("show");
+        updateProgressBar.classList.remove("indeterminate");
+        updateProgressBar.style.width = "0%";
+        updateProgressLabel.textContent = "";
+      }
+    }
+
+    if (status === "checking") {
+      updateTitle.textContent = "Checking for updates...";
+      updateMeta.textContent = current ? `Current version: ${current}` : "";
+      return;
+    }
+
+    if (status === "downloading") {
+      updateTitle.textContent = "Downloading update...";
+      const lines = [];
+      if (latest) lines.push(`Version ${latest}`);
+      if (current) lines.push(`Current version: ${current}`);
+      updateMeta.textContent = lines.join("\n");
+      return;
+    }
+
+    if (status === "verifying") {
+      updateTitle.textContent = "Verifying update...";
+      updateMeta.textContent = latest
+        ? `Version ${latest}`
+        : current
+          ? `Current version: ${current}`
+          : "";
+      return;
+    }
+
+    if (showReady) {
+      if (status === "waitingForIdle") {
+        updateTitle.textContent = "Finish the current print job before updating.";
+      } else {
+        updateTitle.textContent = "Update ready";
+      }
+      const lines = [];
+      if (status === "waitingForIdle") {
+        lines.push(
+          state.userMessage ||
+            "Update will be available when printing finishes.",
+        );
+      } else {
+        lines.push(
+          state.userMessage ||
+            "Update downloaded and verified. Click Update Now to install.",
+        );
+      }
+      if (latest) lines.push(`Version ${latest}`);
+      if (state.fileName) lines.push(state.fileName);
+      updateMeta.textContent = lines.join("\n");
+      return;
+    }
+
+    if (showInstalling) {
+      updateTitle.textContent = "Installing update...";
+      updateMeta.textContent =
+        state.userMessage ||
+        "PrintMadeEasy Agent will restart automatically.";
+      return;
+    }
+
+    if (showUnavailable) {
+      updateTitle.textContent =
+        state.userMessage || "Update verification is not available yet.";
+      updateMeta.textContent = current ? `Current version: ${current}` : "";
+      return;
+    }
+
+    if (showAvailable) {
+      updateTitle.textContent = "New version available";
+      const lines = [`Version ${latest}`];
+      if (current) lines.push(`Current version: ${current}`);
+      if (notes) lines.push(notes);
+      updateMeta.textContent = lines.join("\n");
+      return;
+    }
+
+    if (status === "error" && state.userMessage) {
+      updateTitle.textContent = state.userMessage;
+      updateMeta.textContent = current ? `Current version: ${current}` : "";
+      return;
+    }
+
+    updateTitle.textContent = "You're up to date";
+    updateMeta.textContent = current
+      ? `Current version: ${current}`
+      : latest
+        ? `Latest version: ${latest}`
+        : "";
   }
 
   function renderColorSupport(state) {
@@ -163,6 +326,7 @@
     if (agentFooter) {
       agentFooter.textContent = `PrintMadeEasy Agent ${version}`;
     }
+    renderUpdateState(state.update);
 
     printerSelect.innerHTML = "";
     if (printers.length === 0 && !selectedPrinter) {
@@ -421,9 +585,112 @@
     }
   });
 
+  if (checkUpdatesBtn) {
+    checkUpdatesBtn.addEventListener("click", async () => {
+      if (updateCheckBusy) return;
+      updateCheckBusy = true;
+      checkUpdatesBtn.disabled = true;
+      try {
+        const prior =
+          typeof window.printAgent.getUpdateState === "function"
+            ? await window.printAgent.getUpdateState()
+            : null;
+        renderUpdateState({
+          ...(prior || {}),
+          status: "checking",
+          userMessage: "Checking for updates...",
+        });
+        const state = await window.printAgent.checkForUpdates();
+        renderUpdateState(state);
+        if (state && state.userMessage) {
+          setMessage(state.userMessage, state.status !== "error");
+        }
+      } catch {
+        renderUpdateState({
+          status: "error",
+          currentVersion: "",
+          latestVersion: null,
+          notes: null,
+          fileName: null,
+          updateAvailable: false,
+          dismissed: false,
+          userMessage: "Unable to check for updates right now.",
+          updateNowReady: false,
+        });
+        setMessage("Unable to check for updates right now.", false);
+      } finally {
+        updateCheckBusy = false;
+        checkUpdatesBtn.disabled = false;
+      }
+    });
+  }
+
+  if (updateLaterBtn) {
+    updateLaterBtn.addEventListener("click", async () => {
+      try {
+        const state = await window.printAgent.dismissUpdate();
+        renderUpdateState(state);
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  if (updateNowBtn) {
+    updateNowBtn.addEventListener("click", async () => {
+      updateNowBtn.disabled = true;
+      try {
+        const result = await window.printAgent.startUpdate();
+        if (result && result.accepted) {
+          setMessage(result.message || "Update in progress.", true);
+        } else if (result && result.code === "WAITING_FOR_IDLE") {
+          setMessage(
+            result.message ||
+              "Finish the current print job before updating.",
+            true,
+          );
+        } else {
+          setMessage(
+            (result && result.message) ||
+              "Unable to download the update right now.",
+            false,
+          );
+        }
+        if (typeof window.printAgent.getUpdateState === "function") {
+          const state = await window.printAgent.getUpdateState();
+          renderUpdateState(state);
+        }
+      } catch {
+        setMessage("Unable to download the update right now.", false);
+      }
+    });
+  }
+
+  if (updateCancelBtn) {
+    updateCancelBtn.addEventListener("click", async () => {
+      updateCancelBtn.disabled = true;
+      try {
+        const state = await window.printAgent.cancelUpdate();
+        renderUpdateState(state);
+        setMessage(
+          (state && state.userMessage) || "Update download was cancelled.",
+          true,
+        );
+      } catch {
+        setMessage("Update download was cancelled.", true);
+      }
+    });
+  }
+
   if (window.printAgent && typeof window.printAgent.onRefresh === "function") {
     window.printAgent.onRefresh(() => {
       refresh({ light: true }).catch(() => undefined);
+    });
+  }
+
+  if (window.printAgent && typeof window.printAgent.onUpdateStatus === "function") {
+    window.printAgent.onUpdateStatus((state) => {
+      renderUpdateState(state);
     });
   }
 

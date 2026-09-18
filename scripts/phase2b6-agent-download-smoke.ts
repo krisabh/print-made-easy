@@ -37,10 +37,10 @@ async function main() {
     assert.equal(WINDOWS_AGENT_DOWNLOAD.href, "/api/agent/download");
     assert.equal(
       WINDOWS_AGENT_DOWNLOAD.fileName,
-      "PrintMadeEasy-Agent-Setup-1.3.0.exe",
+      "PrintMadeEasy-Agent-Setup-1.4.0.exe",
     );
-    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.3.0");
-    console.log("1 PASS dashboard download metadata is Agent 1.3.0");
+    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.4.0");
+    console.log("1 PASS dashboard download metadata is Agent 1.4.0");
 
     const missingEnv = resolveWindowsAgentInstallerPath("");
     assert.equal(missingEnv.ok, false);

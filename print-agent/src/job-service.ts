@@ -25,9 +25,20 @@ import {
 import { runTestPrint as runInternalTestPrint } from "./test-print";
 
 let processing = false;
+let testPrintBusy = false;
+
+/** True while a cloud print job or test print is in progress. */
+export function isPrintOperationBusy(): boolean {
+  return processing || testPrintBusy;
+}
 
 export async function runTestPrint(printerName: string) {
-  return runInternalTestPrint(printerName);
+  testPrintBusy = true;
+  try {
+    return await runInternalTestPrint(printerName);
+  } finally {
+    testPrintBusy = false;
+  }
 }
 
 function trackLocalFile(localFiles: string[], filePath: string) {

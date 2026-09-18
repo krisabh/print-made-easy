@@ -93,9 +93,10 @@ function main() {
   assert.match(nsh, /CurrentVersion\\Run/);
   assert.equal(LOGIN_ITEM_NAME, "PrintMadeEasy Agent");
   assert.match(mainSrc, /setLoginItemSettings/);
+  assert.match(mainSrc, /removeLegacyElectronLoginItemIfOurs/);
   assert.ok(!JSON.stringify(pkg.build).includes("runAfterFinish"));
   assert.ok(!/"createStartupShortcut"\s*:\s*true/.test(JSON.stringify(pkg.build)));
-  console.log("K PASS single login-item mechanism + uninstall Run-key cleanup");
+  console.log("K PASS single login-item mechanism + legacy Run cleanup + uninstall");
 
   // L — login IPC still present
   assert.match(mainSrc, /agent:login-account/);

@@ -17,14 +17,14 @@ import {
   setPrinterColorSupported,
 } from "./api-client";
 import {
+  LOGIN_ITEM_NAME,
   loadConfig,
   updateConfig,
   getConfigPaths,
   isAgentPaired,
-  LOGIN_ITEM_NAME,
 } from "./config";
 import { connectWithPairingUrl, PairingError } from "./pairing";
-import { processPendingJobs, runTestPrint } from "./job-service";
+import { processPendingJobs, runTestPrint, isPrintOperationBusy } from "./job-service";
 import { detectPrinters } from "./printer-service";
 import {
   applyFirstRunPrinterIfNeeded,
@@ -37,6 +37,13 @@ import {
   cleanStartupOrphanTempFiles,
   ensureJobsDirectory,
 } from "./storage-service";
+import {
+  UPDATE_CHECK_INTERVAL_MS,
+  createUpdateChecker,
+  type UpdatePublicState,
+} from "./update-check";
+import { removeLegacyElectronLoginItemIfOurs } from "./login-item-migration";
+import { createWindowsHkcuRunStore } from "./windows-run-key-store";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -47,6 +54,7 @@ let closeDialogOpen = false;
 let pollTimer: NodeJS.Timeout | null = null;
 let heartbeatTimer: NodeJS.Timeout | null = null;
 let cleanupTimer: NodeJS.Timeout | null = null;
+let updateCheckTimer: NodeJS.Timeout | null = null;
 let backgroundLoopsStarted = false;
 let syncInFlight: Promise<{
   printers: Awaited<ReturnType<typeof detectPrinters>>;
@@ -99,11 +107,59 @@ function getAgentVersion() {
   return app.getVersion();
 }
 
+const updateChecker = createUpdateChecker({
+  getCurrentVersion: getAgentVersion,
+  getApiUrl: () => loadConfig().apiUrl || "https://clauras.com",
+  isBusy: () => isPrintOperationBusy(),
+  requestAgentExitForUpdate: () => {
+    // Installer already spawned detached. Exit without relaunch — NSIS --force-run starts the new Agent.
+    isQuitting = true;
+    if (pollTimer) clearInterval(pollTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (cleanupTimer) clearInterval(cleanupTimer);
+    if (updateCheckTimer) clearInterval(updateCheckTimer);
+    app.quit();
+  },
+  onStateChange: () => {
+    pushUpdateState();
+  },
+});
+
+function pushUpdateState(state?: UpdatePublicState) {
+  const snapshot = state ?? updateChecker.getPublicState();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("agent:update-status", snapshot);
+  }
+}
+
+async function runUpdateCheck(options?: { manual?: boolean }) {
+  const result = await updateChecker.runCheck(options);
+  pushUpdateState();
+  return result;
+}
+
+function startUpdateCheckLoops() {
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
+  // Non-blocking startup check shortly after ready.
+  setTimeout(() => {
+    void runUpdateCheck({ manual: false }).catch((error) => {
+      console.warn("Startup update check failed:", error);
+    });
+  }, 4_000);
+
+  updateCheckTimer = setInterval(() => {
+    void runUpdateCheck({ manual: false }).catch((error) => {
+      console.warn("Periodic update check failed:", error);
+    });
+  }, UPDATE_CHECK_INTERVAL_MS);
+}
+
 /** Completely stop Agent (tray + background). Single shutdown path. */
 function forceExitAgent() {
   isQuitting = true;
   if (pollTimer) clearInterval(pollTimer);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
   app.quit();
 }
 
@@ -111,6 +167,7 @@ function restartAgent() {
   isQuitting = true;
   if (pollTimer) clearInterval(pollTimer);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
   app.relaunch();
   app.exit(0);
 }
@@ -146,6 +203,19 @@ function buildApplicationMenu() {
           click: () => {
             void openDashboardInBrowser().catch((error) => {
               console.error("Open Dashboard failed:", error);
+            });
+          },
+        },
+        {
+          label: "Check for Updates",
+          click: () => {
+            void runUpdateCheck({ manual: true }).then(() => {
+              if (!mainWindow || mainWindow.isDestroyed()) {
+                createWindow();
+              } else {
+                mainWindow.show();
+                mainWindow.focus();
+              }
             });
           },
         },
@@ -195,6 +265,20 @@ function applyOpenAtLoginSetting(enabled: boolean) {
     args: [],
     name: LOGIN_ITEM_NAME,
   });
+
+  // 1.3.0 wrote electron.app.Electron (no name). Remove that orphan when it
+  // points at this Agent — ON or OFF — so upgrades do not leave duplicates
+  // and OFF is truly off.
+  if (process.platform === "win32") {
+    try {
+      removeLegacyElectronLoginItemIfOurs({
+        store: createWindowsHkcuRunStore(),
+        agentExecutablePath: process.execPath,
+      });
+    } catch (error) {
+      console.warn("Legacy auto-start Run key cleanup failed:", error);
+    }
+  }
 }
 
 function wasOpenedAtLogin() {
@@ -230,7 +314,11 @@ function createWindow() {
   });
 
   mainWindow.loadFile(getUiPath());
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    // Push any update state discovered while the window was closed.
+    pushUpdateState();
+  });
   mainWindow.on("close", (event) => {
     void handleWindowClose(event);
   });
@@ -441,6 +529,7 @@ function registerIpc() {
         printerCount: printers.length,
         paired: Boolean(latest.authToken),
         agentVersion: getAgentVersion(),
+        update: updateChecker.getPublicState(),
       };
     },
   );
@@ -565,6 +654,34 @@ function registerIpc() {
     return updateConfig({ openAtLogin: Boolean(enabled) });
   });
 
+  ipcMain.handle("agent:check-for-updates", async () => {
+    await runUpdateCheck({ manual: true });
+    return updateChecker.getPublicState();
+  });
+
+  ipcMain.handle("agent:dismiss-update", async () => {
+    updateChecker.dismissAvailable();
+    const state = updateChecker.getPublicState();
+    pushUpdateState(state);
+    return state;
+  });
+
+  ipcMain.handle("agent:start-update", async () => {
+    const result = await updateChecker.startUpdate();
+    pushUpdateState();
+    return result;
+  });
+
+  ipcMain.handle("agent:cancel-update", async () => {
+    const state = await updateChecker.cancelUpdateDownload();
+    pushUpdateState(state);
+    return state;
+  });
+
+  ipcMain.handle("agent:get-update-state", async () => {
+    return updateChecker.getPublicState();
+  });
+
   ipcMain.handle("agent:open-dashboard", async () => {
     await openDashboardInBrowser();
   });
@@ -676,6 +793,11 @@ if (!gotTheLock) {
   app.whenReady().then(async () => {
     ensureJobsDirectory();
     cleanStartupOrphanTempFiles();
+    try {
+      await updateChecker.startupUpdateCleanup();
+    } catch (error) {
+      console.warn("Update temp cleanup failed:", error);
+    }
 
     buildApplicationMenu();
     registerIpc();
@@ -701,6 +823,7 @@ if (!gotTheLock) {
     }
 
     startBackgroundLoops();
+    startUpdateCheckLoops();
   });
 
   app.on("window-all-closed", () => {});
@@ -710,6 +833,7 @@ if (!gotTheLock) {
     if (pollTimer) clearInterval(pollTimer);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (cleanupTimer) clearInterval(cleanupTimer);
+    if (updateCheckTimer) clearInterval(updateCheckTimer);
     // Best-effort: remove inactive orphans. Active print files stay protected.
     try {
       cleanStartupOrphanTempFiles();

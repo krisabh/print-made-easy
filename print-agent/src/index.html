@@ -179,6 +179,82 @@
         min-height: 16px;
       }
       .hidden { display: none !important; }
+      .update-banner {
+        margin-top: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+      }
+      .update-banner.available {
+        border-color: #93c5fd;
+        background: #dbeafe;
+      }
+      .update-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .update-meta {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .update-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .update-progress-wrap {
+        margin-top: 10px;
+        display: none;
+      }
+      .update-progress-wrap.show {
+        display: block;
+      }
+      .update-progress-track {
+        height: 8px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        overflow: hidden;
+      }
+      .update-progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: #2563eb;
+        transition: width 0.15s ease-out;
+      }
+      .update-progress-bar.indeterminate {
+        width: 40%;
+        animation: update-indeterminate 1.1s ease-in-out infinite;
+      }
+      @keyframes update-indeterminate {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(280%); }
+      }
+      .update-progress-label {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .update-banner.downloading,
+      .update-banner.verifying {
+        border-color: #93c5fd;
+        background: #eff6ff;
+      }
+      .update-banner.ready {
+        border-color: #86efac;
+        background: #ecfdf5;
+      }
+      .update-banner.unavailable {
+        border-color: #fcd34d;
+        background: #fffbeb;
+      }
       .success-box {
         background: #ecfdf5;
         border: 1px solid #a7f3d0;
@@ -312,6 +388,32 @@
           <div id="colorList"></div>
           <div class="meta" id="colorEmpty" style="display: none">
             Connect the Agent and detect printers to configure color support.
+          </div>
+        </section>
+
+        <section class="card" id="updateCard">
+          <div class="label">Updates</div>
+          <div id="updateBanner" class="update-banner">
+            <div class="update-title" id="updateTitle">Checking for updates...</div>
+            <div class="update-meta" id="updateMeta"></div>
+            <div class="update-progress-wrap" id="updateProgressWrap">
+              <div class="update-progress-track">
+                <div class="update-progress-bar" id="updateProgressBar"></div>
+              </div>
+              <div class="update-progress-label" id="updateProgressLabel"></div>
+            </div>
+            <div class="update-actions" id="updateActions" style="display: none">
+              <button id="updateNowBtn" type="button">Update Now</button>
+              <button id="updateLaterBtn" class="secondary" type="button">Later</button>
+              <button id="updateCancelBtn" class="secondary" type="button" style="display: none">
+                Cancel
+              </button>
+            </div>
+          </div>
+          <div class="actions" style="margin-top: 10px">
+            <button id="checkUpdatesBtn" class="secondary" type="button">
+              Check for Updates
+            </button>
           </div>
         </section>
 

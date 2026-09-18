@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld("printAgent", {
   setOpenAtLogin: (enabled: boolean) =>
     ipcRenderer.invoke("agent:set-open-at-login", enabled),
   openDashboard: () => ipcRenderer.invoke("agent:open-dashboard"),
+  checkForUpdates: () => ipcRenderer.invoke("agent:check-for-updates"),
+  dismissUpdate: () => ipcRenderer.invoke("agent:dismiss-update"),
+  startUpdate: () => ipcRenderer.invoke("agent:start-update"),
+  cancelUpdate: () => ipcRenderer.invoke("agent:cancel-update"),
+  getUpdateState: () => ipcRenderer.invoke("agent:get-update-state"),
   connectPairingUrl: (url: string) =>
     ipcRenderer.invoke("agent:connect-pairing-url", url),
   loginAccount: (input: { email: string; password: string }) =>
@@ -22,5 +27,10 @@ contextBridge.exposeInMainWorld("printAgent", {
     const listener = () => callback();
     ipcRenderer.on("refresh-requested", listener);
     return () => ipcRenderer.removeListener("refresh-requested", listener);
+  },
+  onUpdateStatus: (callback: (state: unknown) => void) => {
+    const listener = (_event: unknown, state: unknown) => callback(state);
+    ipcRenderer.on("agent:update-status", listener);
+    return () => ipcRenderer.removeListener("agent:update-status", listener);
   },
 });
