@@ -76,8 +76,99 @@ const APP_DIR =
     ? path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "PrintYantra")
     : path.join(os.homedir(), ".printyantra");
 
+/** Pre-1.5.0 ProgramData / home folder (PrintMadeEasy Agent). */
+const LEGACY_APP_DIR =
+  process.platform === "win32"
+    ? path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "PrintMadeEasy")
+    : path.join(os.homedir(), ".printmadeeasy");
+
+const LEGACY_CONFIG_PATH = path.join(LEGACY_APP_DIR, "agent-config.json");
+
 export const CONFIG_PATH = path.join(APP_DIR, "agent-config.json");
 export const JOBS_DIR = path.join(APP_DIR, "jobs");
+
+/**
+ * Remap retired production host after PrintYantra domain migration.
+ * Only exact known Clauras production origins — never invent other rewrites.
+ */
+export function remapLegacyProductionApiUrl(apiUrl: string): string {
+  const trimmed = (apiUrl || "").trim().replace(/\/$/, "");
+  if (
+    trimmed === "https://clauras.com" ||
+    trimmed === "http://clauras.com"
+  ) {
+    return PACKAGED_DEFAULT_API_URL;
+  }
+  return apiUrl;
+}
+
+/**
+ * Copy paired PrintMadeEasy config into PrintYantra ProgramData when the new
+ * path has no config yet. Preserves authToken / agentId / selectedPrinter so
+ * heartbeats resume without forcing re-login. Does not move jobs folders.
+ */
+export function tryMigrateLegacyAgentConfig(options?: {
+  legacyConfigPath?: string;
+  targetConfigPath?: string;
+  readFile?: (p: string) => string;
+  writeFile?: (p: string, data: string) => void;
+  exists?: (p: string) => boolean;
+  ensureDirs?: () => void;
+}): boolean {
+  const legacyPath = options?.legacyConfigPath ?? LEGACY_CONFIG_PATH;
+  const targetPath = options?.targetConfigPath ?? CONFIG_PATH;
+  const exists = options?.exists ?? ((p: string) => fs.existsSync(p));
+  const readFile =
+    options?.readFile ?? ((p: string) => fs.readFileSync(p, "utf8"));
+  const writeFile =
+    options?.writeFile ??
+    ((p: string, data: string) => fs.writeFileSync(p, data, "utf8"));
+  const ensureDirs = options?.ensureDirs ?? ensureAppDirs;
+
+  if (exists(targetPath)) return false;
+  if (!exists(legacyPath)) return false;
+
+  try {
+    const raw = readFile(legacyPath);
+    const parsed = JSON.parse(raw) as Partial<AgentConfig>;
+    if (!parsed || typeof parsed !== "object") return false;
+
+    const migrated: AgentConfig = {
+      apiUrl: remapLegacyProductionApiUrl(
+        typeof parsed.apiUrl === "string" && parsed.apiUrl.trim()
+          ? parsed.apiUrl
+          : resolveDefaultApiUrl(),
+      ),
+      shopCode: typeof parsed.shopCode === "string" ? parsed.shopCode : "",
+      shopName:
+        typeof parsed.shopName === "string" || parsed.shopName === null
+          ? (parsed.shopName as string | null)
+          : null,
+      agentId:
+        typeof parsed.agentId === "string" && parsed.agentId.trim()
+          ? parsed.agentId.trim()
+          : createDeviceAgentId(),
+      authToken:
+        typeof parsed.authToken === "string" && parsed.authToken.trim()
+          ? parsed.authToken
+          : null,
+      selectedPrinter:
+        typeof parsed.selectedPrinter === "string"
+          ? parsed.selectedPrinter
+          : parsed.selectedPrinter === null
+            ? null
+            : null,
+      openAtLogin: resolveOpenAtLogin(parsed.openAtLogin),
+    };
+
+    ensureDirs();
+    writeFile(targetPath, JSON.stringify(migrated, null, 2));
+    return true;
+  } catch (error) {
+    console.warn("Legacy PrintMadeEasy config migration failed:", error);
+    return false;
+  }
+}
 
 export function createDeviceAgentId() {
   return `PMEA-WINDOWS-${randomBytes(4).toString("hex").toUpperCase()}`;
@@ -171,6 +262,7 @@ function persistIfNeeded(config: AgentConfig, shouldWrite: boolean) {
 
 export function loadConfig(): AgentConfig {
   ensureAppDirs();
+  tryMigrateLegacyAgentConfig();
 
   const identityInput = {
     packaged: isPackagedApp(),
@@ -210,7 +302,9 @@ export function loadConfig(): AgentConfig {
       config = {
         ...getDefaultConfig(identity.agentId),
         ...parsed,
-        apiUrl: parsed.apiUrl || resolveDefaultApiUrl(),
+        apiUrl: remapLegacyProductionApiUrl(
+          parsed.apiUrl || resolveDefaultApiUrl(),
+        ),
         shopCode: parsed.shopCode || "",
         shopName: parsed.shopName ?? null,
         agentId: identity.agentId,
@@ -222,7 +316,9 @@ export function loadConfig(): AgentConfig {
       config = {
         ...getDefaultConfig(identity.agentId),
         ...parsed,
-        apiUrl: parsed.apiUrl || resolveDefaultApiUrl(),
+        apiUrl: remapLegacyProductionApiUrl(
+          parsed.apiUrl || resolveDefaultApiUrl(),
+        ),
         shopCode: parsed.shopCode || "",
         shopName: parsed.shopName ?? null,
         agentId: identity.agentId,
@@ -234,11 +330,12 @@ export function loadConfig(): AgentConfig {
       config = {
         ...getDefaultConfig(identity.agentId),
         ...parsed,
-        apiUrl:
+        apiUrl: remapLegacyProductionApiUrl(
           process.env.PRINTMADEEASY_API_URL ||
-          process.env.API_URL ||
-          parsed.apiUrl ||
-          resolveDefaultApiUrl(),
+            process.env.API_URL ||
+            parsed.apiUrl ||
+            resolveDefaultApiUrl(),
+        ),
         shopCode: process.env.SHOP_CODE || parsed.shopCode || "",
         shopName: parsed.shopName ?? null,
         agentId: identity.agentId,
@@ -248,8 +345,14 @@ export function loadConfig(): AgentConfig {
       };
     }
 
-    // Persist migrated default (missing openAtLogin → enabled) without touching agentId.
-    persistIfNeeded(config, identity.generated || !openAtLoginExplicit);
+    // Persist remapped production host / migrated openAtLogin without touching agentId.
+    const apiRemapped =
+      typeof parsed.apiUrl === "string" &&
+      remapLegacyProductionApiUrl(parsed.apiUrl) !== parsed.apiUrl;
+    persistIfNeeded(
+      config,
+      identity.generated || !openAtLoginExplicit || apiRemapped,
+    );
     return config;
   } catch (error) {
     console.error("Failed to read agent config:", error);

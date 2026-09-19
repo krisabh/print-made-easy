@@ -10,9 +10,8 @@ export type ShopUploadContext = {
   shopName: string;
   /**
    * Whether the shop's current default printer supports Color.
-   * Derived server-side from legacy Printer.isDefault (shop-wide);
-   * AgentDevice-local defaults are not exposed to customers.
-   * Never trust the client.
+   * Derived server-side from (1) the freshest AgentDevice local default, else
+   * (2) legacy Printer.isDefault. Never trust the client.
    */
   colorSupported: boolean;
   pricing: {

@@ -387,11 +387,30 @@ export async function setShopPrinterColorSupported(input: {
 
 /**
  * Customer-facing capability: does the shop's current default printer support Color?
- * No default printer → false (safe). Does not expose printer names/IDs.
+ * Resolution order:
+ * 1. Freshest AgentDevice with a localDefaultPrinterId → that printer's colorSupported
+ * 2. Legacy shop-wide Printer.isDefault=true → colorSupported
+ * No default → false (safe). Does not expose printer names/IDs.
  */
 export async function getShopDefaultColorSupported(
   shopId: string,
 ): Promise<boolean> {
+  const deviceDefault = await prisma.agentDevice.findFirst({
+    where: {
+      shopId,
+      localDefaultPrinterId: { not: null },
+    },
+    orderBy: [{ lastSeen: "desc" }, { updatedAt: "desc" }],
+    select: {
+      localDefaultPrinter: {
+        select: { colorSupported: true },
+      },
+    },
+  });
+  if (deviceDefault?.localDefaultPrinter) {
+    return deviceDefault.localDefaultPrinter.colorSupported === true;
+  }
+
   const printer = await prisma.printer.findFirst({
     where: { shopId, isDefault: true },
     select: { colorSupported: true },

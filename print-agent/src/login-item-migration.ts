@@ -1,14 +1,18 @@
 /**
- * Migrate legacy Windows HKCU Run auto-start entries from Agent 1.3.0.
+ * Migrate legacy Windows HKCU Run auto-start entries.
  *
  * 1.3.0 called setLoginItemSettings without `name`, so Electron wrote:
  *   electron.app.Electron
+ * 1.4.0 used LOGIN_ITEM_NAME "PrintMadeEasy Agent".
  * 1.5.0 passes LOGIN_ITEM_NAME ("PrintYantra Agent").
  * Without cleanup, upgrades leave both keys (duplicate auto-start) and OFF
  * only removes the named key, leaving the orphan legacy entry.
  */
 
 export const LEGACY_ELECTRON_LOGIN_ITEM_NAME = "electron.app.Electron";
+
+/** Pre-1.5.0 product Run-key name (PrintMadeEasy Agent 1.4.0). */
+export const LEGACY_PRINTMADEEASY_LOGIN_ITEM_NAME = "PrintMadeEasy Agent";
 
 /** Narrow registry facade — real Windows store or in-memory test double. */
 export type RunKeyStore = {
@@ -30,7 +34,8 @@ export type ApplyOpenAtLoginRunKeysOptions = {
 };
 
 function normalizeRunValue(value: string): string {
-  return value.trim().replace(/^"+|"+$/g, "").toLowerCase();
+  // Strip all quotes so `"C:\...\App.exe" --flag` matches path + args forms.
+  return value.trim().replace(/"/g, "").toLowerCase();
 }
 
 /**
@@ -62,10 +67,25 @@ export function isPrintYantraAgentRunValue(
 }
 
 /**
+ * True when a Run value clearly belongs to the retired PrintMadeEasy Agent product.
+ * Used to stop 1.4.0 auto-start after PrintYantra 1.5.0 takes over.
+ */
+export function isLegacyPrintMadeEasyAgentRunValue(runValue: string): boolean {
+  if (!runValue) return false;
+  const value = normalizeRunValue(runValue);
+  if (!value) return false;
+  return (
+    /printmadeeasy agent\.exe(?:\s|$)/i.test(value) &&
+    /printmadeeasy/i.test(value)
+  );
+}
+
+/**
  * Apply desired openAtLogin Run-key state for tests / Windows store.
  * Callers that use Electron should still call setLoginItemSettings first;
  * this synchronizes the named key in the injectable store and always removes
- * a legacy electron.app.Electron entry that belongs to this Agent.
+ * legacy electron.app.Electron / PrintMadeEasy Agent entries that belong to
+ * this product line.
  */
 export function applyOpenAtLoginRunKeys(
   options: ApplyOpenAtLoginRunKeysOptions,
@@ -90,6 +110,7 @@ export function applyOpenAtLoginRunKeys(
     legacyLoginItemName: legacyName,
     agentExecutablePath,
   });
+  removeLegacyPrintMadeEasyLoginItemIfPresent({ store });
 }
 
 export function removeLegacyElectronLoginItemIfOurs(options: {
@@ -105,6 +126,23 @@ export function removeLegacyElectronLoginItemIfOurs(options: {
     return false;
   }
   options.store.remove(legacyName);
+  return true;
+}
+
+/**
+ * Remove the retired PrintMadeEasy Agent Run key when present.
+ * Always safe for PrintYantra 1.5.0 takeover: only deletes the well-known
+ * product name when the value points at PrintMadeEasy Agent.exe.
+ */
+export function removeLegacyPrintMadeEasyLoginItemIfPresent(options: {
+  store: RunKeyStore;
+}): boolean {
+  const current = options.store.get(LEGACY_PRINTMADEEASY_LOGIN_ITEM_NAME);
+  if (current == null || current === "") return false;
+  if (!isLegacyPrintMadeEasyAgentRunValue(current)) {
+    return false;
+  }
+  options.store.remove(LEGACY_PRINTMADEEASY_LOGIN_ITEM_NAME);
   return true;
 }
 

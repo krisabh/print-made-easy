@@ -201,13 +201,64 @@ async function main() {
     assert.equal("printers" in contextShape, false);
     console.log("PASS customer context exposes only colorSupported capability");
 
+    // Test 10 — AgentDevice local default colorSupported (1.5.0 path)
+    await prisma.printer.updateMany({
+      where: { shopId: shop.id },
+      data: { isDefault: false, colorSupported: false },
+    });
+    const deviceTokenHash = `cg-device-${stamp}`;
+    const device = await prisma.agentDevice.create({
+      data: {
+        shopId: shop.id,
+        agentId: `PMEA-WINDOWS-${stamp.slice(0, 8).toUpperCase()}`,
+        tokenHash: deviceTokenHash,
+        lastSeen: new Date(),
+      },
+    });
+    const devicePrinter = await upsertShopPrinter({
+      shopId: shop.id,
+      printerName: "Device Color Printer",
+      status: "online",
+      isDefault: true,
+      agentDeviceId: device.id,
+    });
+    await prisma.printer.update({
+      where: { id: devicePrinter.id },
+      data: { colorSupported: true, isDefault: false },
+    });
+    await prisma.agentDevice.update({
+      where: { id: device.id },
+      data: { localDefaultPrinterId: devicePrinter.id },
+    });
+    // Legacy isDefault rows remain B&W / non-default — device path must win
+    capability = await getShopDefaultColorSupported(shop.id);
+    assert.equal(capability, true);
+    assert.deepEqual(customerUiShowsColor(capability), ["BW", "COLOR"]);
+    console.log(
+      "PASS Test 10 AgentDevice localDefault colorSupported → customer Color",
+    );
+
+    await prisma.printer.update({
+      where: { id: devicePrinter.id },
+      data: { colorSupported: false },
+    });
+    assert.equal(await getShopDefaultColorSupported(shop.id), false);
+    console.log(
+      "PASS Test 10b AgentDevice localDefault B&W → customer B&W only",
+    );
+
     console.log("\nphase9c-customer-color-gating-smoke: ALL PASS");
   } finally {
     await prisma.printJobFile.deleteMany({
       where: { printJob: { shopId: shop.id } },
     });
     await prisma.printJob.deleteMany({ where: { shopId: shop.id } });
+    await prisma.agentDevice.updateMany({
+      where: { shopId: shop.id },
+      data: { localDefaultPrinterId: null },
+    });
     await prisma.printer.deleteMany({ where: { shopId: shop.id } });
+    await prisma.agentDevice.deleteMany({ where: { shopId: shop.id } });
     await prisma.subscription.deleteMany({ where: { shopId: shop.id } });
     await prisma.printPrice.deleteMany({ where: { shopId: shop.id } });
     await prisma.settings.deleteMany({ where: { shopId: shop.id } });

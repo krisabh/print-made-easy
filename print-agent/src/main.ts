@@ -42,7 +42,10 @@ import {
   createUpdateChecker,
   type UpdatePublicState,
 } from "./update-check";
-import { removeLegacyElectronLoginItemIfOurs } from "./login-item-migration";
+import {
+  removeLegacyElectronLoginItemIfOurs,
+  removeLegacyPrintMadeEasyLoginItemIfPresent,
+} from "./login-item-migration";
 import { createWindowsHkcuRunStore } from "./windows-run-key-store";
 
 let mainWindow: BrowserWindow | null = null;
@@ -266,15 +269,19 @@ function applyOpenAtLoginSetting(enabled: boolean) {
     name: LOGIN_ITEM_NAME,
   });
 
-  // 1.3.0 wrote electron.app.Electron (no name). Remove that orphan when it
-  // points at this Agent — ON or OFF — so upgrades do not leave duplicates
-  // and OFF is truly off.
+  // Legacy Run-key cleanup (ON or OFF):
+  // - 1.3.0 wrote electron.app.Electron (no name)
+  // - 1.4.0 wrote "PrintMadeEasy Agent"
+  // Remove those orphans so upgrades do not leave duplicate auto-start and
+  // PrintYantra 1.5.0 is the only Agent that launches at login.
   if (process.platform === "win32") {
     try {
+      const store = createWindowsHkcuRunStore();
       removeLegacyElectronLoginItemIfOurs({
-        store: createWindowsHkcuRunStore(),
+        store,
         agentExecutablePath: process.execPath,
       });
+      removeLegacyPrintMadeEasyLoginItemIfPresent({ store });
     } catch (error) {
       console.warn("Legacy auto-start Run key cleanup failed:", error);
     }

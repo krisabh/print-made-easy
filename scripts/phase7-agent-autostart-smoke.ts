@@ -89,11 +89,16 @@ function main() {
   // K — installer/uninstaller: single login-item mechanism + NSIS cleanup
   assert.equal(pkg.build?.nsis?.include, "build/installer.nsh");
   assert.match(nsh, /customUnInstall/);
+  assert.match(nsh, /customInstall/);
   assert.match(nsh, /PrintYantra Agent/);
+  assert.match(nsh, /PrintMadeEasy Agent/);
   assert.match(nsh, /CurrentVersion\\Run/);
   assert.equal(LOGIN_ITEM_NAME, "PrintYantra Agent");
   assert.match(mainSrc, /setLoginItemSettings/);
   assert.match(mainSrc, /removeLegacyElectronLoginItemIfOurs/);
+  assert.match(mainSrc, /removeLegacyPrintMadeEasyLoginItemIfPresent/);
+  assert.match(configSrc, /tryMigrateLegacyAgentConfig/);
+  assert.match(configSrc, /PrintMadeEasy/);
   assert.ok(!JSON.stringify(pkg.build).includes("runAfterFinish"));
   assert.ok(!/"createStartupShortcut"\s*:\s*true/.test(JSON.stringify(pkg.build)));
   console.log("K PASS single login-item mechanism + legacy Run cleanup + uninstall");
