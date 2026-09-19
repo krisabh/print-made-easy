@@ -15,6 +15,14 @@ export type PrintPaperSizeV1 = "A4";
 export type PrintScaleV1 = "fit" | "noscale";
 export type PrintMarginsV1 = "normal" | "none";
 
+/**
+ * Safe margin (PDF points) around NORMAL image content on A4 when margins=normal.
+ * ~48 pt ≈ 17 mm — visibly larger than the prior 24 pt (~8.5 mm) without
+ * shrinking content excessively. margins=none still uses 0.
+ * Does not apply to ID-card layout (separate constants in id-card-layout).
+ */
+export const NORMAL_A4_MARGIN_PT = 48;
+
 export type PrintSettingsV1 = {
   v: typeof PRINT_SETTINGS_VERSION;
   orientation: PrintOrientationV1;
@@ -258,7 +266,7 @@ export function planJobPrint(
     sumatraOrientation: undefined,
     scale: "fit",
     pages: undefined,
-    imageMarginPt: 24,
+    imageMarginPt: NORMAL_A4_MARGIN_PT,
     paperSize: "A4",
   };
 
@@ -278,7 +286,7 @@ export function planJobPrint(
         s.orientation === "landscape" ? "landscape" : undefined,
       scale: s.scale === "noscale" ? "noscale" : "fit",
       pages: s.pageRange === "all" ? undefined : s.pageRange,
-      imageMarginPt: s.margins === "none" ? 0 : 24,
+      imageMarginPt: s.margins === "none" ? 0 : NORMAL_A4_MARGIN_PT,
       paperSize: "A4",
     };
   } catch {

@@ -19,6 +19,7 @@ import {
 } from "../app/upload/[shopCode]/actions";
 import {
   classifyPreviewExtension,
+  needsInlinePdfCanvasPreview,
   needsMobilePdfOpenFallback,
 } from "../components/print-preview-dialog";
 import { buildIdCardPreviewFormData } from "../lib/id-card-client";
@@ -313,15 +314,15 @@ async function main() {
     console.log("L PASS normal upload unchanged + preview classification");
   }
 
-  // M — mobile PDF open-fallback detection (no PrintJob / no billing)
+  // M — mobile canvas-preview detection (no PrintJob / no billing)
   {
     assert.equal(
-      needsMobilePdfOpenFallback({
+      needsInlinePdfCanvasPreview({
         userAgent:
           "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
       }),
       true,
-      "iPhone should offer Open PDF",
+      "iPhone should use inline canvas PDF preview",
     );
     assert.equal(
       needsMobilePdfOpenFallback({
@@ -329,15 +330,15 @@ async function main() {
           "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
       }),
       true,
-      "Android should offer Open PDF",
+      "Android should use inline canvas PDF preview",
     );
     assert.equal(
-      needsMobilePdfOpenFallback({ matchesNarrow: true }),
+      needsInlinePdfCanvasPreview({ matchesNarrow: true }),
       true,
-      "narrow viewport should offer Open PDF",
+      "narrow viewport should use canvas PDF preview",
     );
     assert.equal(
-      needsMobilePdfOpenFallback({
+      needsInlinePdfCanvasPreview({
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
         matchesNarrow: false,
@@ -345,9 +346,9 @@ async function main() {
         maxTouchPoints: 0,
       }),
       false,
-      "desktop should keep iframe-only path",
+      "desktop should keep iframe path",
     );
-    console.log("M PASS mobile PDF open-fallback detection");
+    console.log("M PASS mobile inline canvas PDF preview detection");
   }
 
   // N — preview PDF is a blob-ready base64 payload (client builds object URL)

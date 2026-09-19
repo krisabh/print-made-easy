@@ -281,7 +281,7 @@ async function main() {
     const mixedPlan = planJobPrint(mixedSettings, 1);
     assert.equal(mixedPlan.pages, undefined);
     assert.equal(mixedPlan.scale, "fit");
-    assert.equal(mixedPlan.imageMarginPt, 24);
+    assert.equal(mixedPlan.imageMarginPt, 48);
 
     console.log("PASS 21 pricing unchanged + defaults + mixed printSettings safe");
   } finally {

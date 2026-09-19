@@ -15,12 +15,14 @@ import { PDFDocument, type PDFImage } from "pdf-lib";
 export const ID_CARD_A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
 
 /**
- * Outer page margin — keeps the stacked cards clear of the sheet edge.
- * Layout no longer fills A4 with half-page slots; margin is a soft bound.
+ * Outer page margin — keeps half-page regions clear of the sheet edge.
  */
 export const ID_CARD_PAGE_MARGIN_PT = 36;
 
-/** Vertical gap between front (upper) and back (lower) card boxes. */
+/**
+ * @deprecated Gap is derived from upper/lower half-page regions (Fix 2),
+ * not a fixed stack gap. Kept for import compatibility.
+ */
 export const ID_CARD_SLOT_GAP_PT = 28;
 
 /**
@@ -136,46 +138,48 @@ export function fitImageInBox(
 }
 
 /**
- * Portrait A4 with two GENERAL ID-card-sized boxes (front upper, back lower).
- * Boxes are horizontally centered and stacked with a vertical gap; the pair is
- * centered vertically on the page (clamped inside page margins).
- * PDF origin is bottom-left.
+ * Portrait A4 with two GENERAL ID-card-sized boxes in half-page regions.
+ *
+ * Algorithm (PDF origin bottom-left):
+ * 1. Usable content area = page inset by marginPt.
+ * 2. Split usable area into TOP (front) and BOTTOM (back) halves.
+ * 3. Place a general-ID max box centered in each half (H + V within region).
+ *
+ * Cards stay Fix-1 size; they are NOT vertically centered as a single stack
+ * (that clustered both faces around mid-page with almost no gap).
  */
 export function computeIdCardA4Layout(
   pageWidth: number = ID_CARD_A4_PORTRAIT_PT.width,
   pageHeight: number = ID_CARD_A4_PORTRAIT_PT.height,
   marginPt: number = ID_CARD_PAGE_MARGIN_PT,
-  gapPt: number = ID_CARD_SLOT_GAP_PT,
+  _gapPt: number = ID_CARD_SLOT_GAP_PT,
   cardMaxWidthPt: number = GENERAL_ID_CARD_MAX_WIDTH_PT,
   cardMaxHeightPt: number = GENERAL_ID_CARD_MAX_HEIGHT_PT,
 ): IdCardA4Layout {
-  const maxContentWidth = Math.max(1, pageWidth - marginPt * 2);
-  const maxContentHeight = Math.max(1, pageHeight - marginPt * 2);
+  void _gapPt; // gap comes from half-page regions, not a fixed stack offset
 
-  const boxWidth = Math.min(cardMaxWidthPt, maxContentWidth);
-  // Ensure two boxes + gap fit; shrink height if the page is unusually short.
-  const maxPairHeight = Math.max(1, maxContentHeight - gapPt);
-  const boxHeight = Math.min(cardMaxHeightPt, maxPairHeight / 2);
+  const contentLeft = marginPt;
+  const contentBottom = marginPt;
+  const contentWidth = Math.max(1, pageWidth - marginPt * 2);
+  const contentHeight = Math.max(1, pageHeight - marginPt * 2);
+  const regionHeight = contentHeight / 2;
+  const midLine = contentBottom + regionHeight;
 
-  const stackHeight = boxHeight * 2 + gapPt;
-  const stackBottom = Math.max(
-    marginPt,
-    Math.min(
-      pageHeight - marginPt - stackHeight,
-      (pageHeight - stackHeight) / 2,
-    ),
-  );
-  const boxX = (pageWidth - boxWidth) / 2;
+  const boxWidth = Math.min(cardMaxWidthPt, contentWidth);
+  const boxHeight = Math.min(cardMaxHeightPt, regionHeight);
+  const boxX = contentLeft + (contentWidth - boxWidth) / 2;
 
+  // Bottom half → BACK (centered in lower region)
   const back: IdCardLayoutSlot = {
     x: boxX,
-    y: stackBottom,
+    y: contentBottom + (regionHeight - boxHeight) / 2,
     width: boxWidth,
     height: boxHeight,
   };
+  // Top half → FRONT (centered in upper region)
   const front: IdCardLayoutSlot = {
     x: boxX,
-    y: stackBottom + boxHeight + gapPt,
+    y: midLine + (regionHeight - boxHeight) / 2,
     width: boxWidth,
     height: boxHeight,
   };

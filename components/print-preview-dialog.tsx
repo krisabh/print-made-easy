@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Eye, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  needsInlinePdfCanvasPreview,
+  readPdfPreviewEnv,
+} from "@/lib/pdf-preview-env";
 import { extensionFromFileName } from "@/lib/print-file-category";
+import type { renderPdfPageToCanvas as RenderPdfPageToCanvas } from "@/lib/client-pdf-preview";
 
 export type PreviewPrintMode = "BW" | "COLOR";
 export type PreviewOrientation = "portrait" | "landscape";
@@ -66,50 +71,13 @@ type PrintPreviewDialogProps = {
   settingsNote?: string | null;
 };
 
-export type PdfOpenFallbackEnv = {
-  userAgent?: string;
-  maxTouchPoints?: number;
-  /** Optional matchMedia; pass a stub in tests. */
-  matchesNarrow?: boolean;
-  matchesCoarsePointer?: boolean;
-};
-
-/**
- * Many mobile browsers (iOS Safari/Chrome, Android Chrome) do not reliably
- * render PDF blobs inside an iframe/`<object>`. Desktop Chrome/Edge/Firefox
- * typically do. When this returns true, the dialog still attempts inline
- * preview where practical and always offers an "Open PDF" action that opens
- * the same blob/object URL in a new tab (no download-only path, no server persist).
- */
-export function needsMobilePdfOpenFallback(
-  env: PdfOpenFallbackEnv = {},
-): boolean {
-  const ua = env.userAgent ?? "";
-  if (/iPhone|iPad|iPod|Android/i.test(ua)) {
-    return true;
-  }
-  if (env.matchesNarrow === true) {
-    return true;
-  }
-  if (env.matchesCoarsePointer === true && (env.maxTouchPoints ?? 0) > 0) {
-    return true;
-  }
-  return false;
-}
-
-/** Read live browser signals (client-only). Safe no-op defaults on server. */
-export function readPdfOpenFallbackEnv(): PdfOpenFallbackEnv {
-  if (typeof navigator === "undefined" || typeof window === "undefined") {
-    return {};
-  }
-  return {
-    userAgent: navigator.userAgent,
-    maxTouchPoints: navigator.maxTouchPoints ?? 0,
-    matchesNarrow: window.matchMedia?.("(max-width: 768px)")?.matches ?? false,
-    matchesCoarsePointer:
-      window.matchMedia?.("(pointer: coarse)")?.matches ?? false,
-  };
-}
+export type { PdfOpenFallbackEnv, PdfPreviewEnv } from "@/lib/pdf-preview-env";
+export {
+  needsInlinePdfCanvasPreview,
+  needsMobilePdfOpenFallback,
+  readPdfOpenFallbackEnv,
+  readPdfPreviewEnv,
+} from "@/lib/pdf-preview-env";
 
 export function buildNormalPreviewPages(
   files: NormalPreviewFile[],
@@ -155,29 +123,159 @@ export function revokePreviewPages(pages: PreviewPage[]) {
   }
 }
 
-function PdfOpenFallbackActions({
+/**
+ * Renders a PDF page to canvas so mobile browsers can show content inside
+ * the dialog (blob iframes are often blank on iOS/Android).
+ */
+function PdfCanvasPreview({
   url,
-  label = "Open PDF",
+  grayscale,
+  className,
 }: {
   url: string;
-  label?: string;
+  grayscale?: boolean;
+  className?: string;
 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPageCount, setPdfPageCount] = useState(1);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPdfPage(1);
+  }, [url]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas || !url) return;
+
+    setStatus("loading");
+    setErrorMessage(null);
+
+    (async () => {
+      try {
+        const { renderPdfPageToCanvas } = (await import(
+          "@/lib/client-pdf-preview"
+        )) as {
+          renderPdfPageToCanvas: typeof RenderPdfPageToCanvas;
+        };
+        const result = await renderPdfPageToCanvas(url, pdfPage, canvas);
+        if (cancelled) return;
+        setPdfPageCount(result.pageCount);
+        setPdfPage(result.pageNumber);
+        setStatus("ready");
+      } catch (error) {
+        if (cancelled) return;
+        setStatus("error");
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Preview couldn't render this PDF.",
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [url, pdfPage]);
+
   return (
-    <div className="mt-3 flex flex-col items-stretch gap-2 sm:items-center">
-      <p className="text-center text-xs text-slate-600">
-        If the preview above is blank, open the PDF in a new tab.
-      </p>
-      <Button
-        type="button"
-        variant="default"
-        className="w-full sm:w-auto"
-        onClick={() => {
-          window.open(url, "_blank", "noopener,noreferrer");
-        }}
+    <div className="flex flex-col gap-2">
+      <div
+        className={[
+          className,
+          "flex items-center justify-center bg-white",
+          grayscale ? "grayscale" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
-        <ExternalLink className="size-4" aria-hidden="true" />
-        {label}
-      </Button>
+        {status === "loading" ? (
+          <div className="flex flex-col items-center gap-2 text-slate-600">
+            <Loader2 className="size-7 animate-spin text-blue-600" />
+            <p className="text-xs">Rendering preview…</p>
+          </div>
+        ) : null}
+        {status === "error" ? (
+          <div className="px-3 text-center text-sm text-amber-900">
+            {errorMessage ?? "Preview couldn't render this PDF."}
+          </div>
+        ) : null}
+        <canvas
+          ref={canvasRef}
+          className={[
+            "max-h-full max-w-full rounded-md",
+            status === "ready" ? "block" : "hidden",
+          ].join(" ")}
+        />
+      </div>
+      {pdfPageCount > 1 && status === "ready" ? (
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pdfPage <= 1}
+            onClick={() => setPdfPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            Prev page
+          </Button>
+          <p className="text-xs text-slate-500">
+            PDF page {pdfPage}/{pdfPageCount}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pdfPage >= pdfPageCount}
+            onClick={() => setPdfPage((p) => Math.min(pdfPageCount, p + 1))}
+          >
+            Next page
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PdfPreviewSurface({
+  url,
+  title,
+  grayscale,
+  frameClass,
+  preferCanvas,
+}: {
+  url: string;
+  title: string;
+  grayscale: boolean;
+  frameClass: string;
+  preferCanvas: boolean;
+}) {
+  if (preferCanvas) {
+    return (
+      <PdfCanvasPreview
+        url={url}
+        grayscale={grayscale}
+        className={frameClass}
+      />
+    );
+  }
+
+  return (
+    <div className={frameClass}>
+      <iframe
+        title={title}
+        src={url}
+        className={[
+          "h-full w-full rounded-md border-0 bg-white",
+          grayscale ? "grayscale" : "",
+        ].join(" ")}
+      />
     </div>
   );
 }
@@ -204,10 +302,11 @@ export function PrintPreviewDialog({
   const current = pages[safeIndex];
   const totalPages = pdfUrl ? 1 : pages.length;
   const grayscale = printMode === "BW";
-  const [offerPdfOpenFallback, setOfferPdfOpenFallback] = useState(false);
+  const [preferCanvas, setPreferCanvas] = useState(false);
 
   const frameClass = useMemo(() => {
-    const pad = margins === "none" ? "p-1" : "p-3 sm:p-4";
+    // Match NORMAL_A4_MARGIN_PT visually: normal ≈ larger pad; none ≈ tight.
+    const pad = margins === "none" ? "p-1" : "p-5 sm:p-6";
     const aspect =
       orientation === "landscape" ? "aspect-[1.414/1]" : "aspect-[1/1.414]";
     return [
@@ -228,16 +327,11 @@ export function PrintPreviewDialog({
 
   useEffect(() => {
     if (!open) {
-      setOfferPdfOpenFallback(false);
+      setPreferCanvas(false);
       return;
     }
-    setOfferPdfOpenFallback(needsMobilePdfOpenFallback(readPdfOpenFallbackEnv()));
+    setPreferCanvas(needsInlinePdfCanvasPreview(readPdfPreviewEnv()));
   }, [open]);
-
-  const activePdfUrl =
-    pdfUrl ?? (current?.kind === "pdf" ? current.url : null);
-  const showPdfOpenFallback =
-    offerPdfOpenFallback && Boolean(activePdfUrl) && !loading && !error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -277,21 +371,13 @@ export function PrintPreviewDialog({
               </p>
             </div>
           ) : pdfUrl ? (
-            <div>
-              <div className={frameClass}>
-                <iframe
-                  title="ID card A4 preview"
-                  src={pdfUrl}
-                  className={[
-                    "h-full w-full rounded-md border-0 bg-white",
-                    grayscale ? "grayscale" : "",
-                  ].join(" ")}
-                />
-              </div>
-              {showPdfOpenFallback ? (
-                <PdfOpenFallbackActions url={pdfUrl} label="Open PDF" />
-              ) : null}
-            </div>
+            <PdfPreviewSurface
+              url={pdfUrl}
+              title="ID card A4 preview"
+              grayscale={grayscale}
+              frameClass={frameClass}
+              preferCanvas={preferCanvas}
+            />
           ) : current?.kind === "unavailable" ? (
             <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 text-center">
               <Eye className="size-6 text-slate-400" aria-hidden="true" />
@@ -316,21 +402,13 @@ export function PrintPreviewDialog({
               />
             </div>
           ) : current?.kind === "pdf" ? (
-            <div>
-              <div className={frameClass}>
-                <iframe
-                  title="Document preview"
-                  src={current.url}
-                  className={[
-                    "h-full w-full rounded-md border-0 bg-white",
-                    grayscale ? "grayscale" : "",
-                  ].join(" ")}
-                />
-              </div>
-              {showPdfOpenFallback ? (
-                <PdfOpenFallbackActions url={current.url} label="View PDF" />
-              ) : null}
-            </div>
+            <PdfPreviewSurface
+              url={current.url}
+              title="Document preview"
+              grayscale={grayscale}
+              frameClass={frameClass}
+              preferCanvas={preferCanvas}
+            />
           ) : (
             <div className="flex min-h-[280px] items-center justify-center text-sm text-slate-500">
               Nothing to preview.

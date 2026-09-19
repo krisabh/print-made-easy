@@ -4,6 +4,7 @@
 export {
   PRINT_SETTINGS_VERSION,
   DEFAULT_PRINT_SETTINGS_V1,
+  NORMAL_A4_MARGIN_PT,
   buildPrintSettingsV1,
   buildDefaultPrintSettingsV1,
   resolvePrintSettings,

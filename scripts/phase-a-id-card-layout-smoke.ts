@@ -114,12 +114,19 @@ async function main() {
     Math.abs(layout.back.x + layout.back.width / 2 - layout.page.width / 2) < 1,
     "back box horizontally centered",
   );
-  // No overlap
+  // No overlap + half-page placement (front upper, back lower)
   assert.ok(
     layout.front.y >= layout.back.y + layout.back.height - 1e-6,
     "front/back do not overlap",
   );
-  console.log("0b PASS layout slots (general ID size, centered, no overlap)");
+  const frontCenterY = layout.front.y + layout.front.height / 2;
+  const backCenterY = layout.back.y + layout.back.height / 2;
+  const pageMid = layout.page.height / 2;
+  assert.ok(frontCenterY > pageMid, "front center in upper half");
+  assert.ok(backCenterY < pageMid, "back center in lower half");
+  const gap = layout.front.y - (layout.back.y + layout.back.height);
+  assert.ok(gap > 80, `meaningful half-page gap (got ${gap})`);
+  console.log("0b PASS layout slots (half-page regions, centered, gap)");
 
   // A — JPEG + JPEG
   const jpegPair = await generateIdCardA4Pdf(
@@ -191,8 +198,15 @@ async function main() {
       large.frontDraw.y >= large.backDraw.y + large.backDraw.height - 1e-6,
       "drawn front/back do not overlap",
     );
+    const frontCy = large.frontDraw.y + large.frontDraw.height / 2;
+    const backCy = large.backDraw.y + large.backDraw.height / 2;
+    assert.ok(frontCy > ID_CARD_A4_PORTRAIT_PT.height / 2, "front in upper half");
+    assert.ok(backCy < ID_CARD_A4_PORTRAIT_PT.height / 2, "back in lower half");
+    const drawGap =
+      large.frontDraw.y - (large.backDraw.y + large.backDraw.height);
+    assert.ok(drawGap > 80, `drawn half-page gap (got ${drawGap})`);
     console.log(
-      "I1 PASS cards inside general ID box, inside A4, smaller than page, no overlap",
+      "I1 PASS cards in half-page regions, inside general ID box, no overlap",
     );
   }
 

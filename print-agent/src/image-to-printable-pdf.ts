@@ -12,7 +12,10 @@ export type PrintableOrientation = "portrait" | "landscape";
 /** PDF points (~72 dpi). Matches prior Agent conversion. */
 export const A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
 export const A4_LANDSCAPE_PT = { width: 842, height: 595 } as const;
-export const PRINTABLE_MARGIN_PT = 24;
+/** Default NORMAL image A4 margin (~17 mm). Keep in sync with NORMAL_A4_MARGIN_PT. */
+export const PRINTABLE_MARGIN_PT = 48;
+/** Alias — same as PRINTABLE_MARGIN_PT / shared NORMAL_A4_MARGIN_PT. */
+export const NORMAL_A4_MARGIN_PT = PRINTABLE_MARGIN_PT;
 
 export function a4PageSize(orientation: PrintableOrientation): {
   width: number;
