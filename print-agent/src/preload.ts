@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("printAgent", {
     ipcRenderer.invoke("agent:connect-pairing-url", url),
   loginAccount: (input: { email: string; password: string }) =>
     ipcRenderer.invoke("agent:login-account", input),
+  switchShop: () => ipcRenderer.invoke("agent:switch-shop"),
   onRefresh: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("refresh-requested", listener);

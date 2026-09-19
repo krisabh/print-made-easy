@@ -1,6 +1,6 @@
 {
   "name": "print-made-easy-agent",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "description": "PrintYantra Windows Print Agent",
   "author": "PrintYantra",
@@ -11,7 +11,8 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "pack": "npm run build && electron-builder --win --dir",
-    "dist": "npm run build && electron-builder --win nsis"
+    "dist": "npm run build && electron-builder --win nsis",
+    "release:hash": "npx tsx scripts/generate-release-metadata.ts"
   },
   "build": {
     "appId": "com.printyantra.agent",

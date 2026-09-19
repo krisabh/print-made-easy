@@ -358,7 +358,32 @@
             </div>
           </div>
           <div id="signedInPanel" class="success-box hidden" style="margin-top: 12px">
-            Signed in to this shop. Jobs will print on the selected default printer.
+            <div>
+              <strong>Connected to:</strong><br />
+              <span id="currentShopLabel">—</span>
+            </div>
+            <p class="hint" style="margin: 8px 0 0">
+              Signed in. Jobs will print on the selected default printer.
+            </p>
+            <div class="actions" style="margin-top: 10px">
+              <button id="switchShopBtn" class="secondary" type="button">
+                Reconnect
+              </button>
+            </div>
+          </div>
+          <div id="switchShopConfirm" class="hidden" style="margin-top: 12px">
+            <div class="success-box" style="border-color: #f59e0b; background: #fffbeb">
+              <strong>Reconnect PrintYantra Agent?</strong>
+              <p class="hint" style="margin: 8px 0 0; color: #92400e">
+                You’ll be asked to sign in again to connect this Agent.
+              </p>
+              <div class="actions" style="margin-top: 10px">
+                <button id="switchShopConfirmBtn" type="button">Continue</button>
+                <button id="switchShopCancelBtn" class="secondary" type="button">
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
           <div id="pairSuccess" class="success-box hidden" style="margin-top: 12px"></div>
           <div id="connectMessage" class="message"></div>

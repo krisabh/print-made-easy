@@ -15,12 +15,12 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 export const WINDOWS_AGENT_RELEASE = {
   productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.5.0",
-  fileName: "PrintYantra-Agent-Setup-1.5.0.exe",
+  version: "1.5.1",
+  fileName: "PrintYantra-Agent-Setup-1.5.1.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
   notes:
-    "Agent 1.5.0: first public PrintYantra Agent release — PrintYantra product identity, printyantra.com production API, same-account multi-computer login, per-device authentication, device-scoped printers and job ownership, login rate limiting, Windows auto-start (with legacy Run-key migration), and in-app update check with secure download and SHA-256 verification.",
+    "PrintYantra Agent 1.5.1: Reconnect capability so you can sign in again to connect this Agent to your shop, plus improved shop reconnection flow. Continues PrintYantra product identity, printyantra.com production API, same-account multi-computer login, per-device authentication, device-scoped printers and job ownership, Windows auto-start, and in-app update check with secure download and SHA-256 verification.",
 } as const;
 
 /**

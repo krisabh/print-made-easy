@@ -394,3 +394,23 @@ export function getConfigPaths() {
 export function isAgentPaired() {
   return Boolean(loadConfig().authToken);
 }
+
+/**
+ * Disconnect from the current shop and return to the login/pairing state.
+ * Preserves stable device identity and general settings; clears shop session.
+ * Does not restore the previous shop automatically.
+ */
+export function clearShopSession(): AgentConfig {
+  const current = loadConfig();
+  const next: AgentConfig = {
+    apiUrl: current.apiUrl,
+    agentId: current.agentId,
+    openAtLogin: current.openAtLogin,
+    authToken: null,
+    shopCode: "",
+    shopName: null,
+    selectedPrinter: null,
+  };
+  saveConfig(next);
+  return { ...next };
+}

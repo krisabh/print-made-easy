@@ -33,6 +33,11 @@
   const connectHint = document.getElementById("connectHint");
   const loginPanel = document.getElementById("loginPanel");
   const signedInPanel = document.getElementById("signedInPanel");
+  const currentShopLabel = document.getElementById("currentShopLabel");
+  const switchShopBtn = document.getElementById("switchShopBtn");
+  const switchShopConfirm = document.getElementById("switchShopConfirm");
+  const switchShopConfirmBtn = document.getElementById("switchShopConfirmBtn");
+  const switchShopCancelBtn = document.getElementById("switchShopCancelBtn");
   const loginEmail = document.getElementById("loginEmail");
   const loginPassword = document.getElementById("loginPassword");
   const loginBtn = document.getElementById("loginBtn");
@@ -41,6 +46,7 @@
   let connecting = false;
   let colorBusy = false;
   let updateCheckBusy = false;
+  let switchingShop = false;
 
   function setMessage(text, ok = true) {
     message.textContent = text;
@@ -388,13 +394,25 @@
       connectCard.style.display = "block";
     }
 
+    const shopLabel = config.shopName
+      ? `${config.shopName} (${config.shopCode || "—"})`
+      : config.shopCode || "—";
+
     if (loginPanel && signedInPanel) {
       if (paired) {
         loginPanel.style.display = "none";
         signedInPanel.classList.remove("hidden");
+        if (currentShopLabel) {
+          currentShopLabel.textContent = shopLabel !== "—" ? shopLabel : "—";
+        }
+        if (switchShopConfirm && !switchingShop) {
+          switchShopConfirm.classList.add("hidden");
+        }
       } else {
         loginPanel.style.display = "block";
         signedInPanel.classList.add("hidden");
+        if (switchShopConfirm) switchShopConfirm.classList.add("hidden");
+        if (currentShopLabel) currentShopLabel.textContent = "—";
       }
     }
 
@@ -426,9 +444,6 @@
           : "warn"
     }`;
 
-    const shopLabel = config.shopName
-      ? `${config.shopName} (${config.shopCode || "—"})`
-      : config.shopCode || "—";
     connectionMeta.textContent = paired
       ? online
         ? `Shop: ${shopLabel} · Synced`
@@ -525,6 +540,66 @@
       if (event.key === "Enter") {
         event.preventDefault();
         void loginWithAccount();
+      }
+    });
+  }
+
+  function hideSwitchConfirm() {
+    switchingShop = false;
+    if (switchShopConfirm) switchShopConfirm.classList.add("hidden");
+  }
+
+  if (switchShopBtn) {
+    switchShopBtn.addEventListener("click", () => {
+      if (connecting) return;
+      switchingShop = true;
+      if (switchShopConfirm) switchShopConfirm.classList.remove("hidden");
+      clearConnectMessage();
+    });
+  }
+
+  if (switchShopCancelBtn) {
+    switchShopCancelBtn.addEventListener("click", () => {
+      hideSwitchConfirm();
+      clearConnectMessage();
+    });
+  }
+
+  if (switchShopConfirmBtn) {
+    switchShopConfirmBtn.addEventListener("click", async () => {
+      if (connecting) return;
+      connecting = true;
+      if (switchShopConfirmBtn) switchShopConfirmBtn.disabled = true;
+      if (switchShopCancelBtn) switchShopCancelBtn.disabled = true;
+      clearConnectMessage();
+      setConnectMessage("Reconnecting…", true);
+      try {
+        const result = await window.printAgent.switchShop();
+        if (!result || result.success === false) {
+          throw new Error("Unable to reconnect.");
+        }
+        hideSwitchConfirm();
+        if (pairSuccess) {
+          pairSuccess.classList.add("hidden");
+          pairSuccess.innerHTML = "";
+        }
+        if (loginPassword) loginPassword.value = "";
+        setConnectMessage(
+          "Disconnected. Sign in to connect this Agent.",
+          true,
+        );
+        await refresh();
+      } catch (error) {
+        hideSwitchConfirm();
+        setConnectMessage(
+          error instanceof Error ? error.message : "Unable to reconnect.",
+          false,
+        );
+        await refresh();
+      } finally {
+        connecting = false;
+        if (switchShopConfirmBtn) switchShopConfirmBtn.disabled = false;
+        if (switchShopCancelBtn) switchShopCancelBtn.disabled = false;
       }
     });
   }

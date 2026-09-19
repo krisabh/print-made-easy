@@ -37,10 +37,10 @@ async function main() {
     assert.equal(WINDOWS_AGENT_DOWNLOAD.href, "/api/agent/download");
     assert.equal(
       WINDOWS_AGENT_DOWNLOAD.fileName,
-      "PrintYantra-Agent-Setup-1.5.0.exe",
+      "PrintYantra-Agent-Setup-1.5.1.exe",
     );
-    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.5.0");
-    console.log("1 PASS dashboard download metadata is Agent 1.5.0");
+    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.5.1");
+    console.log("1 PASS dashboard download metadata is Agent 1.5.1");
 
     const missingEnv = resolveWindowsAgentInstallerPath("");
     assert.equal(missingEnv.ok, false);
@@ -94,7 +94,7 @@ async function main() {
 
     const ok = resolveWindowsAgentInstallerPath(installerPath);
     assert.equal(ok.ok, true);
-    const okRes = await createWindowsAgentDownloadResponse(installerPath);
+    const okRes = await createWindowsAgentDownloadResponse(installerPath, "");
     assert.equal(okRes.status, 200);
     assert.equal(
       okRes.headers.get("Content-Type"),
@@ -118,12 +118,37 @@ async function main() {
     assert.equal(headerDump.includes(tmpRoot), false);
     console.log("5 PASS valid file streams with attachment headers");
 
+    // Defense-in-depth: configured SHA must match on-disk bytes
+    const { createHash } = await import("node:crypto");
+    const goodSha = createHash("sha256").update(payload).digest("hex");
+    const matchRes = await createWindowsAgentDownloadResponse(
+      installerPath,
+      goodSha,
+    );
+    assert.equal(matchRes.status, 200);
+    await matchRes.arrayBuffer();
+    const badSha =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const mismatchRes = await createWindowsAgentDownloadResponse(
+      installerPath,
+      badSha,
+    );
+    assert.equal(mismatchRes.status, 500);
+    const mismatchBody = await mismatchRes.text();
+    assert.equal(mismatchBody.includes(badSha), false);
+    assert.equal(mismatchBody.includes(goodSha), false);
+    assert.equal(mismatchBody.includes(installerPath), false);
+    console.log("5b PASS SHA mismatch fails closed without exposing digests");
+
     // The HTTP route ignores query strings; the helper has no client path argument.
     const ignoredQuery = new URL(
       "http://localhost/api/agent/download?path=/etc/passwd&file=secrets.env",
     );
     assert.equal(ignoredQuery.searchParams.get("path"), "/etc/passwd");
-    const stillInstaller = await createWindowsAgentDownloadResponse(installerPath);
+    const stillInstaller = await createWindowsAgentDownloadResponse(
+      installerPath,
+      "",
+    );
     assert.equal(stillInstaller.status, 200);
     await stillInstaller.arrayBuffer();
     console.log("6 PASS client cannot request an arbitrary filesystem path");

@@ -18,6 +18,7 @@ import {
 } from "./api-client";
 import {
   LOGIN_ITEM_NAME,
+  clearShopSession,
   loadConfig,
   updateConfig,
   getConfigPaths,
@@ -773,6 +774,24 @@ function registerIpc() {
       }
     },
   );
+
+  ipcMain.handle("agent:switch-shop", async () => {
+    const before = loadConfig();
+    const next = clearShopSession();
+    printerCapabilities = [];
+    lastConnection = {
+      status: "Disconnected",
+      message: "Sign in to connect a shop.",
+    };
+    return {
+      success: true as const,
+      paired: false,
+      agentId: next.agentId,
+      openAtLogin: next.openAtLogin,
+      apiUrl: next.apiUrl,
+      previousShopCode: before.shopCode || null,
+    };
+  });
 }
 
 function focusExistingAgent() {
