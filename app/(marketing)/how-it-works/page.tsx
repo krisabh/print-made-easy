@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: "How It Works",
   description:
-    "See how shopkeepers and customers use PrintMadeEasy — from shop QR setup to upload, live status, printing, and automatic document deletion after 1 hour.",
+    "See how shopkeepers and customers use PrintYantra — from shop QR setup to upload, live status, printing, and automatic document deletion after 1 hour.",
 };
 
 export default function HowItWorksPage() {
@@ -28,7 +28,7 @@ export default function HowItWorksPage() {
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
             Two simple journeys — one for shopkeepers, one for customers —
-            connected by PrintMadeEasy.
+            connected by PrintYantra.
           </p>
         </div>
       </section>

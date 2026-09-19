@@ -43,7 +43,7 @@ export function SubscriptionGateBanner({ access }: SubscriptionGateBannerProps) 
       </p>
       <p className="mt-1 text-sm opacity-90">
         {trialExpired
-          ? "Subscribe to continue using PrintMadeEasy."
+          ? "Subscribe to continue using PrintYantra."
           : pastDueExpired
             ? access.detail ||
               "Your Premium payment failed and the grace period has ended. Restore payment to unlock printing."

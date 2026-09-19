@@ -24,7 +24,7 @@ type ConnectPrintAgentCardProps = {
 /**
  * Dashboard Agent status card.
  * Multi-computer setup: install Agent on each PC and sign in with the same
- * PrintMadeEasy email/password. No QR / pairing-link UX.
+ * PrintYantra email/password. No QR / pairing-link UX.
  */
 export function ConnectPrintAgentCard({
   shopName,
@@ -70,19 +70,19 @@ export function ConnectPrintAgentCard({
     ? "Agent Connected"
     : everConnected
       ? "Agent Offline"
-      : "Connect your PrintMadeEasy Agent";
+      : "Connect your PrintYantra Agent";
   const agentMeaning = status.connected
     ? "Your shop is ready to receive and print orders."
     : everConnected
-      ? "Start the PrintMadeEasy Agent to receive and print customer orders."
-      : "Install and sign in to the PrintMadeEasy Agent to start receiving orders.";
+      ? "Start the PrintYantra Agent to receive and print customer orders."
+      : "Install and sign in to the PrintYantra Agent to start receiving orders.";
 
   return (
     <section className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <h3 className="text-base font-semibold text-slate-900">Print Agent</h3>
       <p className="mt-1 text-sm text-slate-500">
         Install the Windows Agent on your printer computer and sign in with your
-        PrintMadeEasy account. Keep the Agent running while you accept orders.
+        PrintYantra account. Keep the Agent running while you accept orders.
       </p>
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
@@ -146,7 +146,7 @@ export function ConnectPrintAgentCard({
           <p>Subscribe to connect a Print Agent and start printing.</p>
         ) : (
           <p>
-            Use the same PrintMadeEasy account on multiple computers. Open the
+            Use the same PrintYantra account on multiple computers. Open the
             Agent on each PC and sign in with your shop email and password. Your
             shop stays connected when at least one Agent is running.
           </p>

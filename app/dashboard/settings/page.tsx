@@ -20,7 +20,7 @@ export default async function ProfilePage() {
       <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="text-base font-semibold text-slate-900">Account</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Signed in as the shop owner for this PrintMadeEasy shop.
+          Signed in as the shop owner for this PrintYantra shop.
         </p>
         <dl className="mt-4 space-y-3 text-sm">
           <div>

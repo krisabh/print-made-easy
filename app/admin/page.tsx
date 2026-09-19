@@ -11,7 +11,7 @@ export default async function AdminOverviewPage() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Overview</h2>
         <p className="mt-1 text-sm text-slate-500">
-          System-wide PrintMadeEasy metrics.
+          System-wide PrintYantra metrics.
         </p>
       </div>
       <AdminOverviewCards metrics={metrics} />

@@ -23,8 +23,8 @@ import { isSafeInstallerFileName } from "../print-agent/src/update-download";
 import { CONFIG_PATH, resolveOpenAtLogin } from "../print-agent/src/config";
 import { isPrintOperationBusy } from "../print-agent/src/job-service";
 
-const FILE_NAME = "PrintMadeEasy-Agent-Setup-1.4.1.exe";
-const FIXTURE = Buffer.from("PrintMadeEasy-Agent-Phase8E-fixture\n");
+const FILE_NAME = "PrintYantra-Agent-Setup-1.5.1.exe";
+const FIXTURE = Buffer.from("PrintYantra-Agent-Phase8E-fixture\n");
 const FIXTURE_SHA = createHash("sha256").update(FIXTURE).digest("hex");
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
@@ -82,9 +82,9 @@ async function main() {
     // Final SHA-256 match
     const match = await validateInstallerForHandoff({
       status: "readyToInstall",
-      currentVersion: "1.4.0",
+      currentVersion: "1.5.0",
       manifest: {
-        version: "1.4.1",
+        version: "1.5.1",
         sha256: FIXTURE_SHA,
         fileName: FILE_NAME,
       },
@@ -98,9 +98,9 @@ async function main() {
     await fsp.writeFile(goodPath, FIXTURE);
     const mismatch = await validateInstallerForHandoff({
       status: "readyToInstall",
-      currentVersion: "1.4.0",
+      currentVersion: "1.5.0",
       manifest: {
-        version: "1.4.1",
+        version: "1.5.1",
         sha256: createHash("sha256").update("wrong").digest("hex"),
         fileName: FILE_NAME,
       },
@@ -115,9 +115,9 @@ async function main() {
     // Missing installer
     const missing = await validateInstallerForHandoff({
       status: "readyToInstall",
-      currentVersion: "1.4.0",
+      currentVersion: "1.5.0",
       manifest: {
-        version: "1.4.1",
+        version: "1.5.1",
         sha256: FIXTURE_SHA,
         fileName: FILE_NAME,
       },
@@ -143,8 +143,8 @@ async function main() {
     } | null = null;
 
     const checker = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
-      getApiUrl: () => "https://clauras.com",
+      getCurrentVersion: () => "1.5.0",
+      getApiUrl: () => "https://printyantra.com",
       getUpdateTempDir: () => tempDir,
       isBusy: () => busy,
       requestAgentExitForUpdate: () => {
@@ -175,8 +175,8 @@ async function main() {
 
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.4.1",
-        url: "https://clauras.com/api/agent/download",
+        version: "1.5.1",
+        url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "test",
         fileName: FILE_NAME,
@@ -216,8 +216,8 @@ async function main() {
     let exitCalls = 0;
 
     const checker = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
-      getApiUrl: () => "https://clauras.com",
+      getCurrentVersion: () => "1.5.0",
+      getApiUrl: () => "https://printyantra.com",
       getUpdateTempDir: () => tempDir,
       isBusy: () => false,
       requestAgentExitForUpdate: () => {
@@ -233,8 +233,8 @@ async function main() {
 
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.4.1",
-        url: "https://clauras.com/api/agent/download",
+        version: "1.5.1",
+        url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "test",
         fileName: FILE_NAME,
@@ -290,7 +290,7 @@ async function main() {
 
   // Config / auto-start preservation logic (code-level)
   {
-    assert.ok(CONFIG_PATH.includes("PrintMadeEasy"));
+    assert.ok(CONFIG_PATH.includes("PrintYantra"));
     assert.ok(CONFIG_PATH.includes("agent-config.json"));
     assert.equal(resolveOpenAtLogin(true), true);
     assert.equal(resolveOpenAtLogin(false), false);
@@ -329,8 +329,8 @@ async function main() {
     const installerPath = path.join(tempDir, FILE_NAME);
     await fsp.writeFile(installerPath, FIXTURE);
     const checker = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
-      getApiUrl: () => "https://clauras.com",
+      getCurrentVersion: () => "1.5.0",
+      getApiUrl: () => "https://printyantra.com",
       getUpdateTempDir: () => tempDir,
       isBusy: () => false,
       requestAgentExitForUpdate: () => undefined,
@@ -338,8 +338,8 @@ async function main() {
     });
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.4.1",
-        url: "https://clauras.com/api/agent/download",
+        version: "1.5.1",
+        url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "t",
         fileName: FILE_NAME,

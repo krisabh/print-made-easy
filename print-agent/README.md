@@ -1,6 +1,6 @@
-# PrintMadeEasy Windows Print Agent
+# PrintYantra Windows Print Agent
 
-Local Windows bridge between  PrintMadeEasy and your printer.
+Local Windows bridge between  PrintYantra and your printer.
 
 ## V1 features
 
@@ -44,7 +44,7 @@ npm run dist
 
 Output:
 
-- `release/PrintMadeEasy-Agent-Setup-1.0.0.exe`
+- `release/PrintYantra-Agent-Setup-1.5.0.exe`
 
 Unpacked app (no installer):
 
@@ -54,8 +54,8 @@ npm run pack
 
 ## Local data
 
-- Config: `C:\ProgramData\PrintMadeEasy\agent-config.json`
-- Temp jobs: `C:\ProgramData\PrintMadeEasy\jobs\`
+- Config: `C:\ProgramData\PrintYantra\agent-config.json`
+- Temp jobs: `C:\ProgramData\PrintYantra\jobs\`
 
 Temp files older than 1 hour are deleted on startup.
 

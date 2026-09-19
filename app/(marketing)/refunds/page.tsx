@@ -7,7 +7,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Refund & Cancellation Policy",
   description:
-    "Refund and cancellation policy for PrintMadeEasy Premium (₹199/month) for print-shop owners.",
+    "Refund and cancellation policy for PrintYantra Premium (₹199/month) for print-shop owners.",
   alternates: {
     canonical: "/refunds",
   },
@@ -24,15 +24,15 @@ export default function RefundsPage() {
 
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
-            This policy explains how shopkeepers can cancel PrintMadeEasy
+            This policy explains how shopkeepers can cancel PrintYantra
             Premium, what happens after cancellation, how the free trial works,
             and how refunds and billing questions are handled.
           </p>
           <p>
-            PrintMadeEasy, a Clauras product powered by Ramyad Enterprises -
+            PrintYantra, a Clauras product powered by Ramyad Enterprises -
             Abhiram, is a software subscription for print-shop owners
             (shopkeepers). Customers who upload documents to a shop do not pay
-            PrintMadeEasy through this billing system.
+            PrintYantra through this billing system.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
@@ -45,7 +45,7 @@ export default function RefundsPage() {
             </span>{" "}
             after a{" "}
             <span className="font-medium text-slate-800">7-day free trial</span>.
-            The trial lets you evaluate PrintMadeEasy before purchasing Premium.
+            The trial lets you evaluate PrintYantra before purchasing Premium.
             If you do not pay for Premium after the trial ends, Premium access
             ends according to the product&apos;s entitlement rules.
           </p>

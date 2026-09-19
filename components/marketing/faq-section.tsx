@@ -8,28 +8,28 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "What is PrintMadeEasy?",
-    a: "PrintMadeEasy is print-shop management software for shopkeepers. It helps print shops accept QR-based customer print requests, manage jobs, connect a Windows Print Agent, and track printer/agent status.",
+    q: "What is PrintYantra?",
+    a: "PrintYantra is print-shop management software for shopkeepers. It helps print shops accept QR-based customer print requests, manage jobs, connect a Windows Print Agent, and track printer/agent status.",
   },
   {
-    q: "Who pays for PrintMadeEasy?",
-    a: "The shopkeeper (print-shop owner) pays PrintMadeEasy. Premium is ₹199 per month (INR) after a 7-day free trial. Customers who scan a shop QR code and submit documents do not pay PrintMadeEasy.",
+    q: "Who pays for PrintYantra?",
+    a: "The shopkeeper (print-shop owner) pays PrintYantra. Premium is ₹199 per month (INR) after a 7-day free trial. Customers who scan a shop QR code and submit documents do not pay PrintYantra.",
   },
   {
-    q: "Who is PrintMadeEasy for?",
+    q: "Who is PrintYantra for?",
     a: "It is built for print shops, photocopy shops, stationery shops, cyber cafes, and small digital service centers that handle print orders.",
   },
   {
     q: "Do I need a special printer?",
-    a: "No special PrintMadeEasy printer is required. The Windows Agent works with printers already installed on your Windows computer.",
+    a: "No special PrintYantra printer is required. The Windows Agent works with printers already installed on your Windows computer.",
   },
   {
     q: "What is the Windows Print Agent?",
-    a: "The PrintMadeEasy Agent is a Windows application that runs on the computer connected to your printer and keeps that shop connected to PrintMadeEasy.",
+    a: "The PrintYantra Agent is a Windows application that runs on the computer connected to your printer and keeps that shop connected to PrintYantra.",
   },
   {
     q: "How do I connect my shop?",
-    a: "From the Printers page in your dashboard, generate a connection link and paste it into the PrintMadeEasy Agent. The link is one-time and expires after a short period.",
+    a: "From the Printers page in your dashboard, generate a connection link and paste it into the PrintYantra Agent. The link is one-time and expires after a short period.",
   },
   {
     q: "What happens if my printer is offline?",
@@ -41,11 +41,11 @@ const FAQS = [
   },
   {
     q: "What happens to uploaded documents?",
-    a: "Documents uploaded for printing are automatically deleted from the PrintMadeEasy server after 1 hour. Job history can remain in the dashboard, but the document files are removed.",
+    a: "Documents uploaded for printing are automatically deleted from the PrintYantra server after 1 hour. Job history can remain in the dashboard, but the document files are removed.",
   },
   {
     q: "Is the Windows Agent required?",
-    a: "Yes. After you create your shop and sign in, download the Agent from the Printers page in your dashboard. The Agent is required to connect your shop computer and process printing through PrintMadeEasy.",
+    a: "Yes. After you create your shop and sign in, download the Agent from the Printers page in your dashboard. The Agent is required to connect your shop computer and process printing through PrintYantra.",
   },
   {
     q: "How do I get support or cancel?",

@@ -1,9 +1,9 @@
 {
   "name": "print-made-easy-agent",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
-  "description": "PrintMadeEasy Windows Print Agent",
-  "author": "PrintMadeEasy",
+  "description": "PrintYantra Windows Print Agent",
+  "author": "PrintYantra",
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build && electron .",
@@ -14,9 +14,9 @@
     "dist": "npm run build && electron-builder --win nsis"
   },
   "build": {
-    "appId": "com.printmadeeasy.agent",
-    "productName": "PrintMadeEasy Agent",
-    "copyright": "Copyright © PrintMadeEasy",
+    "appId": "com.printyantra.agent",
+    "productName": "PrintYantra Agent",
+    "copyright": "Copyright © PrintYantra",
     "directories": {
       "output": "release"
     },
@@ -31,8 +31,8 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "PrintMadeEasy-Agent-Setup-${version}.${ext}",
-      "executableName": "PrintMadeEasy Agent",
+      "artifactName": "PrintYantra-Agent-Setup-${version}.${ext}",
+      "executableName": "PrintYantra Agent",
       "signAndEditExecutable": false
     },
     "nsis": {
@@ -42,8 +42,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PrintMadeEasy Agent",
-      "uninstallDisplayName": "PrintMadeEasy Agent",
+      "shortcutName": "PrintYantra Agent",
+      "uninstallDisplayName": "PrintYantra Agent",
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     }

@@ -36,7 +36,7 @@ export function ShopSetupChecklist({
   const steps: Step[] = [
     {
       id: "agent",
-      title: "Connect your PrintMadeEasy Agent",
+      title: "Connect your PrintYantra Agent",
       description:
         "Keep the Agent running on your computer so customer orders can reach your printer.",
       done: agentConnected,
@@ -90,7 +90,7 @@ export function ShopSetupChecklist({
             Set up your shop to accept print jobs
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Keep internet on, keep the PrintMadeEasy Agent running, then show
+            Keep internet on, keep the PrintYantra Agent running, then show
             your QR so customers can upload.
           </p>
         </div>

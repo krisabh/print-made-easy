@@ -393,7 +393,7 @@ async function main() {
       key: process.env.PAYU_MERCHANT_KEY!,
       txnid: `WH${txnId}`.slice(0, 45),
       amount: "199.00",
-      productinfo: "PrintMadeEasy Premium",
+      productinfo: "PrintYantra Premium",
       firstname: "Ravi",
       email: shop.email!,
       udf1: shop.id,

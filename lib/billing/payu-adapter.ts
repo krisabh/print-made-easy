@@ -104,7 +104,7 @@ export function createPayUAdapter(): PaymentProviderAdapter {
           txnId: input.providerOrderId,
           amountInr: input.amountInr,
           currency: input.currency,
-          productInfo: "PrintMadeEasy Premium",
+          productInfo: "PrintYantra Premium",
           customer: {
             firstName,
             lastName,

@@ -1,5 +1,5 @@
 export const SITE = {
-  name: "PrintMadeEasy",
+  name: "PrintYantra",
   parentCompany: "Clauras",
   /** Registered enterprise / operator (exact legal style name). */
   legalName: "Ramyad Enterprises - Abhiram",
@@ -15,11 +15,11 @@ export const SITE = {
     "A Clauras product • Powered by Ramyad Enterprises - Abhiram",
   /** Preferred relationship sentence for about/legal/contact. */
   relationship:
-    "PrintMadeEasy is a Clauras product, powered by Ramyad Enterprises - Abhiram.",
-  title: "PrintMadeEasy | Print Shop Management Software",
+    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram.",
+  title: "PrintYantra | Print Shop Management Software",
   description:
-    "PrintMadeEasy is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. Subscribe for ₹199/month after a 7-day free trial. Customers scan the shop QR code to submit documents for printing — they do not pay PrintMadeEasy. Uploaded documents are deleted automatically after 1 hour.",
-  url: "https://clauras.com",
+    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. Subscribe for ₹199/month after a 7-day free trial. Customers scan the shop QR code to submit documents for printing — they do not pay PrintYantra. Uploaded documents are deleted automatically after 1 hour.",
+  url: "https://printyantra.com",
   email: "clauras.ai@gmail.com",
   emailHref: "mailto:clauras.ai@gmail.com",
   phone: "8618089513",
@@ -28,8 +28,8 @@ export const SITE = {
   /** International WhatsApp number without + (India +91, no leading 0). */
   whatsappE164: "918618089513",
   whatsappPrefillMessage:
-    "Hello PrintMadeEasy Support, I need help with my print shop account.",
-  whatsappLabel: "Chat with PrintMadeEasy Support on WhatsApp",
+    "Hello PrintYantra Support, I need help with my print shop account.",
+  whatsappLabel: "Chat with PrintYantra Support on WhatsApp",
 } as const;
 
 /** Official WhatsApp click-to-chat URL with safe prefilled message (no secrets). */

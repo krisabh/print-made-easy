@@ -80,7 +80,7 @@ export async function sendMail(input: {
   });
 
   await transporter.sendMail({
-    from: `PrintMadeEasy <${config.from}>`,
+    from: `PrintYantra <${config.from}>`,
     to: input.to,
     subject: input.subject,
     text: input.text,
@@ -92,19 +92,19 @@ export function buildPasswordResetEmail(input: {
   resetUrl: string;
   recipientName?: string | null;
 }) {
-  const subject = "Reset your PrintMadeEasy password";
+  const subject = "Reset your PrintYantra password";
   const greeting = input.recipientName?.trim()
     ? `Hi ${input.recipientName.trim()},`
     : "Hi,";
 
   const text = [
-    "PrintMadeEasy",
+    "PrintYantra",
     "",
     "Password Reset",
     "",
     greeting,
     "",
-    "We received a request to reset the password for your PrintMadeEasy account.",
+    "We received a request to reset the password for your PrintYantra account.",
     "Open the link below to create a new password:",
     "",
     input.resetUrl,
@@ -112,7 +112,7 @@ export function buildPasswordResetEmail(input: {
     "This link expires in 30 minutes and can only be used once.",
     "",
     "If you did not request a password reset, you can safely ignore this email.",
-    "For security, PrintMadeEasy will never ask for your existing password.",
+    "For security, PrintYantra will never ask for your existing password.",
   ].join("\n");
 
   const html = `<!DOCTYPE html>
@@ -124,21 +124,21 @@ export function buildPasswordResetEmail(input: {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
           <tr>
             <td style="padding:28px 28px 8px;">
-              <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2563eb;">PrintMadeEasy</p>
+              <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2563eb;">PrintYantra</p>
               <h1 style="margin:12px 0 0;font-size:22px;line-height:1.3;color:#0f172a;">Password Reset</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 28px 24px;font-size:14px;line-height:1.6;color:#334155;">
               <p style="margin:0 0 14px;">${escapeHtml(greeting)}</p>
-              <p style="margin:0 0 14px;">We received a request to reset the password for your PrintMadeEasy account.</p>
+              <p style="margin:0 0 14px;">We received a request to reset the password for your PrintYantra account.</p>
               <p style="margin:0 0 22px;">Click the button below to create a new password.</p>
               <p style="margin:0 0 22px;">
                 <a href="${escapeHtml(input.resetUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;font-size:14px;">Reset Password</a>
               </p>
               <p style="margin:0 0 14px;color:#64748b;font-size:13px;">This link expires in 30 minutes and can only be used once.</p>
               <p style="margin:0 0 14px;color:#64748b;font-size:13px;">If you did not request a password reset, you can safely ignore this email.</p>
-              <p style="margin:0;color:#64748b;font-size:13px;">For security, PrintMadeEasy will never ask for your existing password.</p>
+              <p style="margin:0;color:#64748b;font-size:13px;">For security, PrintYantra will never ask for your existing password.</p>
             </td>
           </tr>
         </table>

@@ -30,7 +30,7 @@ export default async function PlanBillingPage() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">My Plan / Billing</h2>
         <p className="mt-1 text-sm text-slate-500">
-          View your current plan and manage your PrintMadeEasy subscription.
+          View your current plan and manage your PrintYantra subscription.
         </p>
       </div>
 

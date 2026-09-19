@@ -94,7 +94,7 @@ async function main() {
     assert.equal(existingResult.message, PASSWORD_RESET_GENERIC_MESSAGE);
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.to, email);
-    assert.match(sent[0]?.subject || "", /Reset your PrintMadeEasy password/i);
+    assert.match(sent[0]?.subject || "", /Reset your PrintYantra password/i);
     assert.match(sent[0]?.text || "", /https:\/\/clauras\.com\/reset-password\?token=/);
     assert.doesNotMatch(sent[0]?.text || "", /tokenHash/i);
 

@@ -19,9 +19,9 @@ import {
 } from "../print-agent/src/update-download";
 import { sha256HexOfBuffer } from "../print-agent/src/sha256-file";
 
-const FIXTURE = Buffer.from("PrintMadeEasy-Agent-Phase8D-fixture-v1\n");
+const FIXTURE = Buffer.from("PrintYantra-Agent-Phase8D-fixture-v1\n");
 const FIXTURE_SHA = sha256HexOfBuffer(FIXTURE);
-const FILE_NAME = "PrintMadeEasy-Agent-Setup-1.4.1.exe";
+const FILE_NAME = "PrintYantra-Agent-Setup-1.5.1.exe";
 const TRUSTED = "http://127.0.0.1";
 
 function shaHex(data: Buffer | string) {
@@ -41,7 +41,7 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 
 function manifestFor(serverUrl: string, overrides: Record<string, unknown> = {}) {
   return {
-    version: "1.4.1",
+    version: "1.5.1",
     url: serverUrl,
     sha256: FIXTURE_SHA,
     notes: "Phase 8D test",
@@ -58,7 +58,7 @@ async function main() {
     "C:\\installer.exe",
     "/installer.exe",
     "setup.exe",
-    "PrintMadeEasy-Agent-Setup-1.4.1.exe/../x.exe",
+    "PrintYantra-Agent-Setup-1.5.1.exe/../x.exe",
   ]) {
     assert.equal(isSafeInstallerFileName(bad), false, bad);
   }
@@ -72,7 +72,7 @@ async function main() {
     false,
   );
   assert.equal(
-    assertTrustedDownloadUrl("https://clauras.com/api/agent/download", TRUSTED).ok,
+    assertTrustedDownloadUrl("https://printyantra.com/api/agent/download", TRUSTED).ok,
     false,
   );
   assert.equal(
@@ -80,7 +80,7 @@ async function main() {
     false,
   );
   assert.equal(
-    assertTrustedDownloadUrl("http://evil.example.com/api/agent/download", "https://clauras.com")
+    assertTrustedDownloadUrl("http://evil.example.com/api/agent/download", "https://printyantra.com")
       .ok,
     false,
   );
@@ -100,7 +100,7 @@ async function main() {
 
       let checker!: ReturnType<typeof createUpdateChecker>;
       checker = createUpdateChecker({
-        getCurrentVersion: () => "1.4.0",
+        getCurrentVersion: () => "1.5.0",
         getApiUrl: () => apiOrigin,
         getUpdateTempDir: () => tempDir,
         fetchImpl: async (input, init) => {
@@ -141,7 +141,7 @@ async function main() {
       assert.equal(checker.getPublicState().status, "readyToInstall");
       assert.equal(checker.getPublicState().updateNowReady, true);
       assert.equal(checker.getPublicState().fileName, FILE_NAME);
-      assert.equal(checker.getPublicState().latestVersion, "1.4.1");
+      assert.equal(checker.getPublicState().latestVersion, "1.5.1");
 
       const installerPath = checker.getVerifiedInstallerPath();
       assert.ok(installerPath);
@@ -176,13 +176,13 @@ async function main() {
   // C — sha256 null → verificationUnavailable
   {
     const c = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
-      getApiUrl: () => "https://clauras.com",
+      getCurrentVersion: () => "1.5.0",
+      getApiUrl: () => "https://printyantra.com",
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
-            version: "1.4.1",
-            url: "https://clauras.com/api/agent/download",
+            version: "1.5.1",
+            url: "https://printyantra.com/api/agent/download",
             sha256: null,
             notes: "x",
             fileName: FILE_NAME,
@@ -203,7 +203,7 @@ async function main() {
   await withTempDir(async (tempDir) => {
     const r = await downloadAndVerifyInstaller({
       manifest: {
-        version: "1.4.1",
+        version: "1.5.1",
         url: "http://127.0.0.1/api/agent/download",
         sha256: "not-a-valid-sha256-digest!!!!!!!!!!!!!!!!!",
         fileName: FILE_NAME,
@@ -224,7 +224,7 @@ async function main() {
       const wrongSha = shaHex("wrong-payload");
       const r = await downloadAndVerifyInstaller({
         manifest: {
-          version: "1.4.1",
+          version: "1.5.1",
           url: server.url,
           sha256: wrongSha,
           fileName: FILE_NAME,
@@ -249,7 +249,7 @@ async function main() {
     await withTempDir(async (tempDir) => {
       const r = await downloadAndVerifyInstaller({
         manifest: {
-          version: "1.4.1",
+          version: "1.5.1",
           url: "http://127.0.0.1/api/agent/download",
           sha256: FIXTURE_SHA,
           fileName: FILE_NAME,
@@ -268,7 +268,7 @@ async function main() {
   await withTempDir(async (tempDir) => {
     const r = await downloadAndVerifyInstaller({
       manifest: {
-        version: "1.4.1",
+        version: "1.5.1",
         url: "http://127.0.0.1/api/agent/download",
         sha256: FIXTURE_SHA,
         fileName: FILE_NAME,
@@ -303,7 +303,7 @@ async function main() {
     });
 
     const checker = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
+      getCurrentVersion: () => "1.5.0",
       getApiUrl: () => apiOrigin,
       getUpdateTempDir: () => tempDir,
       fetchImpl: async (input, init) => {
@@ -375,7 +375,7 @@ async function main() {
     });
 
     const checker = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
+      getCurrentVersion: () => "1.5.0",
       getApiUrl: () => apiOrigin,
       getUpdateTempDir: () => tempDir,
       fetchImpl: async (input, init) => {

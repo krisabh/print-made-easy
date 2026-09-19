@@ -1,4 +1,4 @@
-# Print Made Easy
+# PrintYantra
 
 MVP for automating document printing at print shops: customers scan a QR code, upload documents, choose print options, and the Windows Print Agent prints on a local printer.
 

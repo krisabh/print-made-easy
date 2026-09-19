@@ -5,14 +5,14 @@ import { cn } from "@/lib/utils";
 
 type BrandHierarchyProps = {
   className?: string;
-  /** Show the PrintMadeEasy product name above Clauras / operator lines. */
+  /** Show the PrintYantra product name above Clauras / operator lines. */
   showProductName?: boolean;
   compact?: boolean;
 };
 
 /**
  * Consistent public brand hierarchy:
- * PrintMadeEasy → A Clauras product → Powered by Ramyad Enterprises - Abhiram
+ * PrintYantra → A Clauras product → Powered by Ramyad Enterprises - Abhiram
  */
 export function BrandHierarchy({
   className,

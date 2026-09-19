@@ -11,7 +11,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "About PrintMadeEasy — a Clauras product powered by Ramyad Enterprises - Abhiram. Registered enterprise details and contact.",
+    "About PrintYantra — a Clauras product powered by Ramyad Enterprises - Abhiram. Registered enterprise details and contact.",
 };
 
 export default function AboutPage() {
@@ -20,19 +20,19 @@ export default function AboutPage() {
       <section className="border-b border-slate-200 bg-[#f5f7fb] py-14">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <p className="text-xs font-semibold tracking-[0.14em] text-blue-700 uppercase">
-            About PrintMadeEasy
+            About PrintYantra
           </p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
             Print-management software for local shops
           </h1>
           <p className="mt-5 text-base leading-relaxed text-slate-600">
-            PrintMadeEasy is a print-management platform designed to help local
+            PrintYantra is a print-management platform designed to help local
             print shops receive, manage, and print customer documents more
             easily. Shopkeepers use a dashboard, QR-based customer submissions,
-            and a Windows Print Agent from one place.
+            and a PrintYantra Agent from one place.
           </p>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Customers do not pay PrintMadeEasy — they use the shop&apos;s QR
+            Customers do not pay PrintYantra — they use the shop&apos;s QR
             code to submit documents. Pricing is ₹199/month (INR) after a 7-day
             free trial. Uploaded documents are automatically deleted after 1
             hour.
@@ -54,7 +54,7 @@ export default function AboutPage() {
             </div>
             <p className="mt-6 text-xs leading-relaxed text-slate-500">
               Udyam and GST registrations identify the registered enterprise.
-              They do not mean government endorsement of PrintMadeEasy.
+              They do not mean government endorsement of PrintYantra.
             </p>
           </div>
 

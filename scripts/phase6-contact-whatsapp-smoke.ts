@@ -22,7 +22,7 @@ function read(rel: string) {
 
 function main() {
   const expectedMessage =
-    "Hello PrintMadeEasy Support, I need help with my print shop account.";
+    "Hello PrintYantra Support, I need help with my print shop account.";
   const expectedHref = `https://wa.me/918618089513?text=${encodeURIComponent(expectedMessage)}`;
 
   // A — authenticated dashboard contains Contact Us
@@ -65,7 +65,7 @@ function main() {
   assert.ok(expectedHref.includes(encodeURIComponent(expectedMessage)));
   assert.ok(
     expectedHref.includes(
-      "Hello%20PrintMadeEasy%20Support%2C%20I%20need%20help%20with%20my%20print%20shop%20account.",
+      "Hello%20PrintYantra%20Support%2C%20I%20need%20help%20with%20my%20print%20shop%20account.",
     ),
   );
   console.log("E PASS prefilled message present and URL-encoded");
@@ -109,7 +109,7 @@ function main() {
   console.log("H PASS /support remains functional");
 
   // I — company identity remains correct
-  assert.equal(SITE.name, "PrintMadeEasy");
+  assert.equal(SITE.name, "PrintYantra");
   assert.equal(SITE.parentCompany, "Clauras");
   assert.equal(SITE.legalName, "Ramyad Enterprises - Abhiram");
   assert.equal(SITE.email, "clauras.ai@gmail.com");

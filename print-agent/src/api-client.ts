@@ -199,7 +199,7 @@ export async function setPrinterColorSupported(input: {
       );
       if (!row || row.colorSupported !== input.colorSupported) {
         throw new Error(
-          "Color setting was not saved. Deploy the latest PrintMadeEasy web app, then try again.",
+          "Color setting was not saved. Deploy the latest PrintYantra web app, then try again.",
         );
       }
       return row;
@@ -279,7 +279,7 @@ export async function loginWithAccount(input: {
       });
     } catch {
       throw new Error(
-        "Unable to connect to PrintMadeEasy. Check your internet connection.",
+        "Unable to connect to PrintYantra. Check your internet connection.",
       );
     }
 
@@ -369,7 +369,7 @@ export async function ensureAgentAuthenticated(input: {
       return {
         status: "Disconnected" as const,
         message:
-          "Not connected. Sign in with your PrintMadeEasy email and password.",
+          "Not connected. Sign in with your PrintYantra email and password.",
       };
     }
 

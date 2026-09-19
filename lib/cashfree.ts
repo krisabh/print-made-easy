@@ -179,7 +179,7 @@ export async function createCashfreeSubscription(input: {
         plan_intervals: PREMIUM_PLAN.intervals,
         plan_interval_type: PREMIUM_PLAN.intervalType,
         plan_currency: PREMIUM_PLAN.currency,
-        plan_note: "PrintMadeEasy Premium monthly subscription",
+        plan_note: "PrintYantra Premium monthly subscription",
       };
 
   const body = {
@@ -353,7 +353,7 @@ export async function createCashfreeOrder(input: {
     order_meta: {
       return_url: input.returnUrl,
     },
-    order_note: (input.orderNote || "PrintMadeEasy Premium").slice(0, 200),
+    order_note: (input.orderNote || "PrintYantra Premium").slice(0, 200),
   };
 
   const response = await fetchImpl(`${getBaseUrl(config.environment)}/orders`, {

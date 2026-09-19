@@ -29,10 +29,10 @@ export function HeroSection() {
             <span className="block text-blue-700">Without the Print Chaos.</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
-            PrintMadeEasy is print-shop management software for shopkeepers.
+            PrintYantra is print-shop management software for shopkeepers.
             Customers scan your shop QR code to submit documents; your Windows
             Agent prints them. Shopkeepers subscribe for ₹{PREMIUM_PLAN.amountInr}
-            /month after a 7-day free trial — customers do not pay PrintMadeEasy.
+            /month after a 7-day free trial — customers do not pay PrintYantra.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
@@ -68,7 +68,7 @@ function ProductPreview() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase">
-                PrintMadeEasy
+                PrintYantra
               </p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
                 Clauras Print Hub
@@ -242,7 +242,7 @@ export function FeaturesSection({ compact = false }: { compact?: boolean }) {
     {
       icon: Cable,
       title: "Windows Print Agent",
-      body: "Connect the shop computer to PrintMadeEasy and communicate with the connected printer.",
+      body: "Connect the shop computer to PrintYantra and communicate with the connected printer.",
     },
     {
       icon: Printer,
@@ -349,7 +349,7 @@ export function AgentOverviewSection() {
             Built for the computer already connected to your printer
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            After you create your shop and sign in, download the PrintMadeEasy
+            After you create your shop and sign in, download the PrintYantra
             Agent from the Printers page in your dashboard. Install it on the
             Windows computer connected to your printer. The Agent detects the
             available printer and keeps your shop connected.
@@ -377,7 +377,7 @@ export function AgentOverviewSection() {
           <ul className="mt-4 space-y-3 text-sm text-slate-600">
             <li className="flex gap-2">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-              Connects your shop computer to PrintMadeEasy
+              Connects your shop computer to PrintYantra
             </li>
             <li className="flex gap-2">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
@@ -412,13 +412,13 @@ export function PricingSection() {
           <p className="mt-4 text-base text-slate-600">
             Every new shopkeeper gets a 7-day Premium trial with signup. After
             that,{" "}
-            <span className="font-medium text-slate-800">PrintMadeEasy</span>{" "}
+            <span className="font-medium text-slate-800">PrintYantra</span>{" "}
             Premium is{" "}
             <span className="font-medium text-slate-800">
               ₹{PREMIUM_PLAN.amountInr}/month (INR)
             </span>
-            . Only shopkeepers pay PrintMadeEasy — customers who submit
-            documents via the shop QR code do not pay PrintMadeEasy.
+            . Only shopkeepers pay PrintYantra — customers who submit
+            documents via the shop QR code do not pay PrintYantra.
           </p>
         </div>
 
@@ -454,7 +454,7 @@ export function PricingSection() {
 
           <article className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm ring-1 ring-blue-100">
             <p className="text-sm font-semibold text-blue-700">
-              PrintMadeEasy Premium
+              PrintYantra Premium
             </p>
             <h3 className="mt-2 text-2xl font-semibold text-slate-900">
               ₹{PREMIUM_PLAN.amountInr}
@@ -466,7 +466,7 @@ export function PricingSection() {
             <p className="mt-2 text-sm text-slate-600">
               Everything you need to simplify printing at your shop. Paid by the
               shopkeeper after the free trial. Customers do not pay
-              PrintMadeEasy.
+              PrintYantra.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {[
@@ -507,7 +507,7 @@ export function FinalCtaSection() {
         </h2>
         <p className="mt-4 text-base text-blue-100">
           Set up your shop and start managing your print workflow with
-          PrintMadeEasy.
+          PrintYantra.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link

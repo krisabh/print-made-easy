@@ -42,7 +42,7 @@ async function probe(label: string, mutate: (body: any) => void) {
     currency: "INR",
     txnId,
     order: {
-      productInfo: "PrintMadeEasy Premium",
+      productInfo: "PrintYantra Premium",
       paymentChargeSpecification: { price: 199 },
       userDefinedFields: { udf1: "ab" },
     },

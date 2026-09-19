@@ -47,7 +47,7 @@ async function buildPrintableSheetDataUrl(options: {
   ctx.fillStyle = "#1d4ed8";
   ctx.font = "700 36px Arial, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("PRINTMADEEASY", width / 2, 84);
+  ctx.fillText("PRINTYANTRA", width / 2, 84);
 
   ctx.fillStyle = "#0f172a";
   ctx.font = "700 54px Arial, sans-serif";
@@ -228,7 +228,7 @@ export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-blue-100 bg-blue-50 px-5 py-4 text-center">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-blue-700 uppercase">
-            PrintMadeEasy
+            PrintYantra
           </p>
           <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
             {shopName}

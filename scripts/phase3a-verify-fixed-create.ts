@@ -32,7 +32,7 @@ async function main() {
     txnId,
     amountInr: 199,
     currency: "INR",
-    productInfo: "PrintMadeEasy Premium",
+    productInfo: "PrintYantra Premium",
     customer: {
       firstName: "Diag",
       lastName: "User",

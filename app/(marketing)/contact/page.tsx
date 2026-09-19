@@ -8,7 +8,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Contact Us",
   description:
-    "Contact PrintMadeEasy, a Clauras product powered by Ramyad Enterprises - Abhiram, for shop subscription, Windows Agent, billing, or product support.",
+    "Contact PrintYantra, a Clauras product powered by Ramyad Enterprises - Abhiram, for shop subscription, Windows Agent, billing, or product support.",
   alternates: {
     canonical: "/contact",
   },

@@ -46,14 +46,14 @@ function agentPresentation(status: AgentStatus): {
       tone: "warn",
       label: "Connect Agent",
       meaning:
-        "Install and sign in to the PrintMadeEasy Agent to start receiving orders.",
+        "Install and sign in to the PrintYantra Agent to start receiving orders.",
     };
   }
   return {
     tone: "warn",
     label: "Agent Offline",
     meaning:
-      "Start the PrintMadeEasy Agent to receive and print customer orders.",
+      "Start the PrintYantra Agent to receive and print customer orders.",
   };
 }
 

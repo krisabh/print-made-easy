@@ -41,7 +41,7 @@ export async function POST() {
     );
 
     const customerName =
-      session.user.name || session.shop.shopName || "PrintMadeEasy Shop";
+      session.user.name || session.shop.shopName || "PrintYantra Shop";
     const customerEmail =
       session.user.email ||
       session.shop.email ||

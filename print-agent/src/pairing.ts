@@ -28,30 +28,30 @@ function isLocalHost(hostname: string) {
 }
 
 /**
- * Validate PrintMadeEasy pairing QR / paste URL.
+ * Validate PrintYantra pairing QR / paste URL.
  * Does not log the token.
  */
 export function parsePairingUrl(rawInput: string): ParsedPairingUrl {
   const raw = rawInput.trim();
   if (!raw) {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   const path = url.pathname.replace(/\/+$/, "") || "/";
   if (path !== "/agent/connect") {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   const pairingToken = url.searchParams.get("t")?.trim() || "";
   if (!pairingToken || pairingToken.length < 16) {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   const local = isLocalHost(url.hostname);
@@ -60,7 +60,7 @@ export function parsePairingUrl(rawInput: string): ParsedPairingUrl {
   } else if (url.protocol === "http:" && local) {
     // ok for local/dev
   } else {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   const configured = loadConfig().apiUrl;
@@ -77,7 +77,7 @@ export function parsePairingUrl(rawInput: string): ParsedPairingUrl {
     !isLocalHost(configuredHost) &&
     url.hostname !== configuredHost
   ) {
-    throw new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    throw new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
 
   return {
@@ -105,7 +105,7 @@ export function mapRegisterError(message: string): PairingError {
     lower.includes("invalid pairing") ||
     lower.includes("invalid")
   ) {
-    return new PairingError("INVALID", "Invalid PrintMadeEasy connection QR.");
+    return new PairingError("INVALID", "Invalid PrintYantra connection QR.");
   }
   if (
     lower.includes("fetch") ||
@@ -116,12 +116,12 @@ export function mapRegisterError(message: string): PairingError {
   ) {
     return new PairingError(
       "NETWORK",
-      "Unable to connect to PrintMadeEasy. Check your internet connection.",
+      "Unable to connect to PrintYantra. Check your internet connection.",
     );
   }
   return new PairingError(
     "NETWORK",
-    "Unable to connect to PrintMadeEasy. Check your internet connection.",
+    "Unable to connect to PrintYantra. Check your internet connection.",
   );
 }
 

@@ -39,7 +39,7 @@ export function AdminShell({ adminName, children }: AdminShellProps) {
         <aside className="border-b border-slate-200 bg-white lg:w-64 lg:border-r lg:border-b-0">
           <div className="px-5 py-5">
             <p className="text-xs font-semibold tracking-[0.16em] text-blue-600 uppercase">
-              PrintMadeEasy
+              PrintYantra
             </p>
             <h1 className="mt-1 text-lg font-semibold text-slate-900">
               Admin Console

@@ -28,7 +28,7 @@ export function PrintingPrerequisites({
       </h3>
       <p className="mt-1 text-sm text-slate-500">
         Customer orders can be received only when your computer is online and
-        the PrintMadeEasy Agent is running.
+        the PrintYantra Agent is running.
       </p>
 
       <ul className="mt-4 space-y-2.5">
@@ -36,7 +36,7 @@ export function PrintingPrerequisites({
           Keep your computer connected to the internet
         </PrerequisiteItem>
         <PrerequisiteItem highlighted={!agentConnected}>
-          The PrintMadeEasy Agent starts automatically with Windows, but keep it
+          The PrintYantra Agent starts automatically with Windows, but keep it
           running so customer orders can be printed.
         </PrerequisiteItem>
         <PrerequisiteItem>
@@ -49,12 +49,12 @@ export function PrintingPrerequisites({
           <p className="text-sm font-medium text-amber-900">
             {agentEverConnected
               ? "Agent offline"
-              : "Connect your PrintMadeEasy Agent"}
+              : "Connect your PrintYantra Agent"}
           </p>
           <p className="mt-1 text-sm text-amber-800/90">
             {agentEverConnected
-              ? "Start the PrintMadeEasy Agent to receive and print customer orders."
-              : "Install and sign in to the PrintMadeEasy Agent to start receiving orders."}
+              ? "Start the PrintYantra Agent to receive and print customer orders."
+              : "Install and sign in to the PrintYantra Agent to start receiving orders."}
           </p>
           <Link
             href="/dashboard/printers"
@@ -76,7 +76,7 @@ export function PrintingPrerequisites({
         <ol className="mt-2 list-decimal space-y-1 pl-4 text-sm text-slate-600">
           <li>Keep your computer connected to the internet.</li>
           <li>
-            The PrintMadeEasy Agent starts automatically with Windows — keep it
+            The PrintYantra Agent starts automatically with Windows — keep it
             running so customer orders can be printed.
           </li>
           <li>Customers upload documents using your shop&apos;s QR code.</li>

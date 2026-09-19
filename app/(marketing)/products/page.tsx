@@ -18,12 +18,12 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Products & Services",
   description:
-    "PrintMadeEasy provides print-shop management software with QR-based customer print submission, Windows Print Agent, printer management, and print settings for ₹199/month.",
+    "PrintYantra provides print-shop management software with QR-based customer print submission, PrintYantra Agent, printer management, and print settings for ₹199/month.",
   alternates: {
     canonical: "/products",
   },
   openGraph: {
-    title: "PrintMadeEasy — Products & Services",
+    title: "PrintYantra — Products & Services",
     description:
       "Online printing management software for local print shops. Shopkeepers subscribe for ₹199/month after a 7-day free trial.",
     url: `${SITE.url}/products`,
@@ -38,8 +38,8 @@ const CAPABILITIES = [
   },
   {
     icon: MonitorSmartphone,
-    title: "Windows Print Agent",
-    body: "A Windows Agent on the shop PC receives jobs from PrintMadeEasy and sends them to your printers.",
+    title: "PrintYantra Agent",
+    body: "A Windows Agent on the shop PC receives jobs from PrintYantra and sends them to your printers.",
   },
   {
     icon: Printer,
@@ -75,7 +75,7 @@ export default function ProductsPage() {
             Products &amp; Services
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            {SITE.relationship} PrintMadeEasy is software for print-shop owners,
+            {SITE.relationship} PrintYantra is software for print-shop owners,
             not a marketplace selling prints to end customers.
           </p>
         </div>
@@ -90,15 +90,15 @@ export default function ProductsPage() {
                   Primary service
                 </p>
                 <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
-                  PrintMadeEasy
+                  PrintYantra
                 </h2>
                 <p className="mt-2 text-lg text-slate-700">
                   Online Printing Management for Local Print Shops
                 </p>
                 <p className="mt-4 text-sm leading-relaxed text-slate-600">
-                  PrintMadeEasy provides software that helps print shops accept
+                  PrintYantra provides software that helps print shops accept
                   customer print requests through QR codes, receive uploaded
-                  documents, manage print jobs, run a Windows Print Agent, work
+                  documents, manage print jobs, run a PrintYantra Agent, work
                   with multiple printers, configure supported print settings,
                   control color printing based on printer capability, and
                   monitor printer/agent availability.
@@ -120,7 +120,7 @@ export default function ProductsPage() {
                   7-day free trial
                 </p>
                 <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                  Paid by the shopkeeper. Customers do not pay PrintMadeEasy for
+                  Paid by the shopkeeper. Customers do not pay PrintYantra for
                   submitting print jobs.
                 </p>
                 <Link
@@ -165,10 +165,10 @@ export default function ProductsPage() {
                 />
                 <p className="text-sm leading-relaxed text-slate-700">
                   <span className="font-semibold text-slate-900">
-                    Who pays PrintMadeEasy:
+                    Who pays PrintYantra:
                   </span>{" "}
-                  PrintMadeEasy&apos;s subscription is paid by the shopkeeper.
-                  Customers do not pay PrintMadeEasy for submitting print jobs.
+                  PrintYantra&apos;s subscription is paid by the shopkeeper.
+                  Customers do not pay PrintYantra for submitting print jobs.
                 </p>
               </div>
               <div className="flex gap-3">

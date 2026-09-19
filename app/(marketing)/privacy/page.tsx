@@ -6,7 +6,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Privacy Policy for PrintMadeEasy — how we handle shopkeeper account data and customer print documents.",
+    "Privacy Policy for PrintYantra — how we handle shopkeeper account data and customer print documents.",
   alternates: {
     canonical: "/privacy",
   },
@@ -22,8 +22,8 @@ export default function PrivacyPage() {
         <p className="mt-2 text-sm text-slate-500">Last updated: September 5, 2026</p>
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
-            PrintMadeEasy ({SITE.url}) provides print-shop management software
-            for shopkeepers. PrintMadeEasy is a Clauras product, powered by
+            PrintYantra ({SITE.url}) provides print-shop management software
+            for shopkeepers. PrintYantra is a Clauras product, powered by
             Ramyad Enterprises - Abhiram. This Privacy Policy explains what
             information we process to operate the service.
           </p>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           </h2>
           <p>
             Uploaded customer documents are automatically deleted from
-            PrintMadeEasy servers after 1 hour. Job history may remain visible to
+            PrintYantra servers after 1 hour. Job history may remain visible to
             the shopkeeper after the files are removed.
           </p>
 
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
           <p>
             We do not sell personal information. Access to shop data is limited
             to authenticated shopkeepers for their own shop and to authorized
-            platform operations needed to run PrintMadeEasy (including payment
+            platform operations needed to run PrintYantra (including payment
             processing through our payment provider for shopkeeper
             subscriptions).
           </p>

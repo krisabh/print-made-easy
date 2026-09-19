@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 /** Production API used by packaged Windows installs (no repo .env required). */
-const PACKAGED_DEFAULT_API_URL = "https://clauras.com";
+const PACKAGED_DEFAULT_API_URL = "https://printyantra.com";
 
 const DEVICE_AGENT_ID_RE = /^PMEA-WINDOWS-[0-9A-F]{8}$/i;
 
@@ -60,7 +60,7 @@ export type AgentConfig = {
 };
 
 /** Login-item display / Run-key name — keep stable for install/uninstall. */
-export const LOGIN_ITEM_NAME = "PrintMadeEasy Agent";
+export const LOGIN_ITEM_NAME = "PrintYantra Agent";
 
 /**
  * Resolve Start-with-Windows preference.
@@ -73,8 +73,8 @@ export function resolveOpenAtLogin(value: unknown): boolean {
 
 const APP_DIR =
   process.platform === "win32"
-    ? path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "PrintMadeEasy")
-    : path.join(os.homedir(), ".printmadeeasy");
+    ? path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "PrintYantra")
+    : path.join(os.homedir(), ".printyantra");
 
 export const CONFIG_PATH = path.join(APP_DIR, "agent-config.json");
 export const JOBS_DIR = path.join(APP_DIR, "jobs");

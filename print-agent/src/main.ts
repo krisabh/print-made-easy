@@ -109,7 +109,7 @@ function getAgentVersion() {
 
 const updateChecker = createUpdateChecker({
   getCurrentVersion: getAgentVersion,
-  getApiUrl: () => loadConfig().apiUrl || "https://clauras.com",
+  getApiUrl: () => loadConfig().apiUrl || "https://printyantra.com",
   isBusy: () => isPrintOperationBusy(),
   requestAgentExitForUpdate: () => {
     // Installer already spawned detached. Exit without relaunch — NSIS --force-run starts the new Agent.
@@ -174,7 +174,7 @@ function restartAgent() {
 
 async function openDashboardInBrowser() {
   const config = loadConfig();
-  const base = (config.apiUrl || "https://clauras.com").replace(/\/$/, "");
+  const base = (config.apiUrl || "https://printyantra.com").replace(/\/$/, "");
   await shell.openExternal(`${base}/dashboard`);
 }
 
@@ -235,10 +235,10 @@ async function handleWindowClose(event: Electron.Event) {
   try {
     const result = await dialog.showMessageBox(mainWindow, {
       type: "info",
-      title: "PrintMadeEasy is still running",
-      message: "PrintMadeEasy is still running",
+      title: "PrintYantra is still running",
+      message: "PrintYantra is still running",
       detail:
-        "Closing this window keeps PrintMadeEasy running in the background so print jobs can continue.\n\nYou can reopen it from the Windows system tray.\n\nTo completely stop PrintMadeEasy, choose Force Exit or use File → Force Exit.",
+        "Closing this window keeps PrintYantra running in the background so print jobs can continue.\n\nYou can reopen it from the Windows system tray.\n\nTo completely stop PrintYantra, choose Force Exit or use File → Force Exit.",
       buttons: ["Continue Running in Background", "Force Exit"],
       defaultId: 0,
       cancelId: 0,
@@ -303,7 +303,7 @@ function createWindow() {
     minHeight: 560,
     resizable: true,
     maximizable: false,
-    title: "PrintMadeEasy Agent",
+    title: "PrintYantra Agent",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -329,7 +329,7 @@ function createWindow() {
 
 function createTray() {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip("PrintMadeEasy Agent");
+  tray.setToolTip("PrintYantra Agent");
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open", click: () => createWindow() },
@@ -494,7 +494,7 @@ function registerIpc() {
             message:
               error instanceof Error
                 ? error.message
-                : "Unable to connect to PrintMadeEasy server",
+                : "Unable to connect to PrintYantra server",
           };
           lastConnection = connection;
         }
@@ -502,7 +502,7 @@ function registerIpc() {
         connection = {
           status: "Disconnected",
           message:
-            "Not connected. Sign in with your PrintMadeEasy email and password.",
+            "Not connected. Sign in with your PrintYantra email and password.",
         };
       } else if (light) {
         connection = lastConnection;
@@ -690,7 +690,7 @@ function registerIpc() {
     "agent:connect-pairing-url",
     async (_event, rawUrl: string) => {
       if (!rawUrl || typeof rawUrl !== "string") {
-        throw new Error("Invalid PrintMadeEasy connection link.");
+        throw new Error("Invalid PrintYantra connection link.");
       }
 
       const config = loadConfig();
@@ -717,7 +717,7 @@ function registerIpc() {
           throw new Error(error.message);
         }
         throw new Error(
-          "Unable to connect to PrintMadeEasy. Check your internet connection.",
+          "Unable to connect to PrintYantra. Check your internet connection.",
         );
       }
     },

@@ -31,7 +31,7 @@ const TRIAL_INCLUDED_FEATURES = [
 ];
 
 const PREMIUM_FEATURES = [
-  "Continue using PrintMadeEasy after your free trial",
+  "Continue using PrintYantra after your free trial",
   "Upload and print customer jobs",
   "Multiple printers detected by one Agent",
   "Choose your default printer",
@@ -93,7 +93,7 @@ function loadCashfreeSdk() {
 function reasonMessage(reason: string | null) {
   switch (reason) {
     case "trial_expired":
-      return "Your free trial has ended. Subscribe to continue using PrintMadeEasy.";
+      return "Your free trial has ended. Subscribe to continue using PrintYantra.";
     case "expired":
     case "cancelled":
     case "past_due_expired":
@@ -366,7 +366,7 @@ export function SaasPricingPlans({
     <div className="mx-auto max-w-3xl">
       <header className="mx-auto max-w-2xl text-center">
         <p className="text-xs font-semibold tracking-[0.16em] text-blue-600 uppercase">
-          PrintMadeEasy
+          PrintYantra
         </p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
           Simple, transparent pricing

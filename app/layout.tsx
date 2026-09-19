@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
     default: SITE.title,
-    template: "%s | PrintMadeEasy",
+    template: "%s | PrintYantra",
   },
   description: SITE.description,
   alternates: {

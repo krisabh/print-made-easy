@@ -6,7 +6,7 @@ import { FeaturesSection, FinalCtaSection } from "@/components/marketing/section
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Explore PrintMadeEasy features for print job management, Windows Agent connectivity, printer status, and shopkeeper workflows.",
+    "Explore PrintYantra features for print job management, Windows Agent connectivity, printer status, and shopkeeper workflows.",
 };
 
 export default function FeaturesPage() {
@@ -21,7 +21,7 @@ export default function FeaturesPage() {
             Built for everyday print shop work
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            PrintMadeEasy focuses on the practical tools shopkeepers already
+            PrintYantra focuses on the practical tools shopkeepers already
             need: job tracking, Agent connectivity, printer status, and a clear
             dashboard.
           </p>

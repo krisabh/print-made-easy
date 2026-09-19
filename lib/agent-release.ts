@@ -13,14 +13,14 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
  * import WINDOWS_AGENT_DOWNLOAD / WINDOWS_AGENT_RELEASE safely.
  */
 export const WINDOWS_AGENT_RELEASE = {
-  productName: "PrintMadeEasy Agent",
+  productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.4.0",
-  fileName: "PrintMadeEasy-Agent-Setup-1.4.0.exe",
+  version: "1.5.0",
+  fileName: "PrintYantra-Agent-Setup-1.5.0.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
   notes:
-    "Agent 1.4.0: same-account multi-computer login, per-device authentication, device-scoped printers and job ownership, login rate limiting, Windows auto-start (with legacy Run-key migration), and in-app update check with secure download and SHA-256 verification.",
+    "Agent 1.5.0: first public PrintYantra Agent release — PrintYantra product identity, printyantra.com production API, same-account multi-computer login, per-device authentication, device-scoped printers and job ownership, login rate limiting, Windows auto-start (with legacy Run-key migration), and in-app update check with secure download and SHA-256 verification.",
 } as const;
 
 /**

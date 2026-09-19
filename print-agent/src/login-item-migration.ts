@@ -3,7 +3,7 @@
  *
  * 1.3.0 called setLoginItemSettings without `name`, so Electron wrote:
  *   electron.app.Electron
- * 1.4.0 passes LOGIN_ITEM_NAME ("PrintMadeEasy Agent").
+ * 1.5.0 passes LOGIN_ITEM_NAME ("PrintYantra Agent").
  * Without cleanup, upgrades leave both keys (duplicate auto-start) and OFF
  * only removes the named key, leaving the orphan legacy entry.
  */
@@ -34,10 +34,11 @@ function normalizeRunValue(value: string): string {
 }
 
 /**
- * True only when a Run value clearly points at this PrintMadeEasy Agent EXE.
+ * True only when a Run value clearly points at this Agent EXE
+ * (executableName is "PrintYantra Agent").
  * Unrelated apps named similarly are not matched unless the path is ours.
  */
-export function isPrintMadeEasyAgentRunValue(
+export function isPrintYantraAgentRunValue(
   runValue: string,
   agentExecutablePath: string,
 ): boolean {
@@ -50,10 +51,10 @@ export function isPrintMadeEasyAgentRunValue(
   }
   // Quoted path variants / extra args
   if (value.includes(exe)) return true;
-  // Path-normalized: accept only our well-known executable filename under PrintMadeEasy
+  // Path-normalized: accept only our well-known executable filename under PrintYantra
   if (
-    /printmadeeasy agent\.exe(?:\s|$)/i.test(value) &&
-    /printmadeeasy/i.test(value)
+    /printyantra agent\.exe(?:\s|$)/i.test(value) &&
+    /printyantra/i.test(value)
   ) {
     return true;
   }
@@ -100,7 +101,7 @@ export function removeLegacyElectronLoginItemIfOurs(options: {
     options.legacyLoginItemName ?? LEGACY_ELECTRON_LOGIN_ITEM_NAME;
   const current = options.store.get(legacyName);
   if (current == null || current === "") return false;
-  if (!isPrintMadeEasyAgentRunValue(current, options.agentExecutablePath)) {
+  if (!isPrintYantraAgentRunValue(current, options.agentExecutablePath)) {
     return false;
   }
   options.store.remove(legacyName);

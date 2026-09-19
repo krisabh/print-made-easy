@@ -60,7 +60,7 @@ export function ProductWorkflowSection() {
     {
       icon: Store,
       title: "Create Your Shop",
-      body: "Create your PrintMadeEasy shop account and get ready to receive print orders.",
+      body: "Create your PrintYantra shop account and get ready to receive print orders.",
     },
     {
       icon: QrCode,
@@ -74,7 +74,7 @@ export function ProductWorkflowSection() {
     },
     {
       icon: Cable,
-      title: "Install PrintMadeEasy Agent",
+      title: "Install PrintYantra Agent",
       body: "Install the Windows Agent on the Windows computer connected to your printer. The Agent automatically detects the available printer.",
     },
     {
@@ -127,13 +127,13 @@ export function ProductWorkflowSection() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-semibold tracking-[0.14em] text-blue-700 uppercase">
-            How PrintMadeEasy Works
+            How PrintYantra Works
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            How PrintMadeEasy Works
+            How PrintYantra Works
           </h2>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
-            From shop setup to customer pickup — PrintMadeEasy keeps the entire
+            From shop setup to customer pickup — PrintYantra keeps the entire
             print journey simple.
           </p>
         </div>
@@ -148,7 +148,7 @@ export function ProductWorkflowSection() {
                 For Shopkeepers
               </h3>
               <p className="mt-1 text-sm text-slate-600">
-                Set up once. Let PrintMadeEasy handle the workflow.
+                Set up once. Let PrintYantra handle the workflow.
               </p>
             </div>
             <div className="space-y-0">
@@ -210,7 +210,7 @@ export function ProductWorkflowSection() {
           <div className="mt-6 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
             {[
               "Customer submits",
-              "PrintMadeEasy",
+              "PrintYantra",
               "Shop dashboard",
               "Windows Agent",
               "Printer",
@@ -238,7 +238,7 @@ export function ProductWorkflowSection() {
             ))}
           </div>
           <p className="mt-4 text-center text-sm text-slate-600">
-            The customer&apos;s document moves through PrintMadeEasy without
+            The customer&apos;s document moves through PrintYantra without
             them needing to understand the technical details.
           </p>
         </div>
@@ -272,7 +272,7 @@ export function PrivacyWorkflowSection() {
               Less Storage. Less Cleanup.
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              PrintMadeEasy automatically removes uploaded documents after 1
+              PrintYantra automatically removes uploaded documents after 1
               hour, so unnecessary documents don&apos;t remain on your system
               and consume storage.
             </p>
@@ -286,7 +286,7 @@ export function PrivacyWorkflowSection() {
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               Documents uploaded for printing are automatically deleted from the
-              PrintMadeEasy server after 1 hour. They are not kept indefinitely
+              PrintYantra server after 1 hour. They are not kept indefinitely
               after the print workflow is complete.
             </p>
           </article>
@@ -327,7 +327,7 @@ export function PrivacyWorkflowSection() {
               For print shops
             </p>
             <h3 className="mt-2 text-xl font-semibold text-slate-900">
-              Why print shops use PrintMadeEasy
+              Why print shops use PrintYantra
             </h3>
             <ul className="mt-5 space-y-3.5">
               {[
@@ -386,7 +386,7 @@ export function PrivacyWorkflowSection() {
               For customers
             </p>
             <h3 className="mt-2 text-xl font-semibold text-slate-900">
-              Why customers use PrintMadeEasy
+              Why customers use PrintYantra
             </h3>
             <ul className="mt-5 space-y-3.5">
               {[

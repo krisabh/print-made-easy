@@ -16,11 +16,11 @@ import {
 
 function validManifest(overrides: Record<string, unknown> = {}) {
   return {
-    version: "1.4.1",
-    url: "https://clauras.com/api/agent/download",
+    version: "1.5.1",
+    url: "https://printyantra.com/api/agent/download",
     sha256: null,
     notes: "Bug fixes",
-    fileName: "PrintMadeEasy-Agent-Setup-1.4.1.exe",
+    fileName: "PrintYantra-Agent-Setup-1.5.1.exe",
     ...overrides,
   };
 }
@@ -45,7 +45,7 @@ async function main() {
   console.log("B PASS malformed versions rejected");
 
   // C — Manifest validation
-  const trusted = "https://clauras.com";
+  const trusted = "https://printyantra.com";
   const ok = validateAgentUpdateManifest(validManifest(), trusted);
   assert.equal(ok.ok, true);
 
@@ -65,13 +65,13 @@ async function main() {
     ["array", []],
     [
       "path",
-      validManifest({ url: "https://clauras.com/secret/installer.exe" }),
+      validManifest({ url: "https://printyantra.com/secret/installer.exe" }),
     ],
     [
       "name_mismatch",
       validManifest({
-        version: "1.4.1",
-        fileName: "PrintMadeEasy-Agent-Setup-1.4.0.exe",
+        version: "1.5.1",
+        fileName: "PrintYantra-Agent-Setup-1.5.0.exe",
       }),
     ],
   ];
@@ -84,9 +84,9 @@ async function main() {
   // D — URL/origin + localhost http allowed for apiUrl
   const localOk = validateAgentUpdateManifest(
     validManifest({
-      version: "1.4.1",
+      version: "1.5.1",
       url: "http://localhost:3000/api/agent/download",
-      fileName: "PrintMadeEasy-Agent-Setup-1.4.1.exe",
+      fileName: "PrintYantra-Agent-Setup-1.5.1.exe",
     }),
     "http://localhost:3000",
   );
@@ -107,8 +107,8 @@ async function main() {
   };
 
   const checker = createUpdateChecker({
-    getCurrentVersion: () => "1.4.0",
-    getApiUrl: () => "https://clauras.com",
+    getCurrentVersion: () => "1.5.0",
+    getApiUrl: () => "https://printyantra.com",
     fetchImpl,
   });
 
@@ -121,7 +121,7 @@ async function main() {
   assert.equal(r1.updateAvailable, true);
   assert.equal(r2.updateAvailable, true);
   assert.equal(checker.getPublicState().status, "available");
-  assert.equal(checker.getPublicState().latestVersion, "1.4.1");
+  assert.equal(checker.getPublicState().latestVersion, "1.5.1");
   console.log("E PASS single-flight + available transition");
 
   // Headers: no auth
@@ -132,8 +132,8 @@ async function main() {
 
   // upToDate transition
   const checkerSame = createUpdateChecker({
-    getCurrentVersion: () => "1.4.1",
-    getApiUrl: () => "https://clauras.com",
+    getCurrentVersion: () => "1.5.1",
+    getApiUrl: () => "https://printyantra.com",
     fetchImpl: async () =>
       new Response(JSON.stringify(validManifest()), { status: 200 }),
   });
@@ -156,8 +156,8 @@ async function main() {
   ];
   for (const fetchFail of failCases) {
     const c = createUpdateChecker({
-      getCurrentVersion: () => "1.4.0",
-      getApiUrl: () => "https://clauras.com",
+      getCurrentVersion: () => "1.5.0",
+      getApiUrl: () => "https://printyantra.com",
       fetchImpl: fetchFail as typeof fetch,
     });
     const result = await c.runCheck({ manual: true });
@@ -172,8 +172,8 @@ async function main() {
 
   // Background failure stays silent (no userMessage)
   const silent = createUpdateChecker({
-    getCurrentVersion: () => "1.4.0",
-    getApiUrl: () => "https://clauras.com",
+    getCurrentVersion: () => "1.5.0",
+    getApiUrl: () => "https://printyantra.com",
     fetchImpl: async () => new Response("{}", { status: 500 }),
   });
   await silent.runCheck({ manual: false });

@@ -47,7 +47,7 @@ export function ChangePasswordForm() {
           Change Password
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Update the password you use to sign in to PrintMadeEasy.
+          Update the password you use to sign in to PrintYantra.
         </p>
       </div>
 

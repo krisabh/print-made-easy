@@ -8,7 +8,7 @@ export const PREMIUM_PLAN = {
   currency: "INR",
   intervalType: "MONTH" as const,
   intervals: 1,
-  planName: "PrintMadeEasy Premium",
+  planName: "PrintYantra Premium",
 } as const;
 
 export type PremiumPlan = typeof PREMIUM_PLAN;

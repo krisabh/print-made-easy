@@ -1,4 +1,4 @@
-; PrintMadeEasy Agent — custom NSIS hooks
+; PrintYantra Agent — custom NSIS hooks
 ; Startup uses Electron app.setLoginItemSettings (HKCU Run), not NSIS shortcuts.
 ; Remove that single Run value on uninstall so no stale startup entry remains.
 ; Skip on upgrade uninstall (--updated): the new Agent re-applies openAtLogin from
@@ -7,6 +7,6 @@
 
 !macro customUnInstall
   ${ifNot} ${isUpdated}
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PrintMadeEasy Agent"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PrintYantra Agent"
   ${endIf}
 !macroend

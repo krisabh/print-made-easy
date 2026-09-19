@@ -28,7 +28,7 @@ async function pricingReturnRedirect(request: Request) {
   const payment =
     raw === "failed" || raw === "cancel" || raw === "return" ? raw : "return";
 
-  // Prefer configured public app URL (e.g. https://clauras.com).
+  // Prefer configured public app URL (e.g. https://printyantra.com).
   // Do not trust request.origin behind a reverse proxy.
   const browserOrigin = toBrowserFacingBaseUrl(await getPublicAppBaseUrl());
   const destination = new URL("/dashboard/pricing", browserOrigin);

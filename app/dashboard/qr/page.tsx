@@ -22,7 +22,7 @@ export default async function QrPage() {
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
             This QR uses localhost and will not work from a phone. Set
             NEXT_PUBLIC_APP_URL to your public site URL (example:
-            https://clauras.com) or your PC LAN IP for local testing, then
+            https://printyantra.com) or your PC LAN IP for local testing, then
             restart the server.
           </p>
         ) : uploadUrl.startsWith("https://") ? (

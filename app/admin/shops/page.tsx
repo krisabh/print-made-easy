@@ -39,7 +39,7 @@ export default async function AdminShopsPage({ searchParams }: PageProps) {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Shop Management</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Read-only directory of all PrintMadeEasy shops.
+          Read-only directory of all PrintYantra shops.
         </p>
       </div>
 

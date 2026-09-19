@@ -102,7 +102,7 @@ async function main() {
     currency: "INR",
     txnId: "t1",
     order: {
-      productInfo: "PrintMadeEasy Premium",
+      productInfo: "PrintYantra Premium",
       paymentChargeSpecification: { price: 199 },
     },
   };

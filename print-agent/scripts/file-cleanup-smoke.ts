@@ -1,6 +1,6 @@
 /**
  * Focused smoke tests for Agent-owned temporary file cleanup.
- * Does not touch the real %PROGRAMDATA%\PrintMadeEasy\jobs directory.
+ * Does not touch the real %PROGRAMDATA%\PrintYantra\jobs directory.
  *
  * Run from repo root:
  *   npx tsx print-agent/scripts/file-cleanup-smoke.ts

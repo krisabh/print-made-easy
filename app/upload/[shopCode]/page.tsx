@@ -1,4 +1,5 @@
 import { UploadFormLoader } from "@/components/upload-form-loader";
+import { SITE } from "@/lib/marketing";
 import {
   getShopAgentStatus,
   getShopDefaultColorSupported,
@@ -49,7 +50,7 @@ export default async function UploadPage({ params }: UploadPageProps) {
         <div className="mx-auto w-full max-w-md space-y-5">
           <header className="space-y-1">
             <p className="text-xs font-medium tracking-wide text-blue-600 uppercase">
-              PrintMadeEasy
+              {SITE.name}
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
               {shop.shopName}
@@ -98,7 +99,7 @@ export default async function UploadPage({ params }: UploadPageProps) {
       <div className="mx-auto w-full max-w-md space-y-5">
         <header className="space-y-1">
           <p className="text-xs font-medium tracking-wide text-blue-600 uppercase">
-            PrintMadeEasy
+            {SITE.name}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             {shop.shopName}

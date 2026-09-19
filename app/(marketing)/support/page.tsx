@@ -16,7 +16,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Support",
   description:
-    "Get help with PrintMadeEasy setup, Windows Agent installation, shop connection, printer troubleshooting, and print jobs.",
+    "Get help with PrintYantra setup, Windows Agent installation, shop connection, printer troubleshooting, and print jobs.",
 };
 
 const TOPICS = [
@@ -64,7 +64,7 @@ export default function SupportPage() {
             Help for shopkeepers
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            Quick guidance for the parts of PrintMadeEasy shopkeepers use every
+            Quick guidance for the parts of PrintYantra shopkeepers use every
             day.
           </p>
         </div>

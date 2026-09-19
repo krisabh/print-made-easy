@@ -15,7 +15,7 @@ export type DownloadManifestInput = {
 };
 
 export const UPDATE_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
-const INSTALLER_NAME_RE = /^PrintMadeEasy-Agent-Setup-\d+\.\d+\.\d+\.exe$/i;
+const INSTALLER_NAME_RE = /^PrintYantra-Agent-Setup-\d+\.\d+\.\d+\.exe$/i;
 const DOWNLOAD_PATH = "/api/agent/download";
 /** Soft upper bound to reject obviously absurd Content-Length (2 GiB). */
 const MAX_INSTALLER_BYTES = 2 * 1024 * 1024 * 1024;
@@ -69,7 +69,7 @@ export function isSafeInstallerFileName(fileName: string): boolean {
 }
 
 export function getDefaultUpdateTempDir(): string {
-  return path.join(os.tmpdir(), "PrintMadeEasy-Agent-Updates");
+  return path.join(os.tmpdir(), "PrintYantra-Agent-Updates");
 }
 
 export function partialDownloadPath(dir: string, fileName: string): string {

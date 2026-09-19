@@ -90,7 +90,7 @@ export default async function PrintersPage() {
         </h3>
         {printers.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">
-            No printers reported yet. Connect the PrintMadeEasy Agent and select
+            No printers reported yet. Connect the PrintYantra Agent and select
             a printer.
           </p>
         ) : (

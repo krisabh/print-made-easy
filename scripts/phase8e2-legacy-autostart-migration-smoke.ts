@@ -9,24 +9,24 @@ import {
   LEGACY_ELECTRON_LOGIN_ITEM_NAME,
   applyOpenAtLoginRunKeys,
   createMemoryRunKeyStore,
-  isPrintMadeEasyAgentRunValue,
+  isPrintYantraAgentRunValue,
 } from "../print-agent/src/login-item-migration";
 
 const AGENT_EXE =
-  "C:\\Program Files\\PrintMadeEasy Agent\\PrintMadeEasy Agent.exe";
+  "C:\\Program Files\\PrintYantra Agent\\PrintYantra Agent.exe";
 
 function main() {
   // Helper: ownership check
   assert.equal(
-    isPrintMadeEasyAgentRunValue(AGENT_EXE, AGENT_EXE),
+    isPrintYantraAgentRunValue(AGENT_EXE, AGENT_EXE),
     true,
   );
   assert.equal(
-    isPrintMadeEasyAgentRunValue(`"${AGENT_EXE}"`, AGENT_EXE),
+    isPrintYantraAgentRunValue(`"${AGENT_EXE}"`, AGENT_EXE),
     true,
   );
   assert.equal(
-    isPrintMadeEasyAgentRunValue(
+    isPrintYantraAgentRunValue(
       "C:\\Program Files\\SomeOtherApp\\app.exe",
       AGENT_EXE,
     ),
@@ -69,7 +69,7 @@ function main() {
     console.log("B PASS Legacy OFF migration");
   }
 
-  // C — Fresh 1.4.0 ON
+  // C — Fresh 1.5.0 ON
   {
     const store = createMemoryRunKeyStore();
     applyOpenAtLoginRunKeys({
@@ -83,7 +83,7 @@ function main() {
     console.log("C PASS Fresh ON");
   }
 
-  // D — Fresh 1.4.0 OFF
+  // D — Fresh 1.5.0 OFF
   {
     const store = createMemoryRunKeyStore();
     applyOpenAtLoginRunKeys({

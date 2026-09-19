@@ -148,7 +148,7 @@ export function DashboardShell({
                 <div>
                   <DashboardBrandTrust className="hidden sm:block" />
                   <p className="text-xs font-medium tracking-wide text-blue-600 uppercase sm:hidden">
-                    PrintMadeEasy
+                    PrintYantra
                   </p>
                   <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:mt-1.5">
                     {shopName}

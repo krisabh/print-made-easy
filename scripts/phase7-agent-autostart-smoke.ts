@@ -33,7 +33,7 @@ function main() {
   assert.equal(resolveOpenAtLogin(true), true);
   assert.equal(resolveOpenAtLogin(false), false);
   assert.match(configSrc, /openAtLogin:\s*true/);
-  assert.match(indexHtml, /Start PrintMadeEasy Agent when Windows starts/);
+  assert.match(indexHtml, /Start PrintYantra Agent when Windows starts/);
   assert.match(indexHtml, /Enabled by default/);
   console.log("A PASS openAtLogin enabled by default");
 
@@ -89,9 +89,9 @@ function main() {
   // K — installer/uninstaller: single login-item mechanism + NSIS cleanup
   assert.equal(pkg.build?.nsis?.include, "build/installer.nsh");
   assert.match(nsh, /customUnInstall/);
-  assert.match(nsh, /PrintMadeEasy Agent/);
+  assert.match(nsh, /PrintYantra Agent/);
   assert.match(nsh, /CurrentVersion\\Run/);
-  assert.equal(LOGIN_ITEM_NAME, "PrintMadeEasy Agent");
+  assert.equal(LOGIN_ITEM_NAME, "PrintYantra Agent");
   assert.match(mainSrc, /setLoginItemSettings/);
   assert.match(mainSrc, /removeLegacyElectronLoginItemIfOurs/);
   assert.ok(!JSON.stringify(pkg.build).includes("runAfterFinish"));

@@ -14,7 +14,7 @@ export default async function PrintPricingPage() {
         <p className="mt-1 text-sm text-slate-500">
           Set what customers pay for printing at your shop. Default Black &amp;
           White is ₹5 per page. This is separate from your ₹199/month
-          PrintMadeEasy subscription.
+          PrintYantra subscription.
         </p>
       </div>
 

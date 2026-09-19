@@ -144,7 +144,7 @@ async function main() {
   results.jobNumber = job.jobNumber;
   console.log("Created PENDING job", job.jobNumber);
 
-  const jobsDir = "C:/ProgramData/PrintMadeEasy/jobs";
+  const jobsDir = "C:/ProgramData/PrintYantra/jobs";
   let sawActiveFile = false;
   let finalStatus: string | null = null;
   let claimedBy: string | null = null;

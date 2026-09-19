@@ -51,7 +51,7 @@ function pgSuccessBody(input: {
         order_id: input.orderId,
         order_amount: input.amount,
         order_currency: input.currency,
-        order_note: input.shopId ? `shop:${input.shopId}` : "PrintMadeEasy Premium",
+        order_note: input.shopId ? `shop:${input.shopId}` : "PrintYantra Premium",
       },
       payment: {
         cf_payment_id: input.paymentId,

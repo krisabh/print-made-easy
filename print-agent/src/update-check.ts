@@ -62,7 +62,7 @@ export type UpdateCheckResult = {
 };
 
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
-const INSTALLER_NAME_RE = /^PrintMadeEasy-Agent-Setup-\d+\.\d+\.\d+\.exe$/i;
+const INSTALLER_NAME_RE = /^PrintYantra-Agent-Setup-\d+\.\d+\.\d+\.exe$/i;
 const UPDATE_PATH = "/api/agent/update";
 const DOWNLOAD_PATH = "/api/agent/download";
 export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -157,7 +157,7 @@ export function validateAgentUpdateManifest(
   }
 
   // Filename should match declared version when both are semver-shaped.
-  const expectedName = `PrintMadeEasy-Agent-Setup-${obj.version}.exe`;
+  const expectedName = `PrintYantra-Agent-Setup-${obj.version}.exe`;
   if (obj.fileName.toLowerCase() !== expectedName.toLowerCase()) {
     return { ok: false, reason: "fileName_version_mismatch" };
   }
@@ -666,7 +666,7 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
       updateNowReady: false,
       dismissed: false,
       userMessage:
-        "Installing update... PrintMadeEasy Agent will restart automatically.",
+        "Installing update... PrintYantra Agent will restart automatically.",
     });
 
     const spawnImpl = deps.spawnInstaller ?? spawnDetachedInstaller;
@@ -701,7 +701,7 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
       accepted: true,
       status: "installing",
       message:
-        "Installing update... PrintMadeEasy Agent will restart automatically.",
+        "Installing update... PrintYantra Agent will restart automatically.",
     };
   }
 

@@ -256,7 +256,7 @@ function buildLabels(
           : `${daysRemaining ?? 0} days remaining`;
     } else {
       label = "Your free trial has ended";
-      detail = "Subscribe to continue using PrintMadeEasy.";
+      detail = "Subscribe to continue using PrintYantra.";
       daysRemaining = 0;
     }
   } else if (subscription.status === "ACTIVE") {
@@ -969,6 +969,6 @@ export function getDashboardSubscriptionSummary(
       view.status === "TRIALING"
         ? "Your free trial has ended"
         : "Subscription expired",
-    subtitle: "Subscribe to continue using PrintMadeEasy",
+    subtitle: "Subscribe to continue using PrintYantra",
   };
 }

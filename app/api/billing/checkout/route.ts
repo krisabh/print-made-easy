@@ -16,7 +16,7 @@ export async function POST() {
     const returnUrl = `${appBaseUrl.replace(/\/$/, "")}/dashboard/pricing?payment=return`;
 
     const customerName =
-      session.user.name || session.shop.shopName || "PrintMadeEasy Shop";
+      session.user.name || session.shop.shopName || "PrintYantra Shop";
     const customerEmail =
       session.user.email ||
       session.shop.email ||

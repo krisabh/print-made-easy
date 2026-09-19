@@ -7,7 +7,7 @@ import { SITE } from "@/lib/marketing";
 export const metadata: Metadata = {
   title: "Terms & Conditions",
   description:
-    "Terms & Conditions for PrintMadeEasy print-shop management software, including shopkeeper subscription, trial, and acceptable use.",
+    "Terms & Conditions for PrintYantra print-shop management software, including shopkeeper subscription, trial, and acceptable use.",
   alternates: {
     canonical: "/terms",
   },
@@ -25,8 +25,8 @@ export default function TermsPage() {
         <div className="mt-8 space-y-5 text-sm leading-relaxed text-slate-600">
           <p>
             These Terms &amp; Conditions (&quot;Terms&quot;) govern access to and
-            use of PrintMadeEasy ({SITE.url}), a print-shop management software
-            platform for shopkeepers and print-shop owners. PrintMadeEasy is a
+            use of PrintYantra ({SITE.url}), a print-shop management software
+            platform for shopkeepers and print-shop owners. PrintYantra is a
             Clauras product, powered by Ramyad Enterprises - Abhiram.
           </p>
 
@@ -34,25 +34,25 @@ export default function TermsPage() {
             1. The service
           </h2>
           <p>
-            PrintMadeEasy provides software that helps print shops accept
+            PrintYantra provides software that helps print shops accept
             customer print requests through QR codes, receive uploaded
-            documents, manage print jobs, connect a Windows Print Agent, work
+            documents, manage print jobs, connect a PrintYantra Agent, work
             with printers on the shop computer, configure supported print
             settings, and monitor Agent/printer availability.
           </p>
           <p>
-            PrintMadeEasy is not a consumer print marketplace and does not sell
+            PrintYantra is not a consumer print marketplace and does not sell
             physical printouts to end customers. End customers interact with a
             shop&apos;s QR upload flow to submit documents to that shop.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-slate-900">
-            2. Who pays PrintMadeEasy
+            2. Who pays PrintYantra
           </h2>
           <p>
-            The PrintMadeEasy subscription is paid by the shopkeeper (print-shop
+            The PrintYantra subscription is paid by the shopkeeper (print-shop
             owner/operator). Customers who submit documents through a shop QR
-            code do not pay PrintMadeEasy for submitting print jobs.
+            code do not pay PrintYantra for submitting print jobs.
           </p>
           <p>
             Premium access is priced at{" "}
@@ -79,7 +79,7 @@ export default function TermsPage() {
             4. Acceptable use
           </h2>
           <p>
-            You agree to use PrintMadeEasy only for lawful print-shop operations.
+            You agree to use PrintYantra only for lawful print-shop operations.
             You must not upload or process unlawful content, attempt to disrupt
             the service, misuse Agent/pairing links, or access another shop&apos;s
             data without authorization.
@@ -91,7 +91,7 @@ export default function TermsPage() {
           <p>
             Uploaded customer documents are processed to deliver printing
             workflows for your shop. Uploaded document files are automatically
-            deleted from PrintMadeEasy servers after 1 hour. Job history may
+            deleted from PrintYantra servers after 1 hour. Job history may
             remain available in the shopkeeper dashboard after files are removed.
             Account and billing information is used to operate the subscription
             service. See our{" "}
@@ -105,7 +105,7 @@ export default function TermsPage() {
             6. Service limitations
           </h2>
           <p>
-            PrintMadeEasy depends on your internet connectivity, Windows
+            PrintYantra depends on your internet connectivity, Windows
             computer, Agent installation, printer drivers, and local printer
             hardware. We do not guarantee uninterrupted availability, successful
             physical print output in every environment, or compatibility with
@@ -132,10 +132,10 @@ export default function TermsPage() {
             8. Intellectual property
           </h2>
           <p>
-            PrintMadeEasy software, branding, and related materials remain the
+            PrintYantra software, branding, and related materials remain the
             property of Ramyad Enterprises - Abhiram / Clauras and their
             licensors, as applicable. Your subscription grants
-            a limited right to use the PrintMadeEasy service for your shop during an active
+            a limited right to use the PrintYantra service for your shop during an active
             trial or paid period. You retain rights to content you upload,
             subject to the processing needed to provide the service.
           </p>
@@ -144,11 +144,11 @@ export default function TermsPage() {
             9. Limitation of liability
           </h2>
           <p>
-            To the fullest extent permitted by applicable law, PrintMadeEasy is
+            To the fullest extent permitted by applicable law, PrintYantra is
             not liable for indirect, incidental, or consequential damages arising
             from use of the service, including print failures, downtime, or
             business interruption. Our aggregate liability related to the
-            service is limited to the amounts you paid to PrintMadeEasy for the
+            service is limited to the amounts you paid to PrintYantra for the
             subscription period giving rise to the claim, except where liability
             cannot be limited by law.
           </p>

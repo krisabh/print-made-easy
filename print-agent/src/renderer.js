@@ -174,7 +174,7 @@
       updateTitle.textContent = "Installing update...";
       updateMeta.textContent =
         state.userMessage ||
-        "PrintMadeEasy Agent will restart automatically.";
+        "PrintYantra Agent will restart automatically.";
       return;
     }
 
@@ -324,7 +324,7 @@
     const version = state.agentVersion || "1.2.0";
 
     if (agentFooter) {
-      agentFooter.textContent = `PrintMadeEasy Agent ${version}`;
+      agentFooter.textContent = `PrintYantra Agent ${version}`;
     }
     renderUpdateState(state.update);
 
@@ -436,14 +436,14 @@
             (state.connection && state.connection.message) ||
             "Waiting for backend"
           }`
-      : "Sign in with your PrintMadeEasy email and password.";
+      : "Sign in with your PrintYantra email and password.";
 
     openAtLogin.checked = Boolean(config.openAtLogin);
 
     if (connectHint) {
       connectHint.textContent = paired
         ? "Signed in. Use the same account on another computer to connect it too."
-        : "Sign in with your PrintMadeEasy email and password. Use the same account on multiple computers.";
+        : "Sign in with your PrintYantra email and password. Use the same account on multiple computers.";
     }
 
     renderColorSupport(state);

@@ -21,7 +21,7 @@ export async function runTestPrint(printerName: string) {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  page.drawText("PrintMadeEasy", {
+  page.drawText("PrintYantra", {
     x: 50,
     y: 760,
     size: 28,

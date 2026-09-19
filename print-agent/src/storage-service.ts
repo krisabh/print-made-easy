@@ -41,7 +41,7 @@ export function getActiveLocalFileCountForTests() {
 }
 
 /**
- * True only for PrintMadeEasy Agent-owned temporary print filenames.
+ * True only for PrintYantra Agent-owned temporary print filenames.
  * Never matches agent-config.json or unrelated files.
  */
 export function isAgentOwnedTempFileName(fileName: string) {

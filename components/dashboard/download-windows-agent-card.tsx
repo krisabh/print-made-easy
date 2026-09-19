@@ -19,16 +19,16 @@ const INSTALL_STEPS = [
     caption:
       'Chrome may show "Suspicious download blocked" while the Agent builds reputation.',
     src: "/agent-install/step-01-chrome-suspicious.jpg",
-    alt: "Chrome download list showing Suspicious download blocked for PrintMadeEasy-Agent-Setup",
+    alt: "Chrome download list showing Suspicious download blocked for PrintYantra-Agent-Setup",
     width: 455,
     height: 259,
   },
   {
     title: "Choose the download / continue option",
     caption:
-      'Only if you downloaded from clauras.com, choose "Download suspicious file".',
+      'Only if you downloaded from printyantra.com, choose "Download suspicious file".',
     src: "/agent-install/step-02-chrome-download.jpg",
-    alt: "Chrome dialog with Download suspicious file for PrintMadeEasy-Agent-Setup",
+    alt: "Chrome dialog with Download suspicious file for PrintYantra-Agent-Setup",
     width: 720,
     height: 317,
   },
@@ -52,7 +52,7 @@ const INSTALL_STEPS = [
   {
     title: 'Click "Run anyway"',
     caption:
-      'After More info, click "Run anyway" to continue installing the Agent from clauras.com.',
+      'After More info, click "Run anyway" to continue installing the Agent from printyantra.com.',
     src: "/agent-install/step-05-windows-run-anyway.jpg",
     alt: "Windows SmartScreen dialog with Run anyway and Don't run buttons",
     width: 720,
@@ -77,7 +77,7 @@ export function DownloadWindowsAgentCard() {
             {productName}
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-slate-500">
-            Install the PrintMadeEasy Agent on the Windows computer connected to
+            Install the PrintYantra Agent on the Windows computer connected to
             your printer.
           </p>
         </div>
@@ -112,7 +112,7 @@ export function DownloadWindowsAgentCard() {
               Windows Security Notice
             </p>
             <p className="mt-1.5 text-sm leading-relaxed text-amber-900/90">
-              PrintMadeEasy Agent is a new Windows application. Because it is
+              PrintYantra Agent is a new Windows application. Because it is
               currently building its Microsoft reputation, Windows or Chrome may
               occasionally display a security warning when downloading or
               installing the Agent.
@@ -142,10 +142,10 @@ export function DownloadWindowsAgentCard() {
               If Chrome shows a download warning such as &ldquo;This file
               isn&apos;t commonly downloaded and it may be dangerous,&rdquo;
               continue only if you downloaded it directly from{" "}
-              <span className="font-semibold text-amber-950">clauras.com</span>.
+              <span className="font-semibold text-amber-950">printyantra.com</span>.
             </p>
             <p className="mt-3 text-sm font-medium text-amber-950">
-              Only download the PrintMadeEasy Agent from clauras.com.
+              Only download the PrintYantra Agent from printyantra.com.
             </p>
           </div>
         </div>
@@ -177,7 +177,7 @@ export function DownloadWindowsAgentCard() {
             <p className="text-xs leading-relaxed text-slate-500">
               These screenshots show what Chrome or Windows may display while
               the Agent builds reputation. They do not mean the file is unsafe
-              when downloaded from clauras.com.
+              when downloaded from printyantra.com.
             </p>
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3 [&::-webkit-scrollbar]:hidden">
               {INSTALL_STEPS.map((step, index) => (
