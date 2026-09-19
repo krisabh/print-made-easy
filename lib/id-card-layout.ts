@@ -14,11 +14,28 @@ import { PDFDocument, type PDFImage } from "pdf-lib";
 /** PDF points (~72 dpi). Matches Agent A4 portrait size for Sumatra. */
 export const ID_CARD_A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
 
-/** Outer page margin around both slots. */
-export const ID_CARD_PAGE_MARGIN_PT = 24;
+/**
+ * Outer page margin — keeps the stacked cards clear of the sheet edge.
+ * Layout no longer fills A4 with half-page slots; margin is a soft bound.
+ */
+export const ID_CARD_PAGE_MARGIN_PT = 36;
 
-/** Vertical gap between front (upper) and back (lower) slots. */
-export const ID_CARD_SLOT_GAP_PT = 16;
+/** Vertical gap between front (upper) and back (lower) card boxes. */
+export const ID_CARD_SLOT_GAP_PT = 28;
+
+/**
+ * General ID-card MAX bounding box (PDF points) for one face on A4.
+ *
+ * Rationale: roughly ISO ID-1 / common government ID print size (~86×54 mm),
+ * with a little headroom so Aadhaar / PAN / DL / similar cards fit without
+ * forcing every upload into one exact physical dimension.
+ *
+ * This is a MAXIMUM fit box — not a hard crop to 85.60×53.98 mm.
+ * Images keep their aspect ratio, are never stretched/cropped, and are not
+ * upscaled above 1× (see fitImageInBox).
+ */
+export const GENERAL_ID_CARD_MAX_WIDTH_PT = 260; // ≈ 91.7 mm
+export const GENERAL_ID_CARD_MAX_HEIGHT_PT = 165; // ≈ 58.2 mm
 
 /**
  * Max bytes per source image — aligns with default MAX_UPLOAD_SIZE_MB (20).
@@ -119,7 +136,9 @@ export function fitImageInBox(
 }
 
 /**
- * Portrait A4 with two equal vertical slots (front upper, back lower).
+ * Portrait A4 with two GENERAL ID-card-sized boxes (front upper, back lower).
+ * Boxes are horizontally centered and stacked with a vertical gap; the pair is
+ * centered vertically on the page (clamped inside page margins).
  * PDF origin is bottom-left.
  */
 export function computeIdCardA4Layout(
@@ -127,22 +146,38 @@ export function computeIdCardA4Layout(
   pageHeight: number = ID_CARD_A4_PORTRAIT_PT.height,
   marginPt: number = ID_CARD_PAGE_MARGIN_PT,
   gapPt: number = ID_CARD_SLOT_GAP_PT,
+  cardMaxWidthPt: number = GENERAL_ID_CARD_MAX_WIDTH_PT,
+  cardMaxHeightPt: number = GENERAL_ID_CARD_MAX_HEIGHT_PT,
 ): IdCardA4Layout {
-  const contentWidth = Math.max(1, pageWidth - marginPt * 2);
-  const contentHeight = Math.max(1, pageHeight - marginPt * 2);
-  const slotHeight = Math.max(1, (contentHeight - gapPt) / 2);
+  const maxContentWidth = Math.max(1, pageWidth - marginPt * 2);
+  const maxContentHeight = Math.max(1, pageHeight - marginPt * 2);
+
+  const boxWidth = Math.min(cardMaxWidthPt, maxContentWidth);
+  // Ensure two boxes + gap fit; shrink height if the page is unusually short.
+  const maxPairHeight = Math.max(1, maxContentHeight - gapPt);
+  const boxHeight = Math.min(cardMaxHeightPt, maxPairHeight / 2);
+
+  const stackHeight = boxHeight * 2 + gapPt;
+  const stackBottom = Math.max(
+    marginPt,
+    Math.min(
+      pageHeight - marginPt - stackHeight,
+      (pageHeight - stackHeight) / 2,
+    ),
+  );
+  const boxX = (pageWidth - boxWidth) / 2;
 
   const back: IdCardLayoutSlot = {
-    x: marginPt,
-    y: marginPt,
-    width: contentWidth,
-    height: slotHeight,
+    x: boxX,
+    y: stackBottom,
+    width: boxWidth,
+    height: boxHeight,
   };
   const front: IdCardLayoutSlot = {
-    x: marginPt,
-    y: marginPt + slotHeight + gapPt,
-    width: contentWidth,
-    height: slotHeight,
+    x: boxX,
+    y: stackBottom + boxHeight + gapPt,
+    width: boxWidth,
+    height: boxHeight,
   };
 
   return {

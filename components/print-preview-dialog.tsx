@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, ExternalLink, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +66,51 @@ type PrintPreviewDialogProps = {
   settingsNote?: string | null;
 };
 
+export type PdfOpenFallbackEnv = {
+  userAgent?: string;
+  maxTouchPoints?: number;
+  /** Optional matchMedia; pass a stub in tests. */
+  matchesNarrow?: boolean;
+  matchesCoarsePointer?: boolean;
+};
+
+/**
+ * Many mobile browsers (iOS Safari/Chrome, Android Chrome) do not reliably
+ * render PDF blobs inside an iframe/`<object>`. Desktop Chrome/Edge/Firefox
+ * typically do. When this returns true, the dialog still attempts inline
+ * preview where practical and always offers an "Open PDF" action that opens
+ * the same blob/object URL in a new tab (no download-only path, no server persist).
+ */
+export function needsMobilePdfOpenFallback(
+  env: PdfOpenFallbackEnv = {},
+): boolean {
+  const ua = env.userAgent ?? "";
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+    return true;
+  }
+  if (env.matchesNarrow === true) {
+    return true;
+  }
+  if (env.matchesCoarsePointer === true && (env.maxTouchPoints ?? 0) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/** Read live browser signals (client-only). Safe no-op defaults on server. */
+export function readPdfOpenFallbackEnv(): PdfOpenFallbackEnv {
+  if (typeof navigator === "undefined" || typeof window === "undefined") {
+    return {};
+  }
+  return {
+    userAgent: navigator.userAgent,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    matchesNarrow: window.matchMedia?.("(max-width: 768px)")?.matches ?? false,
+    matchesCoarsePointer:
+      window.matchMedia?.("(pointer: coarse)")?.matches ?? false,
+  };
+}
+
 export function buildNormalPreviewPages(
   files: NormalPreviewFile[],
   pageCounts: Record<string, number>,
@@ -110,6 +155,33 @@ export function revokePreviewPages(pages: PreviewPage[]) {
   }
 }
 
+function PdfOpenFallbackActions({
+  url,
+  label = "Open PDF",
+}: {
+  url: string;
+  label?: string;
+}) {
+  return (
+    <div className="mt-3 flex flex-col items-stretch gap-2 sm:items-center">
+      <p className="text-center text-xs text-slate-600">
+        If the preview above is blank, open the PDF in a new tab.
+      </p>
+      <Button
+        type="button"
+        variant="default"
+        className="w-full sm:w-auto"
+        onClick={() => {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }}
+      >
+        <ExternalLink className="size-4" aria-hidden="true" />
+        {label}
+      </Button>
+    </div>
+  );
+}
+
 export function PrintPreviewDialog({
   open,
   onOpenChange,
@@ -132,6 +204,7 @@ export function PrintPreviewDialog({
   const current = pages[safeIndex];
   const totalPages = pdfUrl ? 1 : pages.length;
   const grayscale = printMode === "BW";
+  const [offerPdfOpenFallback, setOfferPdfOpenFallback] = useState(false);
 
   const frameClass = useMemo(() => {
     const pad = margins === "none" ? "p-1" : "p-3 sm:p-4";
@@ -152,6 +225,19 @@ export function PrintPreviewDialog({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (!open) {
+      setOfferPdfOpenFallback(false);
+      return;
+    }
+    setOfferPdfOpenFallback(needsMobilePdfOpenFallback(readPdfOpenFallbackEnv()));
+  }, [open]);
+
+  const activePdfUrl =
+    pdfUrl ?? (current?.kind === "pdf" ? current.url : null);
+  const showPdfOpenFallback =
+    offerPdfOpenFallback && Boolean(activePdfUrl) && !loading && !error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -191,15 +277,20 @@ export function PrintPreviewDialog({
               </p>
             </div>
           ) : pdfUrl ? (
-            <div className={frameClass}>
-              <iframe
-                title="ID card A4 preview"
-                src={pdfUrl}
-                className={[
-                  "h-full w-full rounded-md border-0 bg-white",
-                  grayscale ? "grayscale" : "",
-                ].join(" ")}
-              />
+            <div>
+              <div className={frameClass}>
+                <iframe
+                  title="ID card A4 preview"
+                  src={pdfUrl}
+                  className={[
+                    "h-full w-full rounded-md border-0 bg-white",
+                    grayscale ? "grayscale" : "",
+                  ].join(" ")}
+                />
+              </div>
+              {showPdfOpenFallback ? (
+                <PdfOpenFallbackActions url={pdfUrl} label="Open PDF" />
+              ) : null}
             </div>
           ) : current?.kind === "unavailable" ? (
             <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 text-center">
@@ -225,15 +316,20 @@ export function PrintPreviewDialog({
               />
             </div>
           ) : current?.kind === "pdf" ? (
-            <div className={frameClass}>
-              <iframe
-                title="Document preview"
-                src={current.url}
-                className={[
-                  "h-full w-full rounded-md border-0 bg-white",
-                  grayscale ? "grayscale" : "",
-                ].join(" ")}
-              />
+            <div>
+              <div className={frameClass}>
+                <iframe
+                  title="Document preview"
+                  src={current.url}
+                  className={[
+                    "h-full w-full rounded-md border-0 bg-white",
+                    grayscale ? "grayscale" : "",
+                  ].join(" ")}
+                />
+              </div>
+              {showPdfOpenFallback ? (
+                <PdfOpenFallbackActions url={current.url} label="View PDF" />
+              ) : null}
             </div>
           ) : (
             <div className="flex min-h-[280px] items-center justify-center text-sm text-slate-500">

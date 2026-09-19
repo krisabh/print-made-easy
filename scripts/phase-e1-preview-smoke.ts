@@ -17,7 +17,10 @@ import {
   previewIdCardPdfAction,
   submitPrintJobAction,
 } from "../app/upload/[shopCode]/actions";
-import { classifyPreviewExtension } from "../components/print-preview-dialog";
+import {
+  classifyPreviewExtension,
+  needsMobilePdfOpenFallback,
+} from "../components/print-preview-dialog";
 import { buildIdCardPreviewFormData } from "../lib/id-card-client";
 import {
   ID_CARD_A4_PORTRAIT_PT,
@@ -308,6 +311,58 @@ async function main() {
     assert.equal(classifyPreviewExtension("file.pdf"), "pdf");
     assert.equal(classifyPreviewExtension("notes.docx"), "unavailable");
     console.log("L PASS normal upload unchanged + preview classification");
+  }
+
+  // M — mobile PDF open-fallback detection (no PrintJob / no billing)
+  {
+    assert.equal(
+      needsMobilePdfOpenFallback({
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+      }),
+      true,
+      "iPhone should offer Open PDF",
+    );
+    assert.equal(
+      needsMobilePdfOpenFallback({
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
+      }),
+      true,
+      "Android should offer Open PDF",
+    );
+    assert.equal(
+      needsMobilePdfOpenFallback({ matchesNarrow: true }),
+      true,
+      "narrow viewport should offer Open PDF",
+    );
+    assert.equal(
+      needsMobilePdfOpenFallback({
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        matchesNarrow: false,
+        matchesCoarsePointer: false,
+        maxTouchPoints: 0,
+      }),
+      false,
+      "desktop should keep iframe-only path",
+    );
+    console.log("M PASS mobile PDF open-fallback detection");
+  }
+
+  // N — preview PDF is a blob-ready base64 payload (client builds object URL)
+  {
+    const formData = buildIdCardPreviewFormData({
+      shopCode: shop.shopCode,
+      front,
+      back,
+    });
+    const result = await previewIdCardPdfAction(formData);
+    assert.equal(result.success, true);
+    const bytes = Buffer.from(result.data!.pdfBase64, "base64");
+    assert.ok(bytes.byteLength > 100);
+    assert.equal(bytes.subarray(0, 4).toString("ascii"), "%PDF");
+    console.log("N PASS preview returns PDF bytes suitable for object URL");
   }
 
   // cleanup

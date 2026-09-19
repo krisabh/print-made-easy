@@ -16,6 +16,8 @@ import {
   computeIdCardA4Layout,
   fitImageInBox,
   generateIdCardA4Pdf,
+  GENERAL_ID_CARD_MAX_HEIGHT_PT,
+  GENERAL_ID_CARD_MAX_WIDTH_PT,
   ID_CARD_A4_PORTRAIT_PT,
   normalizeIdCardImageFormat,
 } from "../lib/id-card-layout";
@@ -86,7 +88,38 @@ async function main() {
   assert.equal(layout.page.height, 842);
   assert.ok(layout.front.y > layout.back.y, "front slot is above back");
   assert.ok(layout.front.height > 0 && layout.back.height > 0);
-  console.log("0b PASS layout slots (front upper, back lower)");
+  // General ID-card boxes — not half-page fillers
+  assert.ok(
+    layout.front.width <= GENERAL_ID_CARD_MAX_WIDTH_PT + 1e-6,
+    "front box within general max width",
+  );
+  assert.ok(
+    layout.front.height <= GENERAL_ID_CARD_MAX_HEIGHT_PT + 1e-6,
+    "front box within general max height",
+  );
+  assert.ok(
+    layout.front.width < ID_CARD_A4_PORTRAIT_PT.width * 0.55,
+    "front box substantially narrower than A4",
+  );
+  assert.ok(
+    layout.front.height < ID_CARD_A4_PORTRAIT_PT.height * 0.35,
+    "front box substantially shorter than A4",
+  );
+  assert.ok(
+    Math.abs(layout.front.x + layout.front.width / 2 - layout.page.width / 2) <
+      1,
+    "front box horizontally centered",
+  );
+  assert.ok(
+    Math.abs(layout.back.x + layout.back.width / 2 - layout.page.width / 2) < 1,
+    "back box horizontally centered",
+  );
+  // No overlap
+  assert.ok(
+    layout.front.y >= layout.back.y + layout.back.height - 1e-6,
+    "front/back do not overlap",
+  );
+  console.log("0b PASS layout slots (general ID size, centered, no overlap)");
 
   // A — JPEG + JPEG
   const jpegPair = await generateIdCardA4Pdf(
@@ -129,6 +162,39 @@ async function main() {
   assert.equal(mixed.heightPt, ID_CARD_A4_PORTRAIT_PT.height);
   assert.ok(mixed.frontDraw.width > 0 && mixed.backDraw.width > 0);
   console.log("D PASS 1 page, A4 dims, both images drawn");
+
+  // I1 — drawn cards stay inside general bounding box and A4
+  {
+    const large = await generateIdCardA4Pdf(
+      { bytes: PNG_2X1, format: "png" },
+      { bytes: PNG_1X2, format: "png" },
+    );
+    for (const draw of [large.frontDraw, large.backDraw] as const) {
+      assert.ok(draw.width <= GENERAL_ID_CARD_MAX_WIDTH_PT + 1e-6);
+      assert.ok(draw.height <= GENERAL_ID_CARD_MAX_HEIGHT_PT + 1e-6);
+      assert.ok(draw.x >= 0 && draw.y >= 0);
+      assert.ok(draw.x + draw.width <= ID_CARD_A4_PORTRAIT_PT.width + 1e-6);
+      assert.ok(draw.y + draw.height <= ID_CARD_A4_PORTRAIT_PT.height + 1e-6);
+      assert.ok(
+        draw.width * draw.height <
+          ID_CARD_A4_PORTRAIT_PT.width * ID_CARD_A4_PORTRAIT_PT.height * 0.2,
+        "card area much smaller than A4",
+      );
+      assert.ok(
+        Math.abs(
+          draw.x + draw.width / 2 - ID_CARD_A4_PORTRAIT_PT.width / 2,
+        ) < 1,
+        "drawn card horizontally centered",
+      );
+    }
+    assert.ok(
+      large.frontDraw.y >= large.backDraw.y + large.backDraw.height - 1e-6,
+      "drawn front/back do not overlap",
+    );
+    console.log(
+      "I1 PASS cards inside general ID box, inside A4, smaller than page, no overlap",
+    );
+  }
 
   // F — unsupported input
   await assert.rejects(
