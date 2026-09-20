@@ -61,20 +61,16 @@ export function DashboardShell({
       {NAV.map((item) => {
         const Icon = item.icon;
         const active = isActive(item.href);
-        const isContact = item.href === "/contact";
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setOpen(false)}
             className={cn(
-              "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
-              isContact ? "font-bold" : "font-medium",
+              "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
               active
                 ? "bg-blue-600 text-white"
-                : isContact
-                  ? "text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -157,12 +153,6 @@ export function DashboardShell({
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-                <Link
-                  href="/contact"
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-800 shadow-sm transition-colors hover:bg-blue-100 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                >
-                  Contact Us
-                </Link>
                 <AgentStatusBadge />
               </div>
             </div>

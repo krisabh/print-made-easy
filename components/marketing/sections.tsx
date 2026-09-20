@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 
 import { PREMIUM_PLAN } from "@/lib/cashfree";
+import {
+  PREMIUM_FEATURE_LABELS,
+  TRIAL_FEATURE_LABELS,
+} from "@/lib/premium-features";
 
 export function HeroSection() {
   return (
@@ -435,12 +439,7 @@ export function PricingSection() {
               trial starts automatically when you sign up.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
-              {[
-                "Full access to Premium features",
-                "No payment details required",
-                "Cancel anytime",
-                "Trial starts automatically on signup",
-              ].map((item) => (
+              {TRIAL_FEATURE_LABELS.map((item) => (
                 <li key={item} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                   {item}
@@ -469,16 +468,7 @@ export function PricingSection() {
               PrintYantra.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
-              {[
-                "Upload and print customer jobs",
-                "Multiple printers detected by one Agent",
-                "Choose your default printer",
-                "Customer documents deleted after 1 hour",
-                "Job tracking & status history",
-                "Revenue reports",
-                "Priority support",
-                "Pay monthly. Renew manually when your period ends.",
-              ].map((item) => (
+              {PREMIUM_FEATURE_LABELS.map((item) => (
                 <li key={item} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                   {item}

@@ -33,33 +33,33 @@ export const metadata: Metadata = {
 const CAPABILITIES = [
   {
     icon: QrCode,
-    title: "QR-based print requests",
-    body: "Customers scan your shop QR code to upload documents and submit print jobs.",
+    title: "QR Code Printing",
+    body: "Customers scan your shop QR Code to Upload documents and submit Print Jobs.",
   },
   {
     icon: MonitorSmartphone,
     title: "PrintYantra Agent",
-    body: "A Windows Agent on the shop PC receives jobs from PrintYantra and sends them to your printers.",
+    body: "A Windows Agent on the shop PC receives Jobs from PrintYantra and sends them to your Printers. Supports Multi-Device and Easy Agent Reconnect.",
   },
   {
     icon: Printer,
-    title: "Multiple printers",
-    body: "Connect and manage printers available on the shop computer through the Agent and dashboard.",
+    title: "Printer Status & Capabilities",
+    body: "See Agent and Printer Connected or Offline status, and Color support when your connected Printer allows it.",
   },
   {
     icon: Settings2,
-    title: "Print settings & color control",
-    body: "Configure supported print settings and control color printing based on each printer’s capability.",
+    title: "Color & Black & White Printing",
+    body: "Offer Black & White always, and Color when the connected Printer supports it — plus ID Card — Front & Back.",
   },
   {
     icon: Store,
-    title: "Job management dashboard",
-    body: "Track pending, printing, and ready jobs from one shopkeeper dashboard.",
+    title: "Live Print Job Workflow",
+    body: "Track Pending, Printing, Ready, Delivered, and Cancelled Jobs from one shopkeeper Dashboard.",
   },
   {
     icon: ShieldCheck,
-    title: "Agent & printer status",
-    body: "Monitor Agent and printer availability so you know when the shop is ready to print.",
+    title: "Automatic Agent Startup",
+    body: "Keep the PrintYantra Agent ready with Windows auto-start so your shop can receive Jobs after reboot.",
   },
 ] as const;
 

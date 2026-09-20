@@ -25,19 +25,19 @@ function main() {
     "Hello PrintYantra Support, I need help with my print shop account.";
   const expectedHref = `https://wa.me/918618089513?text=${encodeURIComponent(expectedMessage)}`;
 
-  // A — authenticated dashboard contains Contact Us
+  // A — authenticated dashboard keeps Contact Us in sidebar (not sticky header)
   const shell = read("components/dashboard/shell.tsx");
-  assert.match(shell, /Contact Us/);
-  assert.match(shell, /href=["']\/contact["']/);
+  assert.match(shell, /href:\s*["']\/contact["']/);
+  assert.match(shell, /label:\s*["']Contact Us["']/);
   assert.ok(
-    shell.includes('href="/contact"') && shell.includes("font-bold"),
-    "Contact Us in dashboard should be bold / prominent",
+    !/bg-blue-50[\s\S]{0,120}Contact Us/.test(shell),
+    "Dashboard sticky header must not show a prominent Contact Us button",
   );
-  console.log("A PASS authenticated dashboard contains Contact Us");
+  console.log("A PASS dashboard Contact Us remains in sidebar nav only");
 
   // B — Contact Us points to /contact
-  assert.ok(shell.includes('href="/contact"'));
-  assert.ok(shell.includes('{ href: "/contact", label: "Contact Us"'));
+  assert.ok(shell.includes('href: "/contact"'));
+  assert.ok(shell.includes('label: "Contact Us"'));
   console.log("B PASS Contact Us points to /contact");
 
   // C — WhatsApp button exists in authenticated dashboard

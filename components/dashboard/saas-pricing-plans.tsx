@@ -12,6 +12,10 @@ import {
 
 import type { BillingMode } from "@/lib/billing/types";
 import { resolveBillingPlanCta } from "@/lib/billing/plan-cta";
+import {
+  PREMIUM_FEATURE_LABELS,
+  TRIAL_FEATURE_LABELS,
+} from "@/lib/premium-features";
 import type { PublicSubscriptionView } from "@/lib/subscription";
 
 type SaasPricingPlansProps = {
@@ -22,28 +26,6 @@ type SaasPricingPlansProps = {
   /** Server billing mode — drives CTA copy and checkout path. */
   billingMode: BillingMode;
 };
-
-const TRIAL_INCLUDED_FEATURES = [
-  "Full access to Premium features",
-  "No payment details required",
-  "Cancel anytime",
-  "Your trial starts automatically when you sign up",
-];
-
-const PREMIUM_FEATURES = [
-  "Continue using PrintYantra after your free trial",
-  "Upload and print customer jobs",
-  "Multiple printers detected by one Agent",
-  "Choose your default printer",
-  "Advanced print settings",
-  "Print from customer QR uploads",
-  "Customer documents automatically deleted after 1 hour",
-  "Privacy-focused document handling",
-  "Print job management and status tracking",
-  "Job tracking & status history",
-  "Revenue reports",
-  "Priority support",
-];
 declare global {
   interface Window {
     Cashfree?: (options: { mode: string }) => {
@@ -523,7 +505,7 @@ export function SaasPricingPlans({
             Try all Premium features for 7 days with no payment required.
           </p>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {TRIAL_INCLUDED_FEATURES.map((feature) => (
+            {TRIAL_FEATURE_LABELS.map((feature) => (
               <li
                 key={feature}
                 className="flex items-start gap-2 text-sm text-slate-700"
@@ -558,7 +540,9 @@ export function SaasPricingPlans({
               After your free trial
             </p>
           </div>
-          <h3 className="mt-4 text-2xl font-semibold text-slate-900">Premium</h3>
+          <h3 className="mt-4 text-2xl font-semibold text-slate-900">
+            PrintYantra Premium
+          </h3>
           <p className="mt-1 text-sm text-slate-500">
             Everything you need to simplify printing at your shop.
           </p>
@@ -603,7 +587,7 @@ export function SaasPricingPlans({
           )}
 
           <ul className="mt-6 space-y-2.5">
-            {PREMIUM_FEATURES.map((feature) => (
+            {PREMIUM_FEATURE_LABELS.map((feature) => (
               <li
                 key={feature}
                 className="flex items-start gap-3 text-sm text-slate-700"
