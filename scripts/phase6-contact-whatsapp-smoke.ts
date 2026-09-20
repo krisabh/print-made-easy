@@ -96,7 +96,8 @@ function main() {
   assert.match(contact, /SITE\.phone/);
   assert.match(contact, /WhatsAppIconLink/);
   assert.match(contact, /SITE\.parentCompany/);
-  assert.equal(SITE.email, "clauras.ai@gmail.com");
+  assert.equal(SITE.email, "support@printyantra.com");
+  assert.equal(SITE.emailHref, "mailto:support@printyantra.com");
   assert.equal(SITE.phone, "8618089513");
   console.log("G PASS public /contact remains functional");
 
@@ -112,7 +113,7 @@ function main() {
   assert.equal(SITE.name, "PrintYantra");
   assert.equal(SITE.parentCompany, "Clauras");
   assert.equal(SITE.legalName, "Ramyad Enterprises - Abhiram");
-  assert.equal(SITE.email, "clauras.ai@gmail.com");
+  assert.equal(SITE.email, "support@printyantra.com");
   assert.match(SITE.relationship, /Clauras/);
   console.log("I PASS company identity remains correct (Clauras)");
 
