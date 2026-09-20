@@ -46,6 +46,8 @@ const nextConfig: NextConfig = {
       bodySizeLimit: serverActionBodySizeLimit,
     },
   },
+  // Native / Node-only packages used when baking brightness into PDFs.
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   // Hostinger production installs often omit devDependencies.
   eslint: {
     ignoreDuringBuilds: true,

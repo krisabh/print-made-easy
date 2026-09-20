@@ -43,7 +43,15 @@ import {
   resolveJobPrintCategory,
   type AggregatePrintFileCategory,
 } from "@/lib/print-file-category";
-import { isValidPageRange } from "@/lib/print-settings";
+import {
+  BRIGHTNESS_MAX,
+  BRIGHTNESS_MIN,
+  BRIGHTNESS_STEP,
+  CONTENT_SCALE_MAX,
+  CONTENT_SCALE_MIN,
+  CONTENT_SCALE_STEP,
+  isValidPageRange,
+} from "@/lib/print-settings";
 import { calculatePrintCost } from "@/lib/pricing-service";
 import {
   getMaxUploadSizeBytes,
@@ -81,6 +89,11 @@ const ID_CARD_ACCEPT =
 const MAX_FILES = 10;
 const MAX_COPIES = 100;
 const STATUS_POLL_MS = 3000;
+
+function snapPercent(value: number, min: number, max: number, step: number) {
+  const snapped = Math.round(value / step) * step;
+  return Math.min(max, Math.max(min, snapped));
+}
 
 function getExtension(fileName: string) {
   return extensionFromFileName(fileName);
@@ -393,6 +406,8 @@ export function UploadForm({ shop }: UploadFormProps) {
   const [margins, setMargins] = useState<PrintMargins>("normal");
   const [pagesMode, setPagesMode] = useState<PagesMode>("all");
   const [pageRange, setPageRange] = useState("");
+  const [brightness, setBrightness] = useState(100);
+  const [contentScale, setContentScale] = useState(100);
   const [moreOpen, setMoreOpen] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -413,6 +428,7 @@ export function UploadForm({ shop }: UploadFormProps) {
     null,
   );
   const [isPreviewPending, startPreviewTransition] = useTransition();
+  const idCardPreviewRequestRef = useRef(0);
 
   const isIdCardMode = jobMode === JOB_MODE_ID_CARD_FRONT_BACK;
   const idCardReady = Boolean(idCardFront && idCardBack);
@@ -709,6 +725,8 @@ export function UploadForm({ shop }: UploadFormProps) {
     setMargins("normal");
     setPagesMode("all");
     setPageRange("");
+    setBrightness(100);
+    setContentScale(100);
     setMoreOpen(false);
     setFileError(null);
     setFormError(null);
@@ -777,7 +795,11 @@ export function UploadForm({ shop }: UploadFormProps) {
     }
   }
 
-  function openIdCardPreview() {
+  function openIdCardPreview(options?: {
+    brightness?: number;
+    contentScale?: number;
+    silent?: boolean;
+  }) {
     const sideError = validateIdCardClientSides(
       idCardFront?.file,
       idCardBack?.file,
@@ -788,22 +810,39 @@ export function UploadForm({ shop }: UploadFormProps) {
     }
     if (!idCardFront || !idCardBack) return;
 
-    releasePreviewResources();
-    setPreviewOpen(true);
+    const nextBrightness = options?.brightness ?? brightness;
+    const nextScale = options?.contentScale ?? contentScale;
+    const requestId = ++idCardPreviewRequestRef.current;
+
+    if (!options?.silent) {
+      if (previewPdfUrl) {
+        URL.revokeObjectURL(previewPdfUrl);
+        setPreviewPdfUrl(null);
+      }
+      revokePreviewPages(previewPages);
+      setPreviewPages([]);
+      setPreviewPageIndex(0);
+      setPreviewError(null);
+      setPreviewOpen(true);
+      setPreviewSettingsNote(
+        copies > 1 ? "Copies do not duplicate the preview sheet." : null,
+      );
+    }
+
     setPreviewLoading(true);
-    setPreviewSettingsNote(
-      copies > 1 ? "Copies do not duplicate the preview sheet." : null,
-    );
 
     const formData = buildIdCardPreviewFormData({
       shopCode: shop.shopCode,
       front: idCardFront.file,
       back: idCardBack.file,
+      brightness: nextBrightness,
+      contentScale: nextScale,
     });
 
     startPreviewTransition(async () => {
       try {
         const result = await previewIdCardPdfAction(formData);
+        if (requestId !== idCardPreviewRequestRef.current) return;
         if (!result.success || !result.data) {
           setPreviewError(
             result.error ??
@@ -819,15 +858,54 @@ export function UploadForm({ shop }: UploadFormProps) {
         }
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
-        setPreviewPdfUrl(url);
+        setPreviewPdfUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setPreviewError(null);
         setPreviewLoading(false);
       } catch {
+        if (requestId !== idCardPreviewRequestRef.current) return;
         setPreviewError(
           "Preview couldn't be generated. You can still submit the print job.",
         );
         setPreviewLoading(false);
       }
     });
+  }
+
+  function handleBrightnessChange(value: number) {
+    const next = snapPercent(
+      value,
+      BRIGHTNESS_MIN,
+      BRIGHTNESS_MAX,
+      BRIGHTNESS_STEP,
+    );
+    setBrightness(next);
+    if (previewOpen && isIdCardMode) {
+      openIdCardPreview({ brightness: next, contentScale, silent: true });
+    }
+  }
+
+  function handleContentScaleChange(value: number) {
+    const next = snapPercent(
+      value,
+      CONTENT_SCALE_MIN,
+      CONTENT_SCALE_MAX,
+      CONTENT_SCALE_STEP,
+    );
+    setContentScale(next);
+    if (previewOpen && isIdCardMode) {
+      openIdCardPreview({ brightness, contentScale: next, silent: true });
+    }
+  }
+
+  function handleResetAdjustments() {
+    setBrightness(100);
+    setContentScale(100);
+    if (previewOpen && isIdCardMode) {
+      openIdCardPreview({ brightness: 100, contentScale: 100, silent: true });
+    }
   }
 
   function handlePreviewClick() {
@@ -864,6 +942,8 @@ export function UploadForm({ shop }: UploadFormProps) {
         printMode: shop.colorSupported ? printMode : "BW",
         front: idCardFront.file,
         back: idCardBack.file,
+        brightness,
+        contentScale,
       });
 
       startTransition(async () => {
@@ -908,6 +988,8 @@ export function UploadForm({ shop }: UploadFormProps) {
     formData.set("copies", String(copies));
     formData.set("orientation", orientation);
     formData.set("printMode", shop.colorSupported ? printMode : "BW");
+    formData.set("brightness", String(brightness));
+    formData.set("contentScale", String(contentScale));
     // Category-specific fields; server re-derives category from actual files.
     if (aggregateFileCategory === "DOCUMENT") {
       formData.set("scale", scale);
@@ -1387,7 +1469,7 @@ export function UploadForm({ shop }: UploadFormProps) {
                         </div>
 
                         <SegmentedControl
-                          label="Scale"
+                          label="Page fit"
                           value={scale}
                           onChange={setScale}
                           options={[
@@ -1532,7 +1614,7 @@ export function UploadForm({ shop }: UploadFormProps) {
               ) : (
                 <>
                   <Eye className="size-4" aria-hidden="true" />
-                  Preview
+                  Preview & Adjust
                 </>
               )}
             </Button>
@@ -1561,10 +1643,10 @@ export function UploadForm({ shop }: UploadFormProps) {
           if (!open) closePreview();
           else setPreviewOpen(true);
         }}
-        title={isIdCardMode ? "ID Card Preview" : "Print Preview"}
+        title="Preview & Adjust"
         description={
           isIdCardMode
-            ? "One A4 portrait sheet · Preview only — nothing is submitted yet."
+            ? "One A4 portrait sheet · Front left, Back right · Adjustments apply to both sides."
             : undefined
         }
         loading={previewLoading || isPreviewPending}
@@ -1582,14 +1664,26 @@ export function UploadForm({ shop }: UploadFormProps) {
               ? margins
               : "normal"
         }
-        scale={
+        pageFit={
           isIdCardMode
             ? "fit"
             : aggregateFileCategory === "DOCUMENT"
               ? scale
               : "fit"
         }
+        printTypeLabel={isIdCardMode ? "ID Card — Front & Back" : "Normal Print"}
+        fileInfoLabel={
+          isIdCardMode
+            ? "ID card · 1 A4 page · Front left / Back right"
+            : null
+        }
         settingsNote={previewSettingsNote}
+        brightness={brightness}
+        contentScale={contentScale}
+        onBrightnessChange={handleBrightnessChange}
+        onContentScaleChange={handleContentScaleChange}
+        onResetAdjustments={handleResetAdjustments}
+        applyLabel="Save & Continue"
       />
     </form>
   );

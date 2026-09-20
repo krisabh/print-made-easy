@@ -23,13 +23,21 @@ import {
 import {
   buildPrintSettingsV1,
   isValidPageRange,
+  normalizeBrightnessPercent,
+  normalizeContentScalePercent,
   type PrintMarginsV1,
   type PrintOrientationV1,
   type PrintScaleV1,
 } from "@/lib/print-settings";
+import {
+  createAdjustedImagePrintablePdf,
+  needsArtifactAdjustment,
+  transformPdfWithAdjustments,
+} from "@/lib/printable-artifact";
 import { resolveJobPrintCategory } from "@/lib/print-file-category";
 import { hasSubscriptionAccess } from "@/lib/subscription";
 import {
+  saveGeneratedPdfFile,
   saveUploadFiles,
   type SavedUploadFile,
   validateUploadFiles,
@@ -51,6 +59,8 @@ const submitSchema = z.object({
   margins: z.enum(["normal", "none"]).default("normal"),
   pagesMode: z.enum(["all", "custom"]).default("all"),
   pageRange: z.string().trim().max(120).optional().default(""),
+  brightness: z.union([z.string(), z.number()]).optional(),
+  contentScale: z.union([z.string(), z.number()]).optional(),
 });
 
 function toFriendlyError(message: string) {
@@ -109,6 +119,8 @@ export async function submitPrintJobAction(
       margins: formData.get("margins") || "normal",
       pagesMode: formData.get("pagesMode") || "all",
       pageRange: formData.get("pageRange") || "",
+      brightness: formData.get("brightness") ?? 100,
+      contentScale: formData.get("contentScale") ?? 100,
     });
 
     if (!parsed.success) {
@@ -117,6 +129,9 @@ export async function submitPrintJobAction(
         error: parsed.error.issues[0]?.message ?? "Please check the form and try again.",
       };
     }
+
+    const brightness = normalizeBrightnessPercent(parsed.data.brightness);
+    const contentScale = normalizeContentScalePercent(parsed.data.contentScale);
 
     const jobMode = parseSubmitJobMode(formData.get("jobMode"));
 
@@ -162,7 +177,11 @@ export async function submitPrintJobAction(
       }
 
       try {
-        idCardArtifact = await composeAndSaveIdCardPdf(sides.front, sides.back);
+        idCardArtifact = await composeAndSaveIdCardPdf(
+          sides.front,
+          sides.back,
+          { brightness, contentScale },
+        );
       } catch (composeError) {
         logError("id_card_compose_failed", composeError);
         return {
@@ -186,6 +205,7 @@ export async function submitPrintJobAction(
       );
 
       // Portrait PDF — force print-safe settings; Agent prints a normal PDF.
+      // Brightness/contentScale are already baked into the composed PDF.
       const printSettings = buildPrintSettingsV1({
         copies: parsed.data.copies,
         orientation: "portrait",
@@ -193,6 +213,8 @@ export async function submitPrintJobAction(
         margins: "normal",
         pageRange: "all",
         paperSize: "A4",
+        brightness,
+        contentScale,
       });
 
       try {
@@ -272,7 +294,14 @@ export async function submitPrintJobAction(
       pageRange = "all";
     }
 
-    const savedFiles = await saveUploadFiles(files);
+    const savedFiles = needsArtifactAdjustment(brightness, contentScale)
+      ? await saveUploadFilesWithPrintAdjustments(files, {
+          brightness,
+          contentScale,
+          orientation: parsed.data.orientation as PrintOrientationV1,
+          margins,
+        })
+      : await saveUploadFiles(files);
     const totalPages = savedFiles.reduce((sum, file) => sum + file.totalPages, 0);
 
     // Pricing: full document pages × copies × SINGLE rates. Page range does not change price.
@@ -291,6 +320,8 @@ export async function submitPrintJobAction(
       margins,
       pageRange,
       paperSize: "A4",
+      brightness,
+      contentScale,
     });
 
     const job = await createPrintJob({
@@ -372,7 +403,16 @@ export async function previewIdCardPdfAction(
       return { success: false, error: sides.error };
     }
 
-    const composed = await composeIdCardPdfInMemory(sides.front, sides.back);
+    const brightness = normalizeBrightnessPercent(formData.get("brightness"));
+    const contentScale = normalizeContentScalePercent(
+      formData.get("contentScale"),
+    );
+
+    const composed = await composeIdCardPdfInMemory(
+      sides.front,
+      sides.back,
+      { brightness, contentScale },
+    );
 
     return {
       success: true,
@@ -391,5 +431,72 @@ export async function previewIdCardPdfAction(
         "Preview couldn't be generated. You can still submit the print job.",
     };
   }
+}
+
+/**
+ * Save uploads with brightness/contentScale baked into printable PDFs.
+ * Images become A4 PDFs; PDFs are rewritten; DOCX left unchanged (shop-assisted).
+ */
+async function saveUploadFilesWithPrintAdjustments(
+  files: File[],
+  options: {
+    brightness: number;
+    contentScale: number;
+    orientation: PrintOrientationV1;
+    margins: PrintMarginsV1;
+  },
+): Promise<SavedUploadFile[]> {
+  const validationError = validateUploadFiles(files);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  const saved: SavedUploadFile[] = [];
+  const marginPt = options.margins === "none" ? 0 : undefined;
+
+  for (const file of files) {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (ext === "png" || ext === "jpg" || ext === "jpeg") {
+      const pdfBytes = await createAdjustedImagePrintablePdf(buffer, ext, {
+        orientation: options.orientation,
+        marginPt,
+        brightness: options.brightness,
+        contentScale: options.contentScale,
+      });
+      saved.push(
+        await saveGeneratedPdfFile({
+          pdfBytes,
+          originalFileName: file.name.replace(/\.[^.]+$/, "") + "-print.pdf",
+          totalPages: 1,
+        }),
+      );
+      continue;
+    }
+
+    if (ext === "pdf") {
+      const pdfBytes = await transformPdfWithAdjustments(buffer, {
+        brightness: options.brightness,
+        contentScale: options.contentScale,
+      });
+      const { PDFDocument } = await import("pdf-lib");
+      const loaded = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      saved.push(
+        await saveGeneratedPdfFile({
+          pdfBytes,
+          originalFileName: file.name,
+          totalPages: loaded.getPageCount(),
+        }),
+      );
+      continue;
+    }
+
+    // DOCX / other: store original (no auto brightness/scale).
+    const [one] = await saveUploadFiles([file]);
+    saved.push(one);
+  }
+
+  return saved;
 }
 

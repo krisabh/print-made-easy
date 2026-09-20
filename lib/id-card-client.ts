@@ -68,6 +68,8 @@ export function buildIdCardSubmitFormData(input: {
   printMode: "BW" | "COLOR";
   front: File;
   back: File;
+  brightness?: number;
+  contentScale?: number;
 }): FormData {
   const formData = new FormData();
   formData.set("shopCode", input.shopCode);
@@ -79,6 +81,8 @@ export function buildIdCardSubmitFormData(input: {
   formData.set("margins", "normal");
   formData.set("pagesMode", "all");
   formData.set("pageRange", "");
+  formData.set("brightness", String(input.brightness ?? 100));
+  formData.set("contentScale", String(input.contentScale ?? 100));
   formData.set("front", input.front);
   formData.set("back", input.back);
   return formData;
@@ -89,11 +93,15 @@ export function buildIdCardPreviewFormData(input: {
   shopCode: string;
   front: File;
   back: File;
+  brightness?: number;
+  contentScale?: number;
 }): FormData {
   const formData = new FormData();
   formData.set("shopCode", input.shopCode);
   formData.set("front", input.front);
   formData.set("back", input.back);
+  formData.set("brightness", String(input.brightness ?? 100));
+  formData.set("contentScale", String(input.contentScale ?? 100));
   return formData;
 }
 

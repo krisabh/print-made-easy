@@ -55,6 +55,8 @@ async function main() {
     scale: "fit",
     margins: "normal",
     pageRange: "all",
+    brightness: 100,
+    contentScale: 100,
   });
   const resolvedValid = resolvePrintSettings(valid, { fallbackCopies: 3 });
   assert.equal(resolvedValid.source, "v1");
@@ -130,7 +132,26 @@ async function main() {
   assert.equal(withExtra.source, "v1");
   assert.equal(withExtra.settings?.orientation, "landscape");
   assert.equal(withExtra.settings?.pageRange, "1-3");
+  assert.equal(withExtra.settings?.brightness, 100);
+  assert.equal(withExtra.settings?.contentScale, 100);
   console.log("PASS unknown fields ignored; pageRange accepted");
+
+  // Invalid brightness / contentScale → 100
+  const badAdj = resolvePrintSettings({
+    v: 1,
+    orientation: "portrait",
+    copies: 1,
+    paperSize: "A4",
+    scale: "fit",
+    margins: "normal",
+    pageRange: "all",
+    brightness: "hot",
+    contentScale: Infinity,
+  });
+  assert.equal(badAdj.settings?.brightness, 100);
+  assert.equal(badAdj.settings?.contentScale, 100);
+  assert.equal(badAdj.repaired, true);
+  console.log("PASS invalid brightness/contentScale → 100");
 
   // 7. PrintJob.copies remains pricing SOT — printSettings.copies must not affect cost
   const rates = {

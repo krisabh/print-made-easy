@@ -11,7 +11,20 @@
 
 import { PDFDocument, type PDFImage } from "pdf-lib";
 
+import {
+  applyBrightnessToImageBytes,
+  scaleDrawInBox,
+} from "@/lib/print-adjustments";
+import {
+  normalizeBrightnessPercent,
+  normalizeContentScalePercent,
+} from "@/lib/print-settings";
 import { getMaxUploadSizeBytes } from "@/lib/upload-limits";
+
+export type IdCardPrintAdjustments = {
+  brightness?: unknown;
+  contentScale?: unknown;
+};
 
 /** PDF points (~72 dpi). Matches Agent A4 portrait size for Sumatra. */
 export const ID_CARD_A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
@@ -245,25 +258,48 @@ async function embedIdCardImage(
 /**
  * Compose FRONT + BACK images into one print-ready A4 portrait PDF page.
  * Returns PDF bytes only — does not write to disk or alter retention.
+ *
+ * Shared brightness + contentScale apply to both sides. Scale is clamped
+ * per slot so Front/Back never overlap or leave the printable band.
  */
 export async function generateIdCardA4Pdf(
   front: IdCardImageInput | null | undefined,
   back: IdCardImageInput | null | undefined,
+  adjustments?: IdCardPrintAdjustments,
 ): Promise<GenerateIdCardA4PdfResult> {
   const frontInput = assertValidImageInput("front", front);
   const backInput = assertValidImageInput("back", back);
+  const brightness = normalizeBrightnessPercent(adjustments?.brightness);
+  const contentScale = normalizeContentScalePercent(adjustments?.contentScale);
+
+  const sharp = (await import("sharp")).default;
+
+  async function prepareSide(
+    bytes: Uint8Array,
+    format: IdCardImageFormat,
+  ): Promise<{ bytes: Uint8Array; format: IdCardImageFormat }> {
+    if (brightness === 100) {
+      return { bytes, format };
+    }
+    const adjusted = await applyBrightnessToImageBytes(bytes, brightness);
+    const jpeg = await sharp(adjusted).jpeg({ quality: 90 }).toBuffer();
+    return { bytes: new Uint8Array(jpeg), format: "jpeg" };
+  }
+
+  const frontPrepared = await prepareSide(frontInput.bytes, frontInput.format);
+  const backPrepared = await prepareSide(backInput.bytes, backInput.format);
 
   const pdf = await PDFDocument.create();
   const frontImage = await embedIdCardImage(
     pdf,
-    frontInput.bytes,
-    frontInput.format,
+    frontPrepared.bytes,
+    frontPrepared.format,
     "front",
   );
   const backImage = await embedIdCardImage(
     pdf,
-    backInput.bytes,
-    backInput.format,
+    backPrepared.bytes,
+    backPrepared.format,
     "back",
   );
 
@@ -283,18 +319,29 @@ export async function generateIdCardA4Pdf(
     layout.back.height,
   );
 
+  const frontScaled = scaleDrawInBox(
+    frontFit,
+    { width: layout.front.width, height: layout.front.height },
+    contentScale,
+  );
+  const backScaled = scaleDrawInBox(
+    backFit,
+    { width: layout.back.width, height: layout.back.height },
+    contentScale,
+  );
+
   // Top-align within each slot so different aspect ratios share a common top edge.
   const frontDraw = {
-    x: layout.front.x + frontFit.x,
-    y: layout.front.y + layout.front.height - frontFit.height,
-    width: frontFit.width,
-    height: frontFit.height,
+    x: layout.front.x + frontScaled.x,
+    y: layout.front.y + layout.front.height - frontScaled.height,
+    width: frontScaled.width,
+    height: frontScaled.height,
   };
   const backDraw = {
-    x: layout.back.x + backFit.x,
-    y: layout.back.y + layout.back.height - backFit.height,
-    width: backFit.width,
-    height: backFit.height,
+    x: layout.back.x + backScaled.x,
+    y: layout.back.y + layout.back.height - backScaled.height,
+    width: backScaled.width,
+    height: backScaled.height,
   };
 
   page.drawImage(frontImage, frontDraw);

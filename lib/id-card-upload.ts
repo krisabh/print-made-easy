@@ -149,6 +149,7 @@ export type ComposedIdCardPdf = {
 export async function composeIdCardPdfInMemory(
   front: File,
   back: File,
+  adjustments?: { brightness?: unknown; contentScale?: unknown },
 ): Promise<ComposedIdCardPdf> {
   const frontExt = getExtension(front.name);
   const backExt = getExtension(back.name);
@@ -163,6 +164,7 @@ export async function composeIdCardPdfInMemory(
   const composed = await generateIdCardA4Pdf(
     { bytes: frontNorm.bytes, format: frontNorm.format },
     { bytes: backNorm.bytes, format: backNorm.format },
+    adjustments,
   );
 
   return {
@@ -181,8 +183,9 @@ export async function composeIdCardPdfInMemory(
 export async function composeAndSaveIdCardPdf(
   front: File,
   back: File,
+  adjustments?: { brightness?: unknown; contentScale?: unknown },
 ): Promise<SavedUploadFile> {
-  const composed = await composeIdCardPdfInMemory(front, back);
+  const composed = await composeIdCardPdfInMemory(front, back, adjustments);
 
   return saveGeneratedPdfFile({
     pdfBytes: composed.pdfBytes,

@@ -23,6 +23,25 @@ export type PrintMarginsV1 = "normal" | "none";
  */
 export const NORMAL_A4_MARGIN_PT = 48;
 
+/**
+ * Customer print brightness (%). Applied to the printable artifact.
+ * 100 = unchanged. Independent of Sumatra fit/noscale (`scale`).
+ */
+export type PrintBrightnessPercent = number;
+/**
+ * Customer content scale (%). Scales print content inside the page.
+ * 100 = unchanged. Independent of Sumatra fit/noscale (`scale`) and
+ * independent of on-screen preview viewport zoom.
+ */
+export type PrintContentScalePercent = number;
+
+export const BRIGHTNESS_MIN = 50;
+export const BRIGHTNESS_MAX = 150;
+export const BRIGHTNESS_STEP = 5;
+export const CONTENT_SCALE_MIN = 80;
+export const CONTENT_SCALE_MAX = 120;
+export const CONTENT_SCALE_STEP = 5;
+
 export type PrintSettingsV1 = {
   v: typeof PRINT_SETTINGS_VERSION;
   orientation: PrintOrientationV1;
@@ -32,6 +51,10 @@ export type PrintSettingsV1 = {
   margins: PrintMarginsV1;
   /** "all" or Sumatra page list, e.g. "1-5,8". Does not affect pricing. */
   pageRange: string;
+  /** 50–150. Default 100. Missing on legacy jobs → 100. */
+  brightness: PrintBrightnessPercent;
+  /** 80–120. Default 100. Missing on legacy jobs → 100. */
+  contentScale: PrintContentScalePercent;
 };
 
 /** Canonical defaults - do not duplicate elsewhere. */
@@ -43,6 +66,8 @@ export const DEFAULT_PRINT_SETTINGS_V1: PrintSettingsV1 = {
   scale: "fit",
   margins: "normal",
   pageRange: "all",
+  brightness: 100,
+  contentScale: 100,
 };
 
 const ORIENTATIONS = new Set<string>(["portrait", "landscape"]);
@@ -64,6 +89,8 @@ export function buildPrintSettingsV1(input: {
   margins?: PrintMarginsV1;
   pageRange?: string;
   paperSize?: PrintPaperSizeV1;
+  brightness?: unknown;
+  contentScale?: unknown;
 }): PrintSettingsV1 {
   const orientation: PrintOrientationV1 =
     input.orientation === "landscape" ? "landscape" : "portrait";
@@ -82,6 +109,8 @@ export function buildPrintSettingsV1(input: {
     paperSize,
     pageRange: normalizePageRangeInput(input.pageRange),
     copies: normalizeCopies(input.copies, DEFAULT_PRINT_SETTINGS_V1.copies),
+    brightness: normalizeBrightnessPercent(input.brightness),
+    contentScale: normalizeContentScalePercent(input.contentScale),
   };
 }
 
@@ -215,6 +244,33 @@ export function resolvePrintSettings(
     }
   }
 
+  // Pre-brightness/contentScale v1 objects omit these — default 100, not "broken".
+  let brightness = DEFAULT_PRINT_SETTINGS_V1.brightness;
+  if (obj.brightness === undefined) {
+    brightness = 100;
+  } else {
+    const normalized = tryNormalizeBrightnessPercent(obj.brightness);
+    if (normalized === null) {
+      repaired = true;
+      brightness = 100;
+    } else {
+      brightness = normalized;
+    }
+  }
+
+  let contentScale = DEFAULT_PRINT_SETTINGS_V1.contentScale;
+  if (obj.contentScale === undefined) {
+    contentScale = 100;
+  } else {
+    const normalized = tryNormalizeContentScalePercent(obj.contentScale);
+    if (normalized === null) {
+      repaired = true;
+      contentScale = 100;
+    } else {
+      contentScale = normalized;
+    }
+  }
+
   return {
     source: "v1",
     repaired,
@@ -226,6 +282,8 @@ export function resolvePrintSettings(
       scale,
       margins,
       pageRange,
+      brightness,
+      contentScale,
     },
   };
 }
@@ -334,4 +392,67 @@ function tryNormalizeCopies(value: unknown): number | null {
 
 function normalizeCopies(value: unknown, fallback: number): number {
   return tryNormalizeCopies(value) ?? fallback;
+}
+
+/**
+ * Snap to step and clamp. Invalid → 100.
+ * Accepts number or numeric string from FormData.
+ */
+export function normalizeBrightnessPercent(value: unknown): number {
+  return tryNormalizeBrightnessPercent(value) ?? 100;
+}
+
+export function normalizeContentScalePercent(value: unknown): number {
+  return tryNormalizeContentScalePercent(value) ?? 100;
+}
+
+function tryNormalizeSteppedPercent(
+  value: unknown,
+  min: number,
+  max: number,
+  step: number,
+): number | null {
+  let n: number;
+  if (typeof value === "number") {
+    n = value;
+  } else if (typeof value === "string" && value.trim() !== "") {
+    n = Number(value);
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(n)) return null;
+  const snapped = Math.round(n / step) * step;
+  if (snapped < min || snapped > max) {
+    return Math.min(max, Math.max(min, snapped));
+  }
+  return snapped;
+}
+
+function tryNormalizeBrightnessPercent(value: unknown): number | null {
+  return tryNormalizeSteppedPercent(
+    value,
+    BRIGHTNESS_MIN,
+    BRIGHTNESS_MAX,
+    BRIGHTNESS_STEP,
+  );
+}
+
+function tryNormalizeContentScalePercent(value: unknown): number | null {
+  return tryNormalizeSteppedPercent(
+    value,
+    CONTENT_SCALE_MIN,
+    CONTENT_SCALE_MAX,
+    CONTENT_SCALE_STEP,
+  );
+}
+
+/** True when customer adjustments differ from identity (100/100). */
+export function hasPrintContentAdjustments(
+  brightness: unknown,
+  contentScale: unknown,
+): boolean {
+  return (
+    normalizeBrightnessPercent(brightness) !== 100 ||
+    normalizeContentScalePercent(contentScale) !== 100
+  );
 }
