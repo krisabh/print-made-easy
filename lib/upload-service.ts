@@ -5,11 +5,14 @@ import path from "path";
 import { PDFDocument } from "pdf-lib";
 
 import { getStoredFilePath, getUploadDir } from "@/lib/storage";
+import {
+  getMaxUploadSizeBytes,
+  getMaxUploadSizeMb,
+  maxUploadSizeErrorMessage,
+} from "@/lib/upload-limits";
 
 const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
 const MAX_FILES = 10;
-const MAX_FILE_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 20);
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export type SavedUploadFile = {
   originalFileName: string;
@@ -45,8 +48,8 @@ export function validateUploadFiles(files: File[]) {
       return "This file type is not supported.";
     }
 
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      return "File size must be less than 20 MB.";
+    if (file.size > getMaxUploadSizeBytes()) {
+      return maxUploadSizeErrorMessage(getMaxUploadSizeMb());
     }
   }
 

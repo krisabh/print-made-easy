@@ -11,6 +11,8 @@
 
 import { PDFDocument, type PDFImage } from "pdf-lib";
 
+import { getMaxUploadSizeBytes } from "@/lib/upload-limits";
+
 /** PDF points (~72 dpi). Matches Agent A4 portrait size for Sumatra. */
 export const ID_CARD_A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
 
@@ -20,8 +22,7 @@ export const ID_CARD_A4_PORTRAIT_PT = { width: 595, height: 842 } as const;
 export const ID_CARD_PAGE_MARGIN_PT = 36;
 
 /**
- * @deprecated Gap is derived from upper/lower half-page regions (Fix 2),
- * not a fixed stack gap. Kept for import compatibility.
+ * Horizontal gap between FRONT and BACK columns in the top-half band.
  */
 export const ID_CARD_SLOT_GAP_PT = 28;
 
@@ -40,11 +41,10 @@ export const GENERAL_ID_CARD_MAX_WIDTH_PT = 260; // ≈ 91.7 mm
 export const GENERAL_ID_CARD_MAX_HEIGHT_PT = 165; // ≈ 58.2 mm
 
 /**
- * Max bytes per source image — aligns with default MAX_UPLOAD_SIZE_MB (20).
+ * Max bytes per source image — aligns with MAX_UPLOAD_SIZE_MB (default 500).
  * Does not replace upload-service validation; guards this helper in isolation.
  */
-export const ID_CARD_MAX_IMAGE_BYTES =
-  Number(process.env.MAX_UPLOAD_SIZE_MB ?? 20) * 1024 * 1024;
+export const ID_CARD_MAX_IMAGE_BYTES = getMaxUploadSizeBytes();
 
 export type IdCardImageFormat = "jpg" | "jpeg" | "png";
 
@@ -138,48 +138,46 @@ export function fitImageInBox(
 }
 
 /**
- * Portrait A4 with two GENERAL ID-card-sized boxes in half-page regions.
+ * Portrait A4 with FRONT (left) and BACK (right) in the TOP HALF of the page.
  *
  * Algorithm (PDF origin bottom-left):
  * 1. Usable content area = page inset by marginPt.
- * 2. Split usable area into TOP (front) and BOTTOM (back) halves.
- * 3. Place a general-ID max box centered in each half (H + V within region).
+ * 2. Top half of usable area is the ID-card band; bottom half stays empty.
+ * 3. Split the top band into two columns with a center gap.
+ * 4. Place a general-ID max box centered horizontally in each column,
+ *    vertically centered within the top-half band.
  *
- * Cards stay Fix-1 size; they are NOT vertically centered as a single stack
- * (that clustered both faces around mid-page with almost no gap).
+ * Images keep aspect ratio via fitImageInBox; draw step top-aligns within slots.
  */
 export function computeIdCardA4Layout(
   pageWidth: number = ID_CARD_A4_PORTRAIT_PT.width,
   pageHeight: number = ID_CARD_A4_PORTRAIT_PT.height,
   marginPt: number = ID_CARD_PAGE_MARGIN_PT,
-  _gapPt: number = ID_CARD_SLOT_GAP_PT,
+  gapPt: number = ID_CARD_SLOT_GAP_PT,
   cardMaxWidthPt: number = GENERAL_ID_CARD_MAX_WIDTH_PT,
   cardMaxHeightPt: number = GENERAL_ID_CARD_MAX_HEIGHT_PT,
 ): IdCardA4Layout {
-  void _gapPt; // gap comes from half-page regions, not a fixed stack offset
-
   const contentLeft = marginPt;
   const contentBottom = marginPt;
   const contentWidth = Math.max(1, pageWidth - marginPt * 2);
   const contentHeight = Math.max(1, pageHeight - marginPt * 2);
-  const regionHeight = contentHeight / 2;
-  const midLine = contentBottom + regionHeight;
+  const topHalfHeight = contentHeight / 2;
+  const topHalfBottom = contentBottom + topHalfHeight;
 
-  const boxWidth = Math.min(cardMaxWidthPt, contentWidth);
-  const boxHeight = Math.min(cardMaxHeightPt, regionHeight);
-  const boxX = contentLeft + (contentWidth - boxWidth) / 2;
+  const gap = Math.max(0, Math.min(gapPt, contentWidth * 0.25));
+  const columnWidth = Math.max(1, (contentWidth - gap) / 2);
+  const boxWidth = Math.min(cardMaxWidthPt, columnWidth);
+  const boxHeight = Math.min(cardMaxHeightPt, topHalfHeight);
 
-  // Bottom half → BACK (centered in lower region)
-  const back: IdCardLayoutSlot = {
-    x: boxX,
-    y: contentBottom + (regionHeight - boxHeight) / 2,
+  const front: IdCardLayoutSlot = {
+    x: contentLeft + (columnWidth - boxWidth) / 2,
+    y: topHalfBottom + (topHalfHeight - boxHeight) / 2,
     width: boxWidth,
     height: boxHeight,
   };
-  // Top half → FRONT (centered in upper region)
-  const front: IdCardLayoutSlot = {
-    x: boxX,
-    y: midLine + (regionHeight - boxHeight) / 2,
+  const back: IdCardLayoutSlot = {
+    x: contentLeft + columnWidth + gap + (columnWidth - boxWidth) / 2,
+    y: front.y,
     width: boxWidth,
     height: boxHeight,
   };
@@ -285,15 +283,16 @@ export async function generateIdCardA4Pdf(
     layout.back.height,
   );
 
+  // Top-align within each slot so different aspect ratios share a common top edge.
   const frontDraw = {
     x: layout.front.x + frontFit.x,
-    y: layout.front.y + frontFit.y,
+    y: layout.front.y + layout.front.height - frontFit.height,
     width: frontFit.width,
     height: frontFit.height,
   };
   const backDraw = {
     x: layout.back.x + backFit.x,
-    y: layout.back.y + backFit.y,
+    y: layout.back.y + layout.back.height - backFit.height,
     width: backFit.width,
     height: backFit.height,
   };

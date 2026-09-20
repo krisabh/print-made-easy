@@ -14,6 +14,8 @@ export type ShopUploadContext = {
    * (2) legacy Printer.isDefault. Never trust the client.
    */
   colorSupported: boolean;
+  /** Server-resolved max upload size (MB) from MAX_UPLOAD_SIZE_MB. */
+  maxUploadSizeMb: number;
   pricing: {
     bwSingle: number;
     bwDouble: number;

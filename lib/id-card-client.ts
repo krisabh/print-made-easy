@@ -4,6 +4,11 @@
  */
 
 import {
+  DEFAULT_MAX_UPLOAD_SIZE_MB,
+  getMaxUploadSizeBytes,
+  maxUploadSizeErrorMessage,
+} from "./upload-limits";
+import {
   JOB_MODE_ID_CARD_FRONT_BACK,
   JOB_MODE_NORMAL,
   type SubmitJobMode,
@@ -16,7 +21,6 @@ export {
 } from "../shared/job-mode";
 
 const ID_CARD_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
-const MAX_ID_CARD_BYTES = 20 * 1024 * 1024;
 
 export function extensionFromName(fileName: string): string {
   const parts = fileName.split(".");
@@ -39,14 +43,16 @@ export function isIdCardImageFile(file: File): boolean {
 export function validateIdCardClientSides(
   front: File | null | undefined,
   back: File | null | undefined,
+  maxUploadSizeMb: number = DEFAULT_MAX_UPLOAD_SIZE_MB,
 ): string | null {
   if (!front) return "Please upload the front of the ID card.";
   if (!back) return "Please upload the back of the ID card.";
   if (!isIdCardImageFile(front) || !isIdCardImageFile(back)) {
     return "ID card uploads must be JPEG or PNG images.";
   }
-  if (front.size > MAX_ID_CARD_BYTES || back.size > MAX_ID_CARD_BYTES) {
-    return "File size must be less than 20 MB.";
+  const maxBytes = getMaxUploadSizeBytes(maxUploadSizeMb);
+  if (front.size > maxBytes || back.size > maxBytes) {
+    return maxUploadSizeErrorMessage(maxUploadSizeMb);
   }
   return null;
 }

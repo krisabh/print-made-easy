@@ -9,6 +9,7 @@ import {
   toPricingRates,
 } from "@/lib/pricing-service";
 import { hasSubscriptionAccess } from "@/lib/subscription";
+import { getMaxUploadSizeMb } from "@/lib/upload-limits";
 import type { ShopUploadContext } from "@/types";
 
 /** Always resolve current default printer capability from the DB. */
@@ -91,6 +92,7 @@ export default async function UploadPage({ params }: UploadPageProps) {
     shopCode: shop.shopCode,
     shopName: shop.shopName,
     colorSupported,
+    maxUploadSizeMb: getMaxUploadSizeMb(),
     pricing: toPricingRates(shop.printPrice),
   };
 

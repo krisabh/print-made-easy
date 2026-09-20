@@ -45,6 +45,10 @@ import {
 } from "@/lib/print-file-category";
 import { isValidPageRange } from "@/lib/print-settings";
 import { calculatePrintCost } from "@/lib/pricing-service";
+import {
+  getMaxUploadSizeBytes,
+  maxUploadSizeErrorMessage,
+} from "@/lib/upload-limits";
 import type { ShopUploadContext, UploadSuccessData } from "@/types";
 
 type PrintMode = "BW" | "COLOR";
@@ -75,8 +79,6 @@ const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "png", "jpg", "jpeg"]);
 const ID_CARD_ACCEPT =
   "image/jpeg,image/png,.jpg,.jpeg,.png";
 const MAX_FILES = 10;
-const MAX_FILE_SIZE_MB = 20;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_COPIES = 100;
 const STATUS_POLL_MS = 3000;
 
@@ -373,6 +375,9 @@ type UploadFormProps = {
 export function UploadForm({ shop }: UploadFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const orientationTouchedRef = useRef(false);
+  const maxUploadSizeMb = shop.maxUploadSizeMb;
+  const maxFileSizeBytes = getMaxUploadSizeBytes(maxUploadSizeMb);
+  const sizeTooLargeMessage = maxUploadSizeErrorMessage(maxUploadSizeMb);
   const [jobMode, setJobMode] = useState<SubmitJobMode>(JOB_MODE_NORMAL);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [idCardFront, setIdCardFront] = useState<IdCardSideSelection | null>(
@@ -580,8 +585,8 @@ export function UploadForm({ shop }: UploadFormProps) {
       setFileError("ID card uploads must be JPEG or PNG images.");
       return;
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError("File size must be less than 20 MB.");
+    if (file.size > maxFileSizeBytes) {
+      setFileError(sizeTooLargeMessage);
       return;
     }
     setFileError(null);
@@ -630,8 +635,8 @@ export function UploadForm({ shop }: UploadFormProps) {
         setFileError("This file type is not supported.");
         return;
       }
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        setFileError("File size must be less than 20 MB.");
+      if (file.size > maxFileSizeBytes) {
+        setFileError(sizeTooLargeMessage);
         return;
       }
     }
@@ -1158,7 +1163,9 @@ export function UploadForm({ shop }: UploadFormProps) {
               <p className="mt-3 text-sm font-medium text-slate-800">
                 Tap to upload or drag files here
               </p>
-              <p className="mt-1 text-xs text-slate-500">Maximum 20 MB per file · up to 10 files</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Maximum {maxUploadSizeMb} MB per file · up to 10 files
+              </p>
               <span className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-4 text-sm font-medium text-white">
                 Upload Files
               </span>

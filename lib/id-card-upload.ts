@@ -17,6 +17,11 @@ import {
   type SavedUploadFile,
 } from "@/lib/upload-service";
 import {
+  getMaxUploadSizeBytes,
+  getMaxUploadSizeMb,
+  maxUploadSizeErrorMessage,
+} from "@/lib/upload-limits";
+import {
   JOB_MODE_ID_CARD_FRONT_BACK,
   JOB_MODE_NORMAL,
   parseSubmitJobMode,
@@ -115,6 +120,14 @@ export function validateIdCardFormFiles(
     return {
       ok: false,
       error: "ID card uploads must be JPEG or PNG images.",
+    };
+  }
+
+  const maxBytes = getMaxUploadSizeBytes();
+  if (front.size > maxBytes || back.size > maxBytes) {
+    return {
+      ok: false,
+      error: maxUploadSizeErrorMessage(getMaxUploadSizeMb()),
     };
   }
 

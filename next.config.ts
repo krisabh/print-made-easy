@@ -1,5 +1,14 @@
 import type { NextConfig } from "next";
 
+import { resolveMaxUploadSizeMb } from "./lib/upload-limits";
+
+/**
+ * Server Actions multipart body limit — must be ≥ MAX_UPLOAD_SIZE_MB.
+ * Small overhead buffer covers FormData field metadata around the file.
+ */
+const maxUploadMb = resolveMaxUploadSizeMb();
+const serverActionBodySizeLimit = `${maxUploadMb + 20}mb` as `${number}mb`;
+
 /** Prevent Hostinger/CDN from keeping year-long prerender HTML for public pages. */
 const MARKETING_NO_STORE = [
   {
@@ -34,7 +43,7 @@ const MARKETING_PATHS = [
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: "25mb",
+      bodySizeLimit: serverActionBodySizeLimit,
     },
   },
   // Hostinger production installs often omit devDependencies.

@@ -34,6 +34,7 @@ import {
   type SavedUploadFile,
   validateUploadFiles,
 } from "@/lib/upload-service";
+import { maxUploadSizeErrorMessage } from "@/lib/upload-limits";
 import type { ApiResponse, UploadSuccessData } from "@/types";
 
 const submitSchema = z.object({
@@ -69,8 +70,12 @@ function toFriendlyError(message: string) {
   if (lower.includes("not allowed") || lower.includes("file type")) {
     return "This file type is not supported.";
   }
-  if (lower.includes("size") || lower.includes("mb")) {
-    return "File size must be less than 20 MB.";
+  if (
+    lower.includes("too large") ||
+    lower.includes("file size") ||
+    (lower.includes("size") && lower.includes("mb"))
+  ) {
+    return maxUploadSizeErrorMessage();
   }
   if (lower.includes("maximum") && lower.includes("files")) {
     return "You can upload a maximum of 10 files.";

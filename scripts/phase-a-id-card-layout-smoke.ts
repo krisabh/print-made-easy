@@ -86,8 +86,16 @@ async function main() {
   const layout = computeIdCardA4Layout();
   assert.equal(layout.page.width, 595);
   assert.equal(layout.page.height, 842);
-  assert.ok(layout.front.y > layout.back.y, "front slot is above back");
   assert.ok(layout.front.height > 0 && layout.back.height > 0);
+  // FRONT left of BACK (side-by-side)
+  assert.ok(
+    layout.front.x + layout.front.width <= layout.back.x + 1e-6,
+    "front slot is left of back",
+  );
+  assert.ok(
+    Math.abs(layout.front.y - layout.back.y) < 1e-6,
+    "front/back share the same baseline (top half)",
+  );
   // General ID-card boxes — not half-page fillers
   assert.ok(
     layout.front.width <= GENERAL_ID_CARD_MAX_WIDTH_PT + 1e-6,
@@ -105,28 +113,21 @@ async function main() {
     layout.front.height < ID_CARD_A4_PORTRAIT_PT.height * 0.35,
     "front box substantially shorter than A4",
   );
-  assert.ok(
-    Math.abs(layout.front.x + layout.front.width / 2 - layout.page.width / 2) <
-      1,
-    "front box horizontally centered",
-  );
-  assert.ok(
-    Math.abs(layout.back.x + layout.back.width / 2 - layout.page.width / 2) < 1,
-    "back box horizontally centered",
-  );
-  // No overlap + half-page placement (front upper, back lower)
-  assert.ok(
-    layout.front.y >= layout.back.y + layout.back.height - 1e-6,
-    "front/back do not overlap",
-  );
-  const frontCenterY = layout.front.y + layout.front.height / 2;
-  const backCenterY = layout.back.y + layout.back.height / 2;
+  // Both slots entirely in the top half of the page
   const pageMid = layout.page.height / 2;
-  assert.ok(frontCenterY > pageMid, "front center in upper half");
-  assert.ok(backCenterY < pageMid, "back center in lower half");
-  const gap = layout.front.y - (layout.back.y + layout.back.height);
-  assert.ok(gap > 80, `meaningful half-page gap (got ${gap})`);
-  console.log("0b PASS layout slots (half-page regions, centered, gap)");
+  assert.ok(layout.front.y >= pageMid - 1e-6, "front slot in top half");
+  assert.ok(layout.back.y >= pageMid - 1e-6, "back slot in top half");
+  assert.ok(
+    layout.front.y + layout.front.height <= layout.page.height + 1e-6,
+  );
+  // No horizontal overlap
+  assert.ok(
+    layout.front.x + layout.front.width <= layout.back.x + 1e-6,
+    "front/back do not overlap horizontally",
+  );
+  const columnGap = layout.back.x - (layout.front.x + layout.front.width);
+  assert.ok(columnGap > 10, `meaningful column gap (got ${columnGap})`);
+  console.log("0b PASS layout slots (top-half side-by-side, front left)");
 
   // A — JPEG + JPEG
   const jpegPair = await generateIdCardA4Pdf(
@@ -188,25 +189,25 @@ async function main() {
         "card area much smaller than A4",
       );
       assert.ok(
-        Math.abs(
-          draw.x + draw.width / 2 - ID_CARD_A4_PORTRAIT_PT.width / 2,
-        ) < 1,
-        "drawn card horizontally centered",
+        draw.y + draw.height / 2 > ID_CARD_A4_PORTRAIT_PT.height / 2,
+        "drawn card center in top half",
       );
     }
     assert.ok(
-      large.frontDraw.y >= large.backDraw.y + large.backDraw.height - 1e-6,
-      "drawn front/back do not overlap",
+      large.frontDraw.x + large.frontDraw.width <= large.backDraw.x + 1e-6,
+      "drawn front is left of back",
     );
-    const frontCy = large.frontDraw.y + large.frontDraw.height / 2;
-    const backCy = large.backDraw.y + large.backDraw.height / 2;
-    assert.ok(frontCy > ID_CARD_A4_PORTRAIT_PT.height / 2, "front in upper half");
-    assert.ok(backCy < ID_CARD_A4_PORTRAIT_PT.height / 2, "back in lower half");
-    const drawGap =
-      large.frontDraw.y - (large.backDraw.y + large.backDraw.height);
-    assert.ok(drawGap > 80, `drawn half-page gap (got ${drawGap})`);
+    // Top edges aligned (within a point) for different aspects
+    assert.ok(
+      Math.abs(
+        large.frontDraw.y +
+          large.frontDraw.height -
+          (large.backDraw.y + large.backDraw.height),
+      ) < 1,
+      "drawn front/back top edges aligned",
+    );
     console.log(
-      "I1 PASS cards in half-page regions, inside general ID box, no overlap",
+      "I1 PASS cards side-by-side in top half, inside general ID box, no overlap",
     );
   }
 
