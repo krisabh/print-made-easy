@@ -563,6 +563,7 @@ export function UploadForm({ shop }: UploadFormProps) {
   const currentStep: 1 | 2 | 3 = !showOptions ? 1 : copies >= 1 ? 3 : 2;
 
   function clearIdCardSides() {
+    closePreview();
     setIdCardFront((current) => {
       if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
       return null;
@@ -606,6 +607,8 @@ export function UploadForm({ shop }: UploadFormProps) {
       return;
     }
     setFileError(null);
+    // Invalidate any open ID-card preview PDF when source images change.
+    closePreview();
     const previewUrl = URL.createObjectURL(file);
     const next: IdCardSideSelection = { file, previewUrl };
     if (side === "front") {
@@ -622,6 +625,7 @@ export function UploadForm({ shop }: UploadFormProps) {
   }
 
   function clearIdCardSide(side: "front" | "back") {
+    closePreview();
     if (side === "front") {
       setIdCardFront((current) => {
         if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
@@ -795,11 +799,7 @@ export function UploadForm({ shop }: UploadFormProps) {
     }
   }
 
-  function openIdCardPreview(options?: {
-    brightness?: number;
-    contentScale?: number;
-    silent?: boolean;
-  }) {
+  function openIdCardPreview() {
     const sideError = validateIdCardClientSides(
       idCardFront?.file,
       idCardBack?.file,
@@ -810,33 +810,31 @@ export function UploadForm({ shop }: UploadFormProps) {
     }
     if (!idCardFront || !idCardBack) return;
 
-    const nextBrightness = options?.brightness ?? brightness;
-    const nextScale = options?.contentScale ?? contentScale;
+    // Generate the base ID-card PDF once (layout only at 100%/100%).
+    // Brightness + contentScale are applied live via CSS in PrintPreviewDialog —
+    // same smooth path as Normal Print. Final bake still happens on Submit.
     const requestId = ++idCardPreviewRequestRef.current;
 
-    if (!options?.silent) {
-      if (previewPdfUrl) {
-        URL.revokeObjectURL(previewPdfUrl);
-        setPreviewPdfUrl(null);
-      }
-      revokePreviewPages(previewPages);
-      setPreviewPages([]);
-      setPreviewPageIndex(0);
-      setPreviewError(null);
-      setPreviewOpen(true);
-      setPreviewSettingsNote(
-        copies > 1 ? "Copies do not duplicate the preview sheet." : null,
-      );
+    if (previewPdfUrl) {
+      URL.revokeObjectURL(previewPdfUrl);
+      setPreviewPdfUrl(null);
     }
-
+    revokePreviewPages(previewPages);
+    setPreviewPages([]);
+    setPreviewPageIndex(0);
+    setPreviewError(null);
+    setPreviewOpen(true);
     setPreviewLoading(true);
+    setPreviewSettingsNote(
+      copies > 1 ? "Copies do not duplicate the preview sheet." : null,
+    );
 
     const formData = buildIdCardPreviewFormData({
       shopCode: shop.shopCode,
       front: idCardFront.file,
       back: idCardBack.file,
-      brightness: nextBrightness,
-      contentScale: nextScale,
+      brightness: 100,
+      contentScale: 100,
     });
 
     startPreviewTransition(async () => {
@@ -875,37 +873,25 @@ export function UploadForm({ shop }: UploadFormProps) {
   }
 
   function handleBrightnessChange(value: number) {
-    const next = snapPercent(
-      value,
-      BRIGHTNESS_MIN,
-      BRIGHTNESS_MAX,
-      BRIGHTNESS_STEP,
+    setBrightness(
+      snapPercent(value, BRIGHTNESS_MIN, BRIGHTNESS_MAX, BRIGHTNESS_STEP),
     );
-    setBrightness(next);
-    if (previewOpen && isIdCardMode) {
-      openIdCardPreview({ brightness: next, contentScale, silent: true });
-    }
   }
 
   function handleContentScaleChange(value: number) {
-    const next = snapPercent(
-      value,
-      CONTENT_SCALE_MIN,
-      CONTENT_SCALE_MAX,
-      CONTENT_SCALE_STEP,
+    setContentScale(
+      snapPercent(
+        value,
+        CONTENT_SCALE_MIN,
+        CONTENT_SCALE_MAX,
+        CONTENT_SCALE_STEP,
+      ),
     );
-    setContentScale(next);
-    if (previewOpen && isIdCardMode) {
-      openIdCardPreview({ brightness, contentScale: next, silent: true });
-    }
   }
 
   function handleResetAdjustments() {
     setBrightness(100);
     setContentScale(100);
-    if (previewOpen && isIdCardMode) {
-      openIdCardPreview({ brightness: 100, contentScale: 100, silent: true });
-    }
   }
 
   function handlePreviewClick() {

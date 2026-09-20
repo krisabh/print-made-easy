@@ -608,8 +608,8 @@ export function PrintPreviewDialog({
                   url={pdfUrl}
                   title="ID card A4 preview"
                   grayscale={grayscale}
-                  brightness={100}
-                  contentScale={100}
+                  brightness={brightness}
+                  contentScale={contentScale}
                   frameClass={frameClass}
                   preferCanvas={preferCanvas}
                 />
