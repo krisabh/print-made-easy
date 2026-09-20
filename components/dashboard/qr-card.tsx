@@ -6,12 +6,33 @@ import QRCode from "qrcode";
 
 import { Button } from "@/components/ui/button";
 
+/** Agent 1.5.2 PY mark — used at the QR card / sheet top-left (not inside modules). */
+export const QR_BRAND_ICON_SRC = "/brand/printyantra-qr-icon.png";
+
+/** @deprecated Alias kept for smoke/import compatibility. */
+export const QR_CENTER_ICON_SRC = QR_BRAND_ICON_SRC;
+
+/**
+ * Product label for on-screen QR card + printable sheet.
+ *
+ * Literal (not SITE.name import) so the Client Component SSR and hydration
+ * graphs always embed the same string. Must stay identical to SITE.name.
+ */
+export const QR_PRODUCT_NAME = "PrintYantra" as const;
+
+const QR_SITE_URL = "https://printyantra.com";
+
+const QR_NOT_PAYMENT_LABEL = "NOT A PAYMENT QR";
+
 type QrCardProps = {
   shopName: string;
   shopCode: string;
   uploadUrl: string;
+  /** Defaults to QR_PRODUCT_NAME; page may pass SITE.name for an explicit match. */
+  productName?: typeof QR_PRODUCT_NAME;
 };
 
+/** Plain scannable QR — no center overlay (keeps modules clear). */
 async function buildQrDataUrl(uploadUrl: string, size = 640) {
   return QRCode.toDataURL(uploadUrl, {
     errorCorrectionLevel: "H",
@@ -29,6 +50,7 @@ async function buildPrintableSheetDataUrl(options: {
   shopCode: string;
   uploadUrl: string;
   qrDataUrl: string;
+  productName?: typeof QR_PRODUCT_NAME;
 }) {
   const width = 1200;
   const height = 1680;
@@ -38,16 +60,31 @@ async function buildPrintableSheetDataUrl(options: {
   const ctx = canvas.getContext("2d");
   if (!ctx) return options.qrDataUrl;
 
+  const brandLabel = options.productName ?? QR_PRODUCT_NAME;
+
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = "#eff6ff";
   ctx.fillRect(0, 0, width, 140);
 
+  // Top-left: PY icon + website URL (not centered in QR modules).
+  try {
+    const logo = await loadImage(QR_BRAND_ICON_SRC);
+    const logoSize = 56;
+    ctx.drawImage(logo, 48, 42, logoSize, logoSize);
+  } catch {
+    // Continue without icon if it fails to load.
+  }
   ctx.fillStyle = "#1d4ed8";
-  ctx.font = "700 36px Arial, sans-serif";
+  ctx.font = "700 28px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(brandLabel, 120, 66);
+  ctx.fillStyle = "#475569";
+  ctx.font = "500 22px Arial, sans-serif";
+  ctx.fillText(QR_SITE_URL, 120, 98);
+
   ctx.textAlign = "center";
-  ctx.fillText("PRINTYANTRA", width / 2, 84);
 
   ctx.fillStyle = "#0f172a";
   ctx.font = "700 54px Arial, sans-serif";
@@ -57,15 +94,11 @@ async function buildPrintableSheetDataUrl(options: {
   ctx.font = "700 42px Arial, sans-serif";
   ctx.fillText("PRINT DOCUMENTS HERE", width / 2, 360);
 
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "700 26px Arial, sans-serif";
-  ctx.fillText("NOT A PAYMENT QR", width / 2, 410);
-
   const qrImage = await loadImage(options.qrDataUrl);
   const qrSize = 640;
   const qrX = (width - qrSize) / 2;
-  const qrY = 460;
-  ctx.fillStyle = "#f8fafc";
+  const qrY = 420;
+  ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#cbd5e1";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -74,17 +107,22 @@ async function buildPrintableSheetDataUrl(options: {
   ctx.stroke();
   ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
 
+  // Exact warning — bold red text below the QR (not inside modules).
+  ctx.fillStyle = "#dc2626";
+  ctx.font = "700 40px Arial, sans-serif";
+  ctx.fillText(QR_NOT_PAYMENT_LABEL, width / 2, qrY + qrSize + 78);
+
   ctx.fillStyle = "#0f172a";
   ctx.font = "600 30px Arial, sans-serif";
-  ctx.fillText("Scan to upload your documents", width / 2, qrY + qrSize + 90);
+  ctx.fillText("Scan to upload your documents", width / 2, qrY + qrSize + 140);
 
   ctx.fillStyle = "#475569";
   ctx.font = "500 24px Arial, sans-serif";
-  ctx.fillText("Can't scan?", width / 2, qrY + qrSize + 150);
+  ctx.fillText("Can't scan?", width / 2, qrY + qrSize + 196);
 
   ctx.fillStyle = "#1d4ed8";
   ctx.font = "500 22px Arial, sans-serif";
-  wrapCenteredText(ctx, options.uploadUrl, width / 2, qrY + qrSize + 196, width - 140, 30);
+  wrapCenteredText(ctx, options.uploadUrl, width / 2, qrY + qrSize + 242, width - 140, 30);
 
   ctx.fillStyle = "#94a3b8";
   ctx.font = "500 20px Arial, sans-serif";
@@ -126,12 +164,17 @@ function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Unable to load QR image."));
+    image.onerror = () => reject(new Error("Unable to load image."));
     image.src = src;
   });
 }
 
-export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
+export function QrCard({
+  shopName,
+  shopCode,
+  uploadUrl,
+  productName = QR_PRODUCT_NAME,
+}: QrCardProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -172,6 +215,7 @@ export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
         shopCode,
         uploadUrl,
         qrDataUrl,
+        productName,
       });
       const link = document.createElement("a");
       link.href = sheet;
@@ -194,6 +238,7 @@ export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
         shopCode,
         uploadUrl,
         qrDataUrl,
+        productName,
       });
       const popup = window.open("", "_blank", "width=720,height=960");
       if (!popup) {
@@ -226,18 +271,33 @@ export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-blue-100 bg-blue-50 px-5 py-4 text-center">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-blue-700 uppercase">
-            PrintYantra
-          </p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+        <div className="border-b border-blue-100 bg-blue-50 px-5 py-4">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- brand mark next to site URL */}
+            <img
+              src={QR_BRAND_ICON_SRC}
+              alt=""
+              width={40}
+              height={40}
+              className="size-10 shrink-0 rounded-lg bg-white object-contain p-1 shadow-sm ring-1 ring-slate-200/80"
+            />
+            <div className="min-w-0 text-left">
+              <p
+                className="text-[11px] font-semibold tracking-[0.16em] text-blue-700 uppercase"
+                data-qr-brand={productName}
+              >
+                {productName}
+              </p>
+              <p className="mt-0.5 truncate text-sm font-medium text-slate-600">
+                {QR_SITE_URL}
+              </p>
+            </div>
+          </div>
+          <h2 className="mt-3 text-center text-2xl font-bold tracking-tight text-slate-900">
             {shopName}
           </h2>
-          <p className="mt-2 text-sm font-semibold tracking-wide text-blue-700 uppercase">
+          <p className="mt-2 text-center text-sm font-semibold tracking-wide text-blue-700 uppercase">
             Print Documents Here
-          </p>
-          <p className="mt-1 text-xs font-bold tracking-wide text-slate-800 uppercase">
-            NOT A PAYMENT QR
           </p>
         </div>
 
@@ -253,7 +313,13 @@ export function QrCard({ shopName, shopCode, uploadUrl }: QrCardProps) {
               Generating QR…
             </div>
           )}
-          <p className="mt-4 text-sm font-medium text-slate-700">
+          <p
+            className="mt-4 text-base font-bold tracking-wide text-red-600 uppercase"
+            aria-label={QR_NOT_PAYMENT_LABEL}
+          >
+            {QR_NOT_PAYMENT_LABEL}
+          </p>
+          <p className="mt-3 text-sm font-medium text-slate-700">
             Scan to upload your documents
           </p>
           <p className="mt-1 text-xs text-slate-400">Shop code: {shopCode}</p>

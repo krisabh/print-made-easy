@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SiteLogo } from "@/components/brand/site-logo";
 import { SITE } from "@/lib/marketing";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +94,14 @@ export function RegistrationDetails({
 }
 
 /** Subtle dashboard trust line linking to About. */
-export function DashboardBrandTrust({ className }: { className?: string }) {
+export function DashboardBrandTrust({
+  className,
+  /** When false, omit the logo (right content header). Left sidebar keeps the logo. */
+  showLogo = true,
+}: {
+  className?: string;
+  showLogo?: boolean;
+}) {
   return (
     <Link
       href="/about"
@@ -101,11 +109,15 @@ export function DashboardBrandTrust({ className }: { className?: string }) {
         "group block max-w-xs rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
         className,
       )}
+      aria-label={`${SITE.name} — about`}
     >
-      <p className="text-xs font-semibold tracking-wide text-blue-600 uppercase transition-colors group-hover:text-blue-700">
-        {SITE.name}
-      </p>
-      <p className="mt-0.5 text-[11px] leading-snug text-slate-500 transition-colors group-hover:text-slate-600">
+      {showLogo ? <SiteLogo as="img" size="sm" className="mb-1" /> : null}
+      <p
+        className={cn(
+          "text-[11px] leading-snug text-slate-500 transition-colors group-hover:text-slate-600",
+          showLogo && "mt-0.5",
+        )}
+      >
         {SITE.identityCompact}
       </p>
     </Link>

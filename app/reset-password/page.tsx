@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
+import { SiteLogo } from "@/components/brand/site-logo";
 import { findValidPasswordResetToken } from "@/lib/password-reset";
 
 type ResetPasswordPageProps = {
@@ -31,10 +32,8 @@ export default async function ResetPasswordPage({
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f5f7fb] px-4 py-10">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs font-semibold tracking-wide text-blue-600 uppercase">
-          PrintYantra
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+        <SiteLogo href="/" size="md" />
+        <h1 className="mt-4 text-2xl font-semibold text-slate-900">
           Reset your password
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">

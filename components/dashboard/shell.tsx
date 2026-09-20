@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { logoutAction } from "@/app/auth/actions";
+import { SiteLogo } from "@/components/brand/site-logo";
 import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 import { Button } from "@/components/ui/button";
 import { AgentStatusBadge } from "@/components/dashboard/agent-status-badge";
@@ -110,8 +111,8 @@ export function DashboardShell({
               onClick={() => setOpen(false)}
             />
             <aside className="absolute inset-y-0 left-0 w-72 bg-white p-5 shadow-xl">
-              <div className="mb-6 flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900">Menu</p>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <SiteLogo href="/dashboard" size="sm" onClick={() => setOpen(false)} />
                 <Button
                   type="button"
                   variant="ghost"
@@ -142,10 +143,11 @@ export function DashboardShell({
                   <Menu className="size-4" />
                 </Button>
                 <div>
-                  <DashboardBrandTrust className="hidden sm:block" />
-                  <p className="text-xs font-medium tracking-wide text-blue-600 uppercase sm:hidden">
-                    PrintYantra
-                  </p>
+                  {/* Text-only identity — logo lives in the left sidebar only. */}
+                  <DashboardBrandTrust
+                    showLogo={false}
+                    className="hidden sm:block"
+                  />
                   <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:mt-1.5">
                     {shopName}
                   </h1>

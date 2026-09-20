@@ -1,7 +1,11 @@
-import { QrCard } from "@/components/dashboard/qr-card";
+import { QrCard, QR_PRODUCT_NAME } from "@/components/dashboard/qr-card";
 import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { SITE } from "@/lib/marketing";
 import { requireDashboardSession } from "@/lib/require-product-access";
+
+// Keep QR label in lockstep with authoritative SITE.name (build-time check).
+const _qrName: typeof QR_PRODUCT_NAME = SITE.name;
 
 export default async function QrPage() {
   const { session, access } = await requireDashboardSession();
@@ -48,6 +52,7 @@ export default async function QrPage() {
         shopName={shop.shopName}
         shopCode={shop.shopCode}
         uploadUrl={uploadUrl}
+        productName={_qrName}
       />
     </div>
   );
