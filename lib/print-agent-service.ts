@@ -906,6 +906,13 @@ function sqlIsFreshHeartbeat(column: Prisma.Sql) {
 /**
  * Feature 2 Phase 2D — shop Agent online if ANY AgentDevice has a fresh lastSeen,
  * else fall back to legacy Shop.agentLastSeen. Never uses device count alone.
+ *
+ * Printer status resolves the shop "current default" the same way as
+ * getShopDefaultColorSupported:
+ * 1. Freshest AgentDevice.localDefaultPrinterId (device Agents never set Printer.isDefault)
+ * 2. Else legacy shop-wide Printer.isDefault = 1
+ * Joining only on Printer.isDefault left multi-device Agents stuck on Printer Offline
+ * even while AgentDevice.lastSeen and Printer.lastSeen were fresh.
  */
 async function getShopHeartbeatFreshness(shopId: string) {
   const rows = await prisma.$queryRaw<HeartbeatFreshnessRow[]>(Prisma.sql`
@@ -936,7 +943,23 @@ async function getShopHeartbeatFreshness(shopId: string) {
       END AS printerFresh
     FROM Shop s
     LEFT JOIN Printer p
-      ON p.shopId = s.id AND p.isDefault = 1
+      ON p.id = COALESCE(
+        (
+          SELECT ad.localDefaultPrinterId
+          FROM AgentDevice ad
+          WHERE ad.shopId = s.id
+            AND ad.localDefaultPrinterId IS NOT NULL
+          ORDER BY ad.lastSeen DESC, ad.updatedAt DESC
+          LIMIT 1
+        ),
+        (
+          SELECT pLegacy.id
+          FROM Printer pLegacy
+          WHERE pLegacy.shopId = s.id
+            AND pLegacy.isDefault = 1
+          LIMIT 1
+        )
+      )
     WHERE s.id = ${shopId}
     LIMIT 1
   `);
@@ -1000,14 +1023,23 @@ export async function listShopPrintersWithLiveStatus(shopId: string) {
       p.printerName AS printerName,
       p.status AS status,
       p.lastSeen AS lastSeen,
-      p.isDefault AS isDefault,
+      CASE
+        WHEN p.isDefault = 1
+          OR EXISTS (
+            SELECT 1
+            FROM AgentDevice ad
+            WHERE ad.shopId = p.shopId
+              AND ad.localDefaultPrinterId = p.id
+          )
+        THEN 1 ELSE 0
+      END AS isDefault,
       CASE
         WHEN ${sqlIsFreshHeartbeat(Prisma.raw("p.lastSeen"))}
         THEN 1 ELSE 0
       END AS reportFresh
     FROM Printer p
     WHERE p.shopId = ${shopId}
-    ORDER BY p.isDefault DESC, p.printerName ASC
+    ORDER BY isDefault DESC, p.printerName ASC
   `);
 
   return rows.map((printer) => {

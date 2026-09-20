@@ -59,9 +59,9 @@ export function MarketingHeader({
   }, [moreOpen]);
 
   return (
-    <header className="sticky top-0 z-40 overflow-hidden border-b border-slate-200/90 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 overflow-hidden px-4 sm:h-16 sm:gap-4 sm:px-6">
-        {/* Menu-bar scale: 40px (inline) — clearly visible inside h-14/h-16. */}
+    <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:h-16 sm:gap-4 sm:px-6">
+        {/* Logo overflow is contained by SiteLogo; header stays overflow-visible so More can open. */}
         <SiteLogo href="/" size="sm" onClick={() => setOpen(false)} />
 
         <nav

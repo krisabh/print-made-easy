@@ -137,9 +137,54 @@ async function main() {
     const liveList = await listShopPrintersWithLiveStatus(shop.id);
     assert.equal(liveList[0]?.status, "online");
 
-    // Agent online but printer lastSeen stale → printer Offline.
+    // Device-scoped Agent: Printer.isDefault stays false; localDefaultPrinterId is authority.
+    // Dashboard must still report printer online (regression: isDefault-only JOIN).
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: { agentLastSeen: null },
+    });
     await prisma.printer.updateMany({
       where: { shopId: shop.id },
+      data: { isDefault: false, status: "offline", lastSeen: null },
+    });
+    const deviceTokenStamp = `dev-${stamp}`;
+    const device = await prisma.agentDevice.create({
+      data: {
+        shopId: shop.id,
+        agentId: deviceTokenStamp,
+        tokenHash: `hash-${stamp}`,
+        lastSeen: new Date(),
+      },
+    });
+    const devicePrinter = await prisma.printer.create({
+      data: {
+        shopId: shop.id,
+        agentDeviceId: device.id,
+        printerName: "Device Canon",
+        status: "online",
+        isDefault: false,
+        lastSeen: new Date(),
+      },
+    });
+    await prisma.agentDevice.update({
+      where: { id: device.id },
+      data: { localDefaultPrinterId: devicePrinter.id },
+    });
+
+    const deviceStatus = await getShopAgentStatus(shop.id);
+    assert.equal(deviceStatus?.connected, true);
+    assert.equal(deviceStatus?.printerOffline, false);
+    assert.equal(deviceStatus?.printerName, "Device Canon");
+    assert.equal(deviceStatus?.printerStatus, "online");
+
+    const deviceList = await listShopPrintersWithLiveStatus(shop.id);
+    const deviceRow = deviceList.find((p) => p.printerName === "Device Canon");
+    assert.equal(deviceRow?.isDefault, true);
+    assert.equal(deviceRow?.status, "online");
+
+    // Agent online but printer lastSeen stale → printer Offline.
+    await prisma.printer.update({
+      where: { id: devicePrinter.id },
       data: { status: "online", lastSeen: new Date(Date.now() - 60_000) },
     });
     const stalePrinter = await getShopAgentStatus(shop.id);
@@ -147,22 +192,30 @@ async function main() {
     assert.equal(stalePrinter?.printerOffline, true);
 
     // Stopped agent after being online: stale lastSeen → both Offline.
+    await prisma.agentDevice.update({
+      where: { id: device.id },
+      data: { lastSeen: new Date(Date.now() - 60_000) },
+    });
     await prisma.shop.update({
       where: { id: shop.id },
       data: { agentLastSeen: new Date(Date.now() - 60_000) },
     });
-    await prisma.printer.updateMany({
-      where: { shopId: shop.id },
+    await prisma.printer.update({
+      where: { id: devicePrinter.id },
       data: { status: "online", lastSeen: new Date(Date.now() - 60_000) },
     });
     const stopped = await getShopAgentStatus(shop.id);
     assert.equal(stopped?.connected, false);
     assert.equal(stopped?.printerOffline, true);
-    assert.ok(stopped?.agentId);
 
     console.log("agent-status-freshness-smoke: ok");
   } finally {
+    await prisma.agentDevice.updateMany({
+      where: { shopId: shop.id },
+      data: { localDefaultPrinterId: null },
+    });
     await prisma.printer.deleteMany({ where: { shopId: shop.id } });
+    await prisma.agentDevice.deleteMany({ where: { shopId: shop.id } });
     await prisma.shop.deleteMany({ where: { id: shop.id } });
   }
 }
