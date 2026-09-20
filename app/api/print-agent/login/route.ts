@@ -7,6 +7,12 @@ import {
   getClientIpFromRequest,
   recordAgentLoginFailure,
 } from "@/lib/agent-login-rate-limit";
+import {
+  MULTI_DEVICE_LIMIT_ERROR,
+  MULTI_DEVICE_LIMIT_STATUS,
+  assertShopAllowsAgentDevice,
+  resolveMultiDeviceLimit,
+} from "@/lib/agent-device-limit";
 import { verifyPassword } from "@/lib/auth";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import {
@@ -31,6 +37,8 @@ const loginSchema = z.object({
  * Shop is derived server-side from the authenticated User → Shop relation.
  * Does not overwrite Shop.agentTokenHash / Shop.agentId.
  * Phase 2F — failed-attempt rate limit (email + IP).
+ * Shop-scoped MULTI_DEVICE_LIMIT — new agentId rejected when shop is at capacity;
+ * same agentId reconnect/relogin always allowed.
  */
 export async function POST(request: NextRequest) {
   const ip = getClientIpFromRequest(request);
@@ -103,25 +111,55 @@ export async function POST(request: NextRequest) {
     const token = generateAgentToken();
     const tokenHash = hashAgentToken(token);
     const now = new Date();
+    const limit = resolveMultiDeviceLimit();
 
-    await prisma.agentDevice.upsert({
-      where: {
-        shopId_agentId: {
-          shopId: shop.id,
-          agentId,
-        },
-      },
-      create: {
+    const gate = await prisma.$transaction(async (tx) => {
+      const decision = await assertShopAllowsAgentDevice(tx, {
         shopId: shop.id,
         agentId,
-        tokenHash,
-        lastSeen: now,
-      },
-      update: {
-        tokenHash,
-        lastSeen: now,
-      },
+        limit,
+      });
+
+      if (!decision.allowed) {
+        return {
+          rejected: true as const,
+          count: decision.count,
+          limit: decision.limit,
+        };
+      }
+
+      await tx.agentDevice.upsert({
+        where: {
+          shopId_agentId: {
+            shopId: shop.id,
+            agentId,
+          },
+        },
+        create: {
+          shopId: shop.id,
+          agentId,
+          tokenHash,
+          lastSeen: now,
+        },
+        update: {
+          tokenHash,
+          lastSeen: now,
+        },
+      });
+
+      return { rejected: false as const, reason: decision.reason };
     });
+
+    if (gate.rejected) {
+      logWarn(
+        "agent_login_device_limit",
+        `${shop.shopCode} agent=${agentId} count=${gate.count} limit=${gate.limit}`,
+      );
+      return Response.json(
+        { error: MULTI_DEVICE_LIMIT_ERROR },
+        { status: MULTI_DEVICE_LIMIT_STATUS },
+      );
+    }
 
     clearAgentLoginFailuresForEmail(email);
     logInfo("agent_login_ok", `${shop.shopCode} agent=${agentId}`);

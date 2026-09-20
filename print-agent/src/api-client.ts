@@ -296,6 +296,11 @@ export async function loginWithAccount(input: {
           data.error || "Subscription required to connect the Print Agent.",
         );
       }
+      if (response.status === 403 && data.error) {
+        // Device limit / other authorization refusals — show server message;
+        // do not wipe local agentId or auto-start settings (updateConfig not called).
+        throw new Error(data.error);
+      }
       throw new Error(data.error || "Invalid email or password.");
     }
 

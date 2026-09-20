@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
+import {
+  MULTI_DEVICE_LIMIT_ERROR,
+  MULTI_DEVICE_LIMIT_STATUS,
+  evaluateAgentDeviceLimit,
+  resolveMultiDeviceLimit,
+} from "@/lib/agent-device-limit";
 import { runDocumentCleanupIfDue } from "@/lib/cleanup";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import {
@@ -49,6 +55,7 @@ async function registerWithPairingToken(input: {
   const now = new Date();
   const permanentToken = generateAgentToken();
   const permanentHash = hashAgentToken(permanentToken);
+  const limit = resolveMultiDeviceLimit();
 
   const result = await prisma.$transaction(async (tx) => {
     const candidates = await tx.$queryRaw<
@@ -82,6 +89,23 @@ async function registerWithPairingToken(input: {
       new Date(shop.agentPairingExpiresAt).getTime() <= now.getTime()
     ) {
       return { error: "Pairing credential expired.", status: 401 as const };
+    }
+
+    // Shop already locked above. Count registered AgentDevices; same agentId reuses.
+    const decision = await evaluateAgentDeviceLimit(tx, {
+      shopId: shop.id,
+      agentId: input.agentId,
+      limit,
+    });
+    if (!decision.allowed) {
+      logWarn(
+        "agent_pairing_device_limit",
+        `${shop.shopCode} agent=${input.agentId} count=${decision.count} limit=${decision.limit}`,
+      );
+      return {
+        error: MULTI_DEVICE_LIMIT_ERROR,
+        status: MULTI_DEVICE_LIMIT_STATUS,
+      };
     }
 
     // Feature 2 Phase 2B.1 — create/rotate THIS device's AgentDevice credential.
@@ -159,6 +183,7 @@ async function registerWithPairingToken(input: {
  * 1) pairingToken + agentId — Feature 2B.1: creates/upserts AgentDevice only
  *    (does not overwrite Shop.agentTokenHash; other devices remain valid)
  * 2) shopCode + AGENT_SETUP_SECRET — legacy/dev: still writes Shop.agent* shim
+ *    (single shop-level token; not an AgentDevice registration — no MULTI_DEVICE_LIMIT)
  */
 export async function POST(request: NextRequest) {
   try {
