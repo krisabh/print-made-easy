@@ -37,10 +37,10 @@ async function main() {
     assert.equal(WINDOWS_AGENT_DOWNLOAD.href, "/api/agent/download");
     assert.equal(
       WINDOWS_AGENT_DOWNLOAD.fileName,
-      "PrintYantra-Agent-Setup-1.5.1.exe",
+      "PrintYantra-Agent-Setup-1.5.2.exe",
     );
-    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.5.1");
-    console.log("1 PASS dashboard download metadata is Agent 1.5.1");
+    assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.5.2");
+    console.log("1 PASS dashboard download metadata is Agent 1.5.2");
 
     const missingEnv = resolveWindowsAgentInstallerPath("");
     assert.equal(missingEnv.ok, false);

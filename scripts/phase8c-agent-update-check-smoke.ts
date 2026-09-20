@@ -16,11 +16,11 @@ import {
 
 function validManifest(overrides: Record<string, unknown> = {}) {
   return {
-    version: "1.5.1",
+    version: "1.5.2",
     url: "https://printyantra.com/api/agent/download",
     sha256: null,
     notes: "Bug fixes",
-    fileName: "PrintYantra-Agent-Setup-1.5.1.exe",
+    fileName: "PrintYantra-Agent-Setup-1.5.2.exe",
     ...overrides,
   };
 }
@@ -70,7 +70,7 @@ async function main() {
     [
       "name_mismatch",
       validManifest({
-        version: "1.5.1",
+        version: "1.5.2",
         fileName: "PrintYantra-Agent-Setup-1.5.0.exe",
       }),
     ],
@@ -84,9 +84,9 @@ async function main() {
   // D — URL/origin + localhost http allowed for apiUrl
   const localOk = validateAgentUpdateManifest(
     validManifest({
-      version: "1.5.1",
+      version: "1.5.2",
       url: "http://localhost:3000/api/agent/download",
-      fileName: "PrintYantra-Agent-Setup-1.5.1.exe",
+      fileName: "PrintYantra-Agent-Setup-1.5.2.exe",
     }),
     "http://localhost:3000",
   );
@@ -121,7 +121,7 @@ async function main() {
   assert.equal(r1.updateAvailable, true);
   assert.equal(r2.updateAvailable, true);
   assert.equal(checker.getPublicState().status, "available");
-  assert.equal(checker.getPublicState().latestVersion, "1.5.1");
+  assert.equal(checker.getPublicState().latestVersion, "1.5.2");
   console.log("E PASS single-flight + available transition");
 
   // Headers: no auth
@@ -132,7 +132,7 @@ async function main() {
 
   // upToDate transition
   const checkerSame = createUpdateChecker({
-    getCurrentVersion: () => "1.5.1",
+    getCurrentVersion: () => "1.5.2",
     getApiUrl: () => "https://printyantra.com",
     fetchImpl: async () =>
       new Response(JSON.stringify(validManifest()), { status: 200 }),

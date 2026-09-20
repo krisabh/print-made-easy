@@ -23,7 +23,7 @@ import { isSafeInstallerFileName } from "../print-agent/src/update-download";
 import { CONFIG_PATH, resolveOpenAtLogin } from "../print-agent/src/config";
 import { isPrintOperationBusy } from "../print-agent/src/job-service";
 
-const FILE_NAME = "PrintYantra-Agent-Setup-1.5.1.exe";
+const FILE_NAME = "PrintYantra-Agent-Setup-1.5.2.exe";
 const FIXTURE = Buffer.from("PrintYantra-Agent-Phase8E-fixture\n");
 const FIXTURE_SHA = createHash("sha256").update(FIXTURE).digest("hex");
 
@@ -84,7 +84,7 @@ async function main() {
       status: "readyToInstall",
       currentVersion: "1.5.0",
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         sha256: FIXTURE_SHA,
         fileName: FILE_NAME,
       },
@@ -100,7 +100,7 @@ async function main() {
       status: "readyToInstall",
       currentVersion: "1.5.0",
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         sha256: createHash("sha256").update("wrong").digest("hex"),
         fileName: FILE_NAME,
       },
@@ -117,7 +117,7 @@ async function main() {
       status: "readyToInstall",
       currentVersion: "1.5.0",
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         sha256: FIXTURE_SHA,
         fileName: FILE_NAME,
       },
@@ -175,7 +175,7 @@ async function main() {
 
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "test",
@@ -233,7 +233,7 @@ async function main() {
 
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "test",
@@ -338,7 +338,7 @@ async function main() {
     });
     checker.setReadyForInstallForTests({
       manifest: {
-        version: "1.5.1",
+        version: "1.5.2",
         url: "https://printyantra.com/api/agent/download",
         sha256: FIXTURE_SHA,
         notes: "t",

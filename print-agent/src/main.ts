@@ -96,11 +96,27 @@ function rememberPrinterCapabilities(
   printerCapabilities = printers;
 }
 
-const TRAY_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVQ4T2NkYGD4z0ABYBzVMKoBBgQYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGFQDAKvSBQH0fG3eAAAAAElFTkSuQmCC";
+/** Packaged + dev: icons are copied next to main.js under dist/. */
+function getBrandedIconPath(filename: string): string {
+  return path.join(__dirname, filename);
+}
+
+function loadBrandedIcon(filename: string) {
+  const iconPath = getBrandedIconPath(filename);
+  const image = nativeImage.createFromPath(iconPath);
+  if (image.isEmpty()) {
+    console.warn(`Branded icon missing or unreadable: ${iconPath}`);
+  }
+  return image;
+}
 
 function createTrayIcon() {
-  return nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_PNG_BASE64}`);
+  const tray = loadBrandedIcon("tray-icon.png");
+  if (!tray.isEmpty()) {
+    return tray;
+  }
+  // Fallback to window-sized PNG if tray asset is absent.
+  return loadBrandedIcon("icon.png");
 }
 
 function getUiPath() {
@@ -304,6 +320,7 @@ function createWindow() {
     return;
   }
 
+  const windowIcon = loadBrandedIcon("icon.png");
   mainWindow = new BrowserWindow({
     width: 460,
     height: 760,
@@ -313,6 +330,7 @@ function createWindow() {
     maximizable: false,
     title: "PrintYantra Agent",
     show: false,
+    ...(windowIcon.isEmpty() ? {} : { icon: windowIcon }),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -806,6 +824,11 @@ function focusExistingAgent() {
   if (app.isReady()) {
     createWindow();
   }
+}
+
+// Match electron-builder appId so Windows taskbar/pinned shortcuts use our branding.
+if (process.platform === "win32") {
+  app.setAppUserModelId("com.printyantra.agent");
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
