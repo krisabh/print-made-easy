@@ -10,6 +10,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   createAdminCoupon,
   getAdminCoupon,
+  getAdminCouponEffectiveStatus,
   updateAdminCoupon,
 } from "../lib/admin-coupons";
 import { hashPassword } from "../lib/auth";
@@ -62,6 +63,59 @@ async function main() {
   assert.equal(authorizeAdmin("SHOPKEEPER").status, 403);
   assert.equal(authorizeAdmin("ADMIN").status, 200);
   console.log("S PASS admin authorization is enforced");
+
+  const statusNow = new Date("2026-06-15T12:00:00.000Z");
+  assert.equal(
+    getAdminCouponEffectiveStatus(
+      {
+        isActive: true,
+        validFrom: "2026-01-01T00:00:00.000Z",
+        validUntil: "2026-12-31T00:00:00.000Z",
+      },
+      statusNow,
+    ),
+    "Active",
+  );
+  assert.equal(
+    getAdminCouponEffectiveStatus(
+      {
+        isActive: true,
+        validFrom: "2026-01-01T00:00:00.000Z",
+        validUntil: "2026-01-31T00:00:00.000Z",
+      },
+      statusNow,
+    ),
+    "Expired",
+  );
+  assert.equal(
+    getAdminCouponEffectiveStatus(
+      {
+        isActive: true,
+        validFrom: "2026-07-01T00:00:00.000Z",
+        validUntil: "2026-12-31T00:00:00.000Z",
+      },
+      statusNow,
+    ),
+    "Scheduled",
+  );
+  assert.equal(
+    getAdminCouponEffectiveStatus(
+      {
+        isActive: false,
+        validFrom: "2026-01-01T00:00:00.000Z",
+        validUntil: "2026-12-31T00:00:00.000Z",
+      },
+      statusNow,
+    ),
+    "Inactive",
+  );
+  const panelSource = fs.readFileSync(
+    path.join(process.cwd(), "components/admin/admin-coupons-panel.tsx"),
+    "utf8",
+  );
+  assert.match(panelSource, /getAdminCouponEffectiveStatus/);
+  assert.equal(panelSource.includes('coupon.isActive ? "Active" : "Inactive"'), false);
+  console.log("STATUS PASS Admin coupon badge uses effective status");
 
   const stamp = Date.now().toString(36);
   const admin = await prisma.user.create({

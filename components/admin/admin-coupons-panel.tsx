@@ -14,7 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import type { AdminCouponView } from "@/lib/admin-coupons";
+import {
+  getAdminCouponEffectiveStatus,
+  type AdminCouponView,
+} from "@/lib/admin-coupons";
 
 type ShopOption = { id: string; shopName: string; shopCode: string };
 
@@ -73,6 +76,22 @@ function formatWhen(iso: string) {
 
 function discountLabel(coupon: Pick<AdminCouponView, "type" | "value">) {
   return coupon.type === "PERCENT" ? `${coupon.value}%` : `₹${coupon.value}`;
+}
+
+function effectiveStatusClass(
+  status: ReturnType<typeof getAdminCouponEffectiveStatus>,
+) {
+  if (status === "Active") return "font-medium text-emerald-700";
+  if (status === "Scheduled") return "font-medium text-blue-700";
+  if (status === "Expired") return "font-medium text-amber-700";
+  return "text-slate-500";
+}
+
+function CouponEffectiveStatusBadge(
+  coupon: Pick<AdminCouponView, "isActive" | "validFrom" | "validUntil">,
+) {
+  const status = getAdminCouponEffectiveStatus(coupon);
+  return <span className={effectiveStatusClass(status)}>{status}</span>;
 }
 
 function optionalLimit(value: string) {
@@ -166,9 +185,7 @@ export function AdminCouponsPanel({
                   <td className="px-4 py-3">{coupon.maxRedemptions ?? "—"}</td>
                   <td className="px-4 py-3">{coupon.perShopLimit ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={coupon.isActive ? "font-medium text-emerald-700" : "text-slate-500"}>
-                      {coupon.isActive ? "Active" : "Inactive"}
-                    </span>
+                    <CouponEffectiveStatusBadge {...coupon} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">

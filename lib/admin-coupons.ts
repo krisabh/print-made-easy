@@ -47,6 +47,36 @@ export type CouponSnapshot = {
   shopId: string | null;
 };
 
+/** Admin list/detail badge. Matches checkout window: now < from / now > until. */
+export type AdminCouponEffectiveStatus =
+  | "Inactive"
+  | "Scheduled"
+  | "Expired"
+  | "Active";
+
+export function getAdminCouponEffectiveStatus(
+  coupon: {
+    isActive: boolean;
+    validFrom: string | Date;
+    validUntil: string | Date;
+  },
+  now: Date = new Date(),
+): AdminCouponEffectiveStatus {
+  if (!coupon.isActive) return "Inactive";
+  const fromMs =
+    coupon.validFrom instanceof Date
+      ? coupon.validFrom.getTime()
+      : new Date(coupon.validFrom).getTime();
+  const untilMs =
+    coupon.validUntil instanceof Date
+      ? coupon.validUntil.getTime()
+      : new Date(coupon.validUntil).getTime();
+  const nowMs = now.getTime();
+  if (nowMs < fromMs) return "Scheduled";
+  if (nowMs > untilMs) return "Expired";
+  return "Active";
+}
+
 type CouponWrite = CouponSnapshot;
 
 type Fail = { ok: false; error: string; status: 400 | 404 | 409 };
