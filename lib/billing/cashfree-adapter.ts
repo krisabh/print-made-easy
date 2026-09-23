@@ -179,9 +179,19 @@ export function createCashfreeAdapter(): PaymentProviderAdapter {
         const payment = asRecord(data.payment);
 
         // Documented PG webhook fields (order + payment nested under data).
-        const orderId = String(order.order_id || "").trim();
-        const paymentId = String(payment.cf_payment_id || "").trim();
-        const amountInr = Number(order.order_amount ?? payment.payment_amount ?? 0);
+        const orderId = String(
+          order.order_id || data.order_id || "",
+        ).trim();
+        const paymentId = String(
+          payment.cf_payment_id ||
+            payment.payment_id ||
+            data.cf_payment_id ||
+            data.payment_id ||
+            "",
+        ).trim();
+        const amountSource =
+          order.order_amount ?? data.order_amount ?? payment.payment_amount ?? 0;
+        const amountInr = Number(amountSource);
         const currency = String(
           order.order_currency || payment.payment_currency || "INR",
         )
@@ -192,7 +202,9 @@ export function createCashfreeAdapter(): PaymentProviderAdapter {
         const shopMatch = /shop:([0-9a-f-]{36})/i.exec(note);
         const shopIdHint = shopMatch?.[1] || null;
 
-        const paymentStatus = String(payment.payment_status || "").toUpperCase();
+        const paymentStatus = String(
+          payment.payment_status || data.payment_status || "",
+        ).toUpperCase();
 
         let type: NormalizedBillingEvent["type"] = "IGNORED";
         let status: NormalizedPaymentResult["status"] = "FAILED";

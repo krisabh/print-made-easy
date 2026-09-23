@@ -128,7 +128,9 @@ export function SaasPricingPlans({
 
   useEffect(() => {
     const payment = searchParams.get("payment");
-    if (!payment) return;
+    const returnedOrderId = searchParams.get("order_id");
+    // Cashfree substitutes {order_id}. That redirect is not payment proof.
+    if (!payment && !returnedOrderId) return;
 
     let cancelled = false;
     let attempts = 0;

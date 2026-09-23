@@ -311,6 +311,26 @@ export function addMonths(from: Date, months: number) {
   return next;
 }
 
+/**
+ * Cashfree replaces the literal `{order_id}` token on redirect.
+ * Existing query params such as `payment=return` are preserved.
+ */
+export function withCashfreeOrderPlaceholder(returnUrl: string) {
+  if (returnUrl.includes("{order_id}")) return returnUrl;
+  const join = returnUrl.includes("?") ? "&" : "?";
+  return `${returnUrl}${join}order_id={order_id}`;
+}
+
+/** Per-order webhook target. Cashfree delivers this even when the dashboard URL is stale. */
+export function cashfreeNotifyUrl(returnUrl: string) {
+  const parsable = returnUrl.replaceAll("{order_id}", "order");
+  const url = new URL(parsable);
+  url.pathname = "/api/webhooks/cashfree";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 export function buildMerchantOrderId(shopCode: string) {
   const stamp = Date.now().toString(36);
   const rand = randomBytes(3).toString("hex");
@@ -361,7 +381,8 @@ export async function createCashfreeOrder(input: {
       customer_phone: phone,
     },
     order_meta: {
-      return_url: input.returnUrl,
+      return_url: withCashfreeOrderPlaceholder(input.returnUrl),
+      notify_url: cashfreeNotifyUrl(input.returnUrl),
     },
     order_note: (input.orderNote || "PrintYantra Premium").slice(0, 200),
   };
@@ -435,22 +456,66 @@ export async function getCashfreeOrder(input: {
     throw new Error(message);
   }
 
-  const payments = Array.isArray(data.payments)
-    ? (data.payments as Record<string, unknown>[])
-    : [];
-  const latestPayment = payments[0] || {};
+  const orderStatus = String(data.order_status || "");
+  let cfPaymentId: string | null = null;
+  let paymentStatus: string | null = null;
+
+  if (Array.isArray(data.payments)) {
+    const latestPayment =
+      (data.payments[0] as Record<string, unknown> | undefined) || {};
+    cfPaymentId = latestPayment.cf_payment_id
+      ? String(latestPayment.cf_payment_id)
+      : null;
+    paymentStatus = latestPayment.payment_status
+      ? String(latestPayment.payment_status)
+      : null;
+  }
+
+  const alreadyPaid =
+    orderStatus.toUpperCase() === "PAID" ||
+    paymentStatus?.toUpperCase() === "SUCCESS";
+
+  // GET /orders returns `payments` as `{ url }`, not payment rows.
+  // A successful payment can exist while order_status is still ACTIVE.
+  if (!alreadyPaid) {
+    const paymentsResponse = await fetchImpl(
+      `${getBaseUrl(config.environment)}/orders/${encodeURIComponent(input.orderId)}/payments`,
+      {
+        method: "GET",
+        headers: authHeaders(config),
+      },
+    );
+    if (paymentsResponse.ok) {
+      const paymentsBody = (await paymentsResponse.json().catch(() => [])) as
+        | Record<string, unknown>[]
+        | { payments?: Record<string, unknown>[] };
+      const list = Array.isArray(paymentsBody)
+        ? paymentsBody
+        : Array.isArray(paymentsBody?.payments)
+          ? paymentsBody.payments
+          : [];
+      const success = list.find(
+        (row) => String(row.payment_status || "").toUpperCase() === "SUCCESS",
+      );
+      const chosen = success || list[0];
+      if (chosen) {
+        paymentStatus = chosen.payment_status
+          ? String(chosen.payment_status)
+          : paymentStatus;
+        cfPaymentId = chosen.cf_payment_id
+          ? String(chosen.cf_payment_id)
+          : cfPaymentId;
+      }
+    }
+  }
 
   return {
     orderId: String(data.order_id || input.orderId),
-    orderStatus: String(data.order_status || ""),
+    orderStatus,
     orderAmount: Number(data.order_amount ?? 0),
     orderCurrency: String(data.order_currency || "INR").toUpperCase(),
-    cfPaymentId: latestPayment.cf_payment_id
-      ? String(latestPayment.cf_payment_id)
-      : null,
-    paymentStatus: latestPayment.payment_status
-      ? String(latestPayment.payment_status)
-      : null,
+    cfPaymentId,
+    paymentStatus,
   };
 }
 

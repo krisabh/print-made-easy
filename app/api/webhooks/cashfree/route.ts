@@ -57,6 +57,14 @@ export async function POST(request: Request) {
             const applied = await processNormalizedBillingEvent(
               normalized.event,
             );
+            const result = "result" in applied ? applied.result : "processed";
+            // Missing order id is retryable. A 200 would stop Cashfree from retrying.
+            if (result === "ignored_missing_order") {
+              return Response.json(
+                { error: "Webhook processing failed." },
+                { status: 500 },
+              );
+            }
             // Mark processed only after apply completes (including definitive rejects).
             // Transient throws leave processedAt null so Cashfree can retry.
             await markWebhookEventProcessed({
@@ -65,7 +73,7 @@ export async function POST(request: Request) {
             return Response.json({
               received: true,
               duplicate: false,
-              result: "result" in applied ? applied.result : "processed",
+              result,
             });
           } catch {
             console.error(

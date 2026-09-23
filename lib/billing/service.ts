@@ -34,6 +34,12 @@ export function ledgerProviderToBillingId(
   return ledgerProvider === PAYU_PROVIDER ? "payu" : "cashfree";
 }
 
+/** Ledger amounts are whole rupees. Cashfree often returns 249.00. */
+export function inrAmountsMatch(reported: number, stored: number) {
+  if (!Number.isFinite(reported) || !Number.isFinite(stored)) return false;
+  return Math.abs(reported - stored) < 0.001;
+}
+
 /**
  * Premium period extension rule (ONE_TIME):
  * - If Premium is currently ACTIVE with currentPeriodEnd in the future,
@@ -318,7 +324,7 @@ export async function applyNormalizedOneTimePayment(
 
   // Authoritative amount is the one stored when THIS payment was created.
   if (
-    payment.amountInr !== existing.amountInr ||
+    !inrAmountsMatch(payment.amountInr, existing.amountInr) ||
     payment.currency.toUpperCase() !== existing.currency.toUpperCase()
   ) {
     await prisma.billingPayment.updateMany({
