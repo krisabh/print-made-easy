@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: "How It Works",
   description:
-    "See how shopkeepers and customers use PrintYantra — from shop QR setup to upload, live status, printing, and automatic document deletion after 1 hour.",
+    "See how shopkeepers and customers use PrintYantra — from shop QR upload and preview to auto print, temporary storage, and automatic document deletion.",
 };
 
 export default function HowItWorksPage() {

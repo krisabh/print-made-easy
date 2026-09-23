@@ -3,16 +3,17 @@ import Link from "next/link";
 import {
   CheckCircle2,
   Clock3,
-  MonitorSmartphone,
+  LayoutDashboard,
   Printer,
   QrCode,
-  Settings2,
   ShieldCheck,
-  Store,
+  SlidersHorizontal,
+  SunMedium,
 } from "lucide-react";
 
 import { FinalCtaSection } from "@/components/marketing/sections";
 import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
+import { MARKETING_CORE_FEATURES } from "@/lib/marketing-features";
 import { SITE } from "@/lib/marketing";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       : "";
   return {
     title: "Products & Services",
-    description: `PrintYantra provides print-shop management software with QR-based customer print submission, PrintYantra Agent, printer management, and print settings for ₹${premiumPriceInr}/month.`,
+    description: `PrintYantra provides print-shop management software with QR upload, preview & adjust, brightness & scale, auto print, and temporary document storage for ₹${premiumPriceInr}/month.`,
     alternates: {
       canonical: "/products",
     },
@@ -38,38 +39,14 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-const CAPABILITIES = [
-  {
-    icon: QrCode,
-    title: "QR Code Printing",
-    body: "Customers scan your shop QR Code to Upload documents and submit Print Jobs.",
-  },
-  {
-    icon: MonitorSmartphone,
-    title: "PrintYantra Agent",
-    body: "A Windows Agent on the shop PC receives Jobs from PrintYantra and sends them to your Printers. Supports Multi-Device and Easy Agent Reconnect.",
-  },
-  {
-    icon: Printer,
-    title: "Printer Status & Capabilities",
-    body: "See Agent and Printer Connected or Offline status, and Color support when your connected Printer allows it.",
-  },
-  {
-    icon: Settings2,
-    title: "Color & Black & White Printing",
-    body: "Offer Black & White always, and Color when the connected Printer supports it — plus ID Card — Front & Back.",
-  },
-  {
-    icon: Store,
-    title: "Live Print Job Workflow",
-    body: "Track Pending, Printing, Ready, Delivered, and Cancelled Jobs from one shopkeeper Dashboard.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Automatic Agent Startup",
-    body: "Keep the PrintYantra Agent ready with Windows auto-start so your shop can receive Jobs after reboot.",
-  },
-] as const;
+const CAPABILITY_ICONS = {
+  "scan-qr-upload": QrCode,
+  "preview-adjust": SlidersHorizontal,
+  "brightness-scale": SunMedium,
+  "auto-print": Printer,
+  "privacy-auto-delete": ShieldCheck,
+  "simple-print-management": LayoutDashboard,
+} as const;
 
 export default async function ProductsPage() {
   const [premiumPriceInr, trial] = await Promise.all([
@@ -108,12 +85,11 @@ export default async function ProductsPage() {
                   Online Printing Management for Local Print Shops
                 </p>
                 <p className="mt-4 text-sm leading-relaxed text-slate-600">
-                  PrintYantra provides software that helps print shops accept
-                  customer print requests through QR codes, receive uploaded
-                  documents, manage print jobs, run a PrintYantra Agent, work
-                  with multiple printers, configure supported print settings,
-                  control color printing based on printer capability, and
-                  monitor printer/agent availability.
+                  PrintYantra helps print shops accept customer print requests
+                  through QR codes, let customers preview and adjust documents,
+                  print automatically, and keep jobs organized — with temporary
+                  document storage and automatic deletion after the configured
+                  storage period.
                 </p>
               </div>
 
@@ -151,22 +127,25 @@ export default async function ProductsPage() {
             </div>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {CAPABILITIES.map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-xl border border-slate-200 bg-slate-50/80 p-4"
-                >
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-white text-blue-700 ring-1 ring-slate-200">
-                    <item.icon className="size-4" aria-hidden="true" />
+              {MARKETING_CORE_FEATURES.map((item) => {
+                const Icon = CAPABILITY_ICONS[item.id];
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 p-4"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-white text-blue-700 ring-1 ring-slate-200">
+                      <Icon className="size-4" aria-hidden="true" />
+                    </div>
+                    <h3 className="mt-3 text-sm font-semibold text-slate-900">
+                      {item.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                      {item.body}
+                    </p>
                   </div>
-                  <h3 className="mt-3 text-sm font-semibold text-slate-900">
-                    {item.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                    {item.body}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-8 grid gap-4 rounded-xl border border-slate-200 bg-[#f8fafc] p-5 sm:grid-cols-2">
@@ -192,8 +171,8 @@ export default async function ProductsPage() {
                   <span className="font-semibold text-slate-900">
                     Document retention:
                   </span>{" "}
-                  Uploaded customer documents are automatically deleted after 1
-                  hour.
+                  Customer documents are stored temporarily for printing and
+                  automatically deleted after the configured storage period.
                 </p>
               </div>
             </div>

@@ -89,8 +89,8 @@ export function ProductWorkflowSection() {
     },
     {
       icon: Printer,
-      title: "Print & Complete",
-      body: "The Agent sends the job to the available printer. Manage the job in the dashboard and mark it ready when complete.",
+      title: "Auto Print & Complete",
+      body: "Submitted jobs can print automatically through the connected printer. Manage jobs in the dashboard and mark them ready when complete.",
     },
   ] as const;
 
@@ -98,22 +98,22 @@ export function ProductWorkflowSection() {
     {
       icon: ScanLine,
       title: "Scan the Shop QR Code",
-      body: "Scan the QR code displayed at the print shop counter. No app install required.",
+      body: "Scan the QR code at the print shop counter. No app install required.",
     },
     {
       icon: Upload,
       title: "Upload Your Document",
-      body: "Upload the document you want the shop to print (PDF, JPG, PNG, or DOCX).",
+      body: "Upload the document you want printed (PDF, JPG, PNG, or DOCX).",
     },
     {
       icon: FileUp,
-      title: "Choose & Submit Your Print Request",
-      body: "Select copies, black & white or color, and single or double side, then submit your print request.",
+      title: "Preview & Adjust",
+      body: "Preview your document, then adjust print options — including brightness and scale when you need clearer or better-sized prints.",
     },
     {
       icon: Clock3,
-      title: "Track Your Print Job",
-      body: "Watch live status updates such as Pending, Printing, and Ready on the same page.",
+      title: "Submit & Track",
+      body: "Submit your print request and watch live status updates such as Pending, Printing, and Ready.",
     },
     {
       icon: CheckCircle2,
@@ -256,10 +256,11 @@ export function PrivacyWorkflowSection() {
             <ShieldCheck className="size-6" aria-hidden="true" />
           </div>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">
-            Privacy Built Into the Print Workflow
+            Privacy — Auto Delete & Temporary Storage
           </h2>
-          <p className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-100">
-            Documents automatically deleted after 1 hour
+          <p className="mt-3 text-base leading-relaxed text-slate-600">
+            Customer documents are stored temporarily for printing and
+            automatically deleted after the configured storage period.
           </p>
         </div>
 
@@ -272,9 +273,9 @@ export function PrivacyWorkflowSection() {
               Less Storage. Less Cleanup.
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              PrintYantra automatically removes uploaded documents after 1
-              hour, so unnecessary documents don&apos;t remain on your system
-              and consume storage.
+              Documents stay only as long as needed for printing. PrintYantra
+              removes them automatically after the configured storage period, so
+              you do not have to manage old customer files by hand.
             </p>
           </article>
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -282,12 +283,12 @@ export function PrivacyWorkflowSection() {
               Customer
             </p>
             <h3 className="mt-2 text-lg font-semibold text-slate-900">
-              Your Documents Are Automatically Removed.
+              Temporary by design
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Documents uploaded for printing are automatically deleted from the
-              PrintYantra server after 1 hour. They are not kept indefinitely
-              after the print workflow is complete.
+              Your document is stored temporarily so the shop can print it, then
+              automatically deleted after the configured storage period — not
+              kept permanently.
             </p>
           </article>
         </div>
@@ -298,7 +299,7 @@ export function PrivacyWorkflowSection() {
               { label: "Document", icon: FileUp },
               { label: "Uploaded", icon: Upload },
               { label: "Print workflow", icon: Printer },
-              { label: "1 hour", icon: Clock3 },
+              { label: "Temporary storage", icon: Clock3 },
               { label: "Automatically deleted", icon: Trash2 },
             ].map((item, index, list) => (
               <div key={item.label} className="contents">
@@ -332,36 +333,20 @@ export function PrivacyWorkflowSection() {
             <ul className="mt-5 space-y-3.5">
               {[
                 {
-                  title: "Less rush at the counter",
-                  body: "Customers can upload documents from their phones instead of waiting to transfer files at the counter.",
+                  title: "Auto print",
+                  body: "Customers submit jobs and the connected printer can handle printing automatically.",
                 },
                 {
-                  title: "No document storage burden",
-                  body: "Documents are temporary. Print jobs are automatically deleted after 1 hour.",
+                  title: "Temporary storage",
+                  body: "Documents are kept only long enough for the print workflow to complete.",
                 },
                 {
-                  title: "Privacy-focused",
-                  body: "Customer documents are handled only for the printing process and are not kept permanently.",
+                  title: "Auto delete",
+                  body: "Old customer files are removed automatically after the configured storage period.",
                 },
                 {
-                  title: "Less manual file handling",
-                  body: "No need to repeatedly transfer files through USB drives, messaging apps or other manual methods.",
-                },
-                {
-                  title: "Multiple printers, one Agent",
-                  body: "The Agent can detect multiple printers connected to the shop computer.",
-                },
-                {
-                  title: "You control the default printer",
-                  body: "Choose which detected printer should handle print jobs.",
-                },
-                {
-                  title: "Simple customer experience",
-                  body: "Customers scan your QR code, upload their document and submit the print job.",
-                },
-                {
-                  title: "Better shop workflow",
-                  body: "Reduce unnecessary back-and-forth between customers and staff.",
+                  title: "Simple print management",
+                  body: "Keep jobs organized from the shop dashboard without counter chaos.",
                 },
               ].map((item) => (
                 <li key={item.title} className="flex gap-2.5 text-sm">
@@ -391,32 +376,20 @@ export function PrivacyWorkflowSection() {
             <ul className="mt-5 space-y-3.5">
               {[
                 {
-                  title: "No app required",
+                  title: "Scan QR & upload",
                   body: "Scan the shop QR code and upload your document from your phone.",
                 },
                 {
-                  title: "Avoid the queue",
-                  body: "Send your document before reaching the counter or while waiting.",
+                  title: "Preview & adjust",
+                  body: "Preview your document and make print adjustments before submitting.",
                 },
                 {
-                  title: "No USB or WhatsApp transfer",
-                  body: "Upload directly through the shop's print page.",
+                  title: "Brightness & scale",
+                  body: "Fine-tune clearer, better-sized prints — especially useful for images and ID cards.",
                 },
                 {
                   title: "Privacy-focused",
-                  body: "Your document is temporary and automatically deleted after 1 hour.",
-                },
-                {
-                  title: "Simple print options",
-                  body: "Choose the important print settings without dealing with complicated software.",
-                },
-                {
-                  title: "Convenient from your phone",
-                  body: "Print documents directly from your phone without needing a computer.",
-                },
-                {
-                  title: "Faster shop experience",
-                  body: "Spend less time transferring files and waiting at the counter.",
+                  body: "Documents are temporary and automatically deleted after the configured storage period.",
                 },
               ].map((item) => (
                 <li key={item.title} className="flex gap-2.5 text-sm">

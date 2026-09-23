@@ -6,7 +6,7 @@ import { FeaturesSection, FinalCtaSection } from "@/components/marketing/section
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Explore PrintYantra features for print job management, Windows Agent connectivity, printer status, and shopkeeper workflows.",
+    "PrintYantra features: scan QR & upload, preview & adjust, brightness & scale, auto print, privacy with temporary storage and auto delete, and simple print management.",
 };
 
 export default function FeaturesPage() {
@@ -18,12 +18,12 @@ export default function FeaturesPage() {
             Features
           </p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900">
-            Built for everyday print shop work
+            The essentials of a modern print shop
           </h1>
           <p className="mt-4 max-w-2xl text-base text-slate-600">
-            PrintYantra focuses on the practical tools shopkeepers already
-            need: job tracking, Agent connectivity, printer status, and a clear
-            dashboard.
+            PrintYantra keeps the journey simple: customers scan, upload,
+            preview, and adjust — while shops get auto print, temporary
+            storage, and clear job management.
           </p>
           <Link
             href="/signup"

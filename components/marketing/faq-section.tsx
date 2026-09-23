@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const FAQS = [
   {
     q: "What is PrintYantra?",
-    a: "PrintYantra is print-shop management software for shopkeepers. It helps print shops accept QR-based customer print requests, manage jobs, connect a Windows Print Agent, and track printer/agent status.",
+    a: "PrintYantra is print-shop management software for shopkeepers. Customers scan a shop QR code to upload and preview documents; shops get auto print, temporary document storage with automatic deletion, and simple job management.",
   },
   {
     q: "Who pays for PrintYantra?",
@@ -41,7 +41,7 @@ const FAQS = [
   },
   {
     q: "What happens to uploaded documents?",
-    a: "Documents uploaded for printing are automatically deleted from the PrintYantra server after 1 hour. Job history can remain in the dashboard, but the document files are removed.",
+    a: "Customer documents are stored temporarily for printing and automatically deleted after the configured storage period. Job history can remain in the dashboard, but the document files are removed.",
   },
   {
     q: "Is the Windows Agent required?",

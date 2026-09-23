@@ -42,8 +42,8 @@ export default async function AboutPage() {
             {trial.enabled
               ? ` after a ${trial.days}-day free trial`
               : " with no free trial"}
-            . Uploaded documents are automatically deleted after 1
-            hour.
+            . Customer documents are stored temporarily for printing and
+            automatically deleted after the configured storage period.
           </p>
 
           <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">

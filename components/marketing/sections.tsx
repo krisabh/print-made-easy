@@ -1,23 +1,33 @@
 import Link from "next/link";
 import {
-  Cable,
   CheckCircle2,
   ClipboardList,
   LayoutDashboard,
-  Link2,
   MonitorSmartphone,
   Printer,
+  QrCode,
   ShieldCheck,
-  Sparkles,
+  SlidersHorizontal,
+  SunMedium,
   Users,
   WifiOff,
 } from "lucide-react";
 
 import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { MARKETING_CORE_FEATURES } from "@/lib/marketing-features";
 import {
   PREMIUM_FEATURE_LABELS,
   TRIAL_FEATURE_LABELS,
 } from "@/lib/premium-features";
+
+const CORE_FEATURE_ICONS = {
+  "scan-qr-upload": QrCode,
+  "preview-adjust": SlidersHorizontal,
+  "brightness-scale": SunMedium,
+  "auto-print": Printer,
+  "privacy-auto-delete": ShieldCheck,
+  "simple-print-management": LayoutDashboard,
+} as const;
 
 export function HeroSection({
   premiumPriceInr = PREMIUM_PLAN.amountInr,
@@ -65,8 +75,8 @@ export function HeroSection({
             </Link>
           </div>
           <p className="mt-5 text-sm text-slate-500">
-            QR print requests • Windows Agent • Job dashboard • Documents deleted
-            after 1 hour
+            Scan QR &amp; upload • Preview &amp; adjust • Auto print • Temporary
+            storage with auto delete
           </p>
         </div>
 
@@ -249,51 +259,6 @@ export function ProblemSection() {
 }
 
 export function FeaturesSection({ compact = false }: { compact?: boolean }) {
-  const features = [
-    {
-      icon: ClipboardList,
-      title: "Print Job Management",
-      body: "Track incoming print jobs from one shopkeeper dashboard.",
-    },
-    {
-      icon: Cable,
-      title: "Windows Print Agent",
-      body: "Connect the shop computer to PrintYantra and communicate with the connected printer.",
-    },
-    {
-      icon: Printer,
-      title: "Printer Status",
-      body: "See whether the printer environment is available or offline.",
-    },
-    {
-      icon: CheckCircle2,
-      title: "Job Status Tracking",
-      body: "Follow jobs through Pending, Printing, Ready, Delivered, and Cancelled.",
-    },
-    {
-      icon: LayoutDashboard,
-      title: "Shopkeeper Dashboard",
-      body: "Get a clear overview of the day's printing activity.",
-    },
-    {
-      icon: Link2,
-      title: "Secure Shop Connection",
-      body: "Connect the Windows Agent to the correct shop using a one-time connection link.",
-    },
-    {
-      icon: Sparkles,
-      title: "Simple Setup",
-      body: "Install the Windows Agent and connect the shop computer without complex configuration.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Centralized Workflow",
-      body: "Keep print jobs and their status organized in one place.",
-    },
-  ];
-
-  const list = compact ? features.slice(0, 6) : features;
-
   return (
     <section id="features" className="bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -302,52 +267,50 @@ export function FeaturesSection({ compact = false }: { compact?: boolean }) {
             Features
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Everything a busy print shop needs to stay organized
+            Six essentials for a smoother print shop
           </h2>
+          <p className="mt-4 text-base leading-relaxed text-slate-600">
+            From QR upload to auto print and temporary document storage — the
+            core journey for customers and shop owners.
+          </p>
         </div>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {list.map((feature) => (
-            <article
-              key={feature.title}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                <feature.icon className="size-5" aria-hidden="true" />
-              </div>
-              <h3 className="mt-4 text-base font-semibold text-slate-900">
-                {feature.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {feature.body}
-              </p>
-            </article>
-          ))}
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {MARKETING_CORE_FEATURES.map((feature) => {
+            const Icon = CORE_FEATURE_ICONS[feature.id];
+            return (
+              <article
+                key={feature.id}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                  <Icon className="size-5" aria-hidden="true" />
+                </div>
+                <h3 className="mt-4 text-base font-semibold text-slate-900">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {feature.body}
+                </p>
+              </article>
+            );
+          })}
         </div>
-        {compact ? (
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link
-              href="/signup"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              Create Your Shop
-            </Link>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Link
+            href="/signup"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Create Your Shop
+          </Link>
+          {compact ? (
             <Link
               href="/features"
               className="text-sm font-semibold text-blue-700 hover:text-blue-800"
             >
-              View all features →
+              Learn more about features →
             </Link>
-          </div>
-        ) : (
-          <div className="mt-8">
-            <Link
-              href="/signup"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              Create Your Shop
-            </Link>
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
     </section>
   );

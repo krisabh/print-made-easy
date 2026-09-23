@@ -6,7 +6,7 @@ export const SITE = {
   udyamRegistrationNumber: "UDYAM-BR-26-0156791",
   gstin: "10BJXPA3480P1ZU",
   tagline:
-    "Print-shop management software for local shops — QR print requests, Windows Agent, and organized jobs.",
+    "Print-shop management software for local shops — QR upload, preview & adjust, auto print, and temporary document storage.",
   /** Compact public hierarchy for footers and UI. */
   productLine: "A Clauras product",
   poweredByLine: "Powered by Ramyad Enterprises - Abhiram",
@@ -18,7 +18,7 @@ export const SITE = {
     "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram.",
   title: "PrintYantra | Print Shop Management Software",
   description:
-    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. A simple monthly subscription for local print shops. Customers scan the shop QR code to submit documents for printing — they do not pay PrintYantra. Uploaded documents are deleted automatically after 1 hour.",
+    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. Customers scan the shop QR code to upload and preview documents for printing. Documents are stored temporarily and automatically deleted after the configured storage period. Customers do not pay PrintYantra.",
   url: "https://printyantra.com",
   email: "support@printyantra.com",
   emailHref: "mailto:support@printyantra.com",
