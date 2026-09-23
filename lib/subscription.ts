@@ -282,6 +282,31 @@ function formatDateIn(value: Date | null | undefined) {
   });
 }
 
+/**
+ * Signup with the global trial turned off. Status stays EXPIRED so access is
+ * denied, but the shop has never had a trial window or a paid Premium period.
+ */
+export function isNewShopWithoutTrialOrPayment(subscription: ShopSubscription) {
+  const providerId = subscription.providerSubscriptionId?.trim() || "";
+  const hasProviderRecord =
+    Boolean(subscription.provider) ||
+    Boolean(subscription.providerCustomerId) ||
+    Boolean(subscription.providerPlanId) ||
+    (providerId.length > 0 && !isCheckoutClaimId(providerId));
+  return (
+    subscription.plan === "TRIAL" &&
+    subscription.status === "EXPIRED" &&
+    subscription.trialStartAt == null &&
+    subscription.trialEndAt == null &&
+    subscription.currentPeriodStart == null &&
+    subscription.currentPeriodEnd == null &&
+    !subscription.cancelAtPeriodEnd &&
+    subscription.cancelledAt == null &&
+    subscription.pastDueSince == null &&
+    !hasProviderRecord
+  );
+}
+
 function graceEndDate(subscription: ShopSubscription) {
   const since =
     subscription.pastDueSince ||
@@ -348,6 +373,10 @@ function buildLabels(
         "Your recurring Premium payment failed and the 3-day grace period has ended. Restore payment to unlock printing again.";
       daysRemaining = 0;
     }
+  } else if (isNewShopWithoutTrialOrPayment(subscription)) {
+    label = "No active subscription";
+    detail = "Choose PrintYantra Premium to get started.";
+    daysRemaining = null;
   } else {
     label = "Subscription expired";
     detail = "Subscribe again to restore access.";
@@ -1027,6 +1056,13 @@ export function getDashboardSubscriptionSummary(
     return {
       title: "Payment required",
       subtitle: "Grace period ended — restore Premium to continue",
+    };
+  }
+
+  if (view.label === "No active subscription") {
+    return {
+      title: "No active subscription",
+      subtitle: "Choose PrintYantra Premium to get started.",
     };
   }
 

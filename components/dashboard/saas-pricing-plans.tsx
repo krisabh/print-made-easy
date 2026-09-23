@@ -469,6 +469,13 @@ export function SaasPricingPlans({
                 </p>
               ) : null}
             </div>
+          ) : trialActive ? (
+            <>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                Free Trial
+              </p>
+              <p className="mt-1 text-sm text-slate-600">{subscription.detail}</p>
+            </>
           ) : (
             <>
               <p className="mt-1 text-lg font-semibold text-slate-900">
@@ -479,7 +486,7 @@ export function SaasPricingPlans({
           )}
           {trialActive ? (
             <p className="mt-2 text-sm font-medium text-emerald-700">
-              Your trial is already active
+              Your trial is active
             </p>
           ) : null}
           {confirming ? (
@@ -566,7 +573,9 @@ export function SaasPricingPlans({
           <div className="flex items-center gap-2 text-blue-600">
             <Sparkles className="size-4" aria-hidden="true" />
             <p className="text-xs font-semibold tracking-[0.14em] uppercase">
-              After your free trial
+              {subscription?.label === "No active subscription"
+                ? "Get started"
+                : "After your free trial"}
             </p>
           </div>
           <h3 className="mt-4 text-2xl font-semibold text-slate-900">
@@ -600,7 +609,7 @@ export function SaasPricingPlans({
             <p className="mt-2 text-sm font-medium text-amber-700">
               {subscription?.detail}
             </p>
-          ) : expired ? (
+          ) : expired && subscription?.label !== "No active subscription" ? (
             <p className="mt-2 text-sm font-medium text-amber-700">
               {subscription?.status === "PAST_DUE"
                 ? subscription.detail ||
