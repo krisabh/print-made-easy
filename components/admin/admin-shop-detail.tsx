@@ -1,9 +1,11 @@
+import { AdminShopPermanentDelete } from "@/components/admin/admin-shop-permanent-delete";
 import { AdminShopStatusControl } from "@/components/admin/admin-shop-status-control";
 import { AdminShopTrialControl } from "@/components/admin/admin-shop-trial-control";
 import {
   formatAdminCreatedDate,
   formatAdminLastSeen,
   type AdminShopDetail,
+  type PermanentShopDeletePreview,
 } from "@/lib/admin-shops";
 
 function formatNumber(value: number) {
@@ -17,9 +19,13 @@ function formatOptionalDate(iso: string | null) {
 
 type AdminShopDetailViewProps = {
   shop: AdminShopDetail;
+  permanentDelete: PermanentShopDeletePreview;
 };
 
-export function AdminShopDetailView({ shop }: AdminShopDetailViewProps) {
+export function AdminShopDetailView({
+  shop,
+  permanentDelete,
+}: AdminShopDetailViewProps) {
   const sub = shop.subscriptionRaw;
 
   return (
@@ -180,6 +186,13 @@ export function AdminShopDetailView({ shop }: AdminShopDetailViewProps) {
           />
         </dl>
       </section>
+
+      <AdminShopPermanentDelete
+        shopId={shop.id}
+        shopName={shop.shopName}
+        shopCode={shop.shopCode}
+        preview={permanentDelete}
+      />
     </div>
   );
 }

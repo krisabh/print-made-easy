@@ -12,6 +12,7 @@ type PageProps = {
     search?: string;
     q?: string;
     page?: string;
+    deleted?: string;
   }>;
 };
 
@@ -40,10 +41,15 @@ export default async function AdminShopsPage({ searchParams }: PageProps) {
         <h2 className="text-xl font-semibold text-slate-900">Shop Management</h2>
         <p className="mt-1 text-sm text-slate-500">
           Directory of all PrintYantra shops. Use Deactivate Shop or Reactivate
-          Shop in the list, or open a shop for the same action. Shops are not
-          deleted.
+          Shop in the list, or open a shop for the same action. Permanent
+          deletion of one deactivated test shop is only on the shop detail page.
         </p>
       </div>
+      {params.deleted === "1" ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          The test shop was permanently deleted.
+        </p>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (

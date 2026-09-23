@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AdminShopDetailView } from "@/components/admin/admin-shop-detail";
-import { getAdminShopDetail } from "@/lib/admin-shops";
+import {
+  getAdminShopDetail,
+  getPermanentShopDeletePreview,
+} from "@/lib/admin-shops";
 import { requireAdmin } from "@/lib/auth";
 
 type PageProps = {
@@ -13,8 +16,11 @@ export default async function AdminShopDetailPage({ params }: PageProps) {
   await requireAdmin();
   const { shopId } = await params;
   const shop = await getAdminShopDetail(shopId);
+  const permanentDelete = shop
+    ? await getPermanentShopDeletePreview(shop.id)
+    : null;
 
-  if (!shop) {
+  if (!shop || !permanentDelete) {
     notFound();
   }
 
@@ -38,7 +44,7 @@ export default async function AdminShopDetailPage({ params }: PageProps) {
         </Link>
       </div>
 
-      <AdminShopDetailView shop={shop} />
+      <AdminShopDetailView shop={shop} permanentDelete={permanentDelete} />
     </div>
   );
 }

@@ -1,14 +1,16 @@
-import type { Prisma, Subscription } from "@prisma/client";
+import { type Prisma, type Subscription } from "@prisma/client";
 
 import { recordAdminAudit } from "@/lib/admin-audit";
 import { AGENT_OFFLINE_MS } from "@/lib/print-agent-auth";
 import { prisma } from "@/lib/prisma";
 import {
   getSubscriptionAccess,
+  isCheckoutClaimId,
   toPublicSubscriptionView,
   type PublicSubscriptionView,
   type ShopSubscription,
 } from "@/lib/subscription";
+import { deleteStoredUploadFile } from "@/lib/upload-service";
 
 export const ADMIN_SHOPS_DEFAULT_PAGE_SIZE = 20;
 export const ADMIN_SHOPS_MAX_PAGE_SIZE = 50;
@@ -884,3 +886,378 @@ export const ADMIN_FORBIDDEN_RESPONSE_KEYS = [
   "CASHFREE_CLIENT_SECRET",
   "CASHFREE_WEBHOOK_SECRET",
 ] as const;
+
+export const PERMANENT_SHOP_DELETE_BLOCKS = [
+  "SHOP_ACTIVE",
+  "SHOP_HAS_BILLING_PAYMENTS",
+  "SHOP_HAS_COUPON",
+  "SHOP_HAS_COUPON_REDEMPTION",
+  "SHOP_HAS_PAID_SUBSCRIPTION",
+  "SHOP_HAS_PROVIDER_IDENTITY",
+  "OWNER_IS_ADMIN",
+  "OWNER_HAS_ADMIN_AUDIT",
+  "UNSAFE_SUBSCRIPTION",
+] as const;
+
+export type PermanentShopDeleteBlock = (typeof PERMANENT_SHOP_DELETE_BLOCKS)[number];
+
+export type PermanentShopDeletePreview = {
+  allowed: boolean;
+  blockCode: PermanentShopDeleteBlock | null;
+  printJobCount: number;
+  submittedPageCount: number;
+  totalPrintPrice: string;
+};
+
+type PermanentDeleteDb = Prisma.TransactionClient | typeof prisma;
+
+type PermanentDeleteSubscription = {
+  plan: string;
+  status: string;
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+  cancelledAt: Date | null;
+  pastDueSince: Date | null;
+  providerCustomerId: string | null;
+  providerPlanId: string | null;
+  providerSubscriptionId: string | null;
+};
+
+type PermanentDeleteSnapshot = {
+  id: string;
+  shopCode: string;
+  shopName: string;
+  isActive: boolean;
+  owner: {
+    id: string;
+    email: string;
+    role: string;
+    auditCount: number;
+  } | null;
+  subscription: PermanentDeleteSubscription | null;
+  billingPaymentCount: number;
+  couponRedemptionCount: number;
+  shopCouponCount: number;
+  printJobCount: number;
+  submittedPageCount: number;
+  totalPrintPrice: string;
+};
+
+class PermanentShopDeleteRollback extends Error {
+  constructor(readonly failure: { error: string; status: 404 | 409 }) {
+    super(failure.error);
+  }
+}
+
+function decimalString(value: unknown) {
+  if (value == null) return "0.00";
+  if (typeof value === "number" && Number.isFinite(value)) return value.toFixed(2);
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+  }
+  if (
+    typeof value === "object" &&
+    "toFixed" in value &&
+    typeof value.toFixed === "function"
+  ) {
+    return value.toFixed(2);
+  }
+  return "0.00";
+}
+
+function parsePermanentDeleteBody(
+  body: unknown,
+): { ok: true; confirmShopCode: string } | { ok: false } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false };
+  }
+  const raw = body as Record<string, unknown>;
+  const keys = Object.keys(raw);
+  if (keys.length !== 1 || keys[0] !== "confirmShopCode") {
+    return { ok: false };
+  }
+  if (typeof raw.confirmShopCode !== "string" || raw.confirmShopCode.length === 0) {
+    return { ok: false };
+  }
+  return { ok: true, confirmShopCode: raw.confirmShopCode };
+}
+
+function subscriptionDeleteBlock(
+  subscription: PermanentDeleteSubscription | null,
+): PermanentShopDeleteBlock | null {
+  if (!subscription) return null;
+  if (subscription.plan !== "TRIAL") return "SHOP_HAS_PAID_SUBSCRIPTION";
+  if (subscription.currentPeriodStart || subscription.currentPeriodEnd) {
+    return "SHOP_HAS_PAID_SUBSCRIPTION";
+  }
+  if (subscription.providerCustomerId || subscription.providerPlanId) {
+    return "SHOP_HAS_PROVIDER_IDENTITY";
+  }
+  if (
+    subscription.providerSubscriptionId &&
+    !isCheckoutClaimId(subscription.providerSubscriptionId)
+  ) {
+    return "SHOP_HAS_PROVIDER_IDENTITY";
+  }
+  if (subscription.status !== "TRIALING" && subscription.status !== "EXPIRED") {
+    return "UNSAFE_SUBSCRIPTION";
+  }
+  if (subscription.cancelledAt || subscription.pastDueSince) {
+    return "UNSAFE_SUBSCRIPTION";
+  }
+  return null;
+}
+
+function permanentDeleteBlock(
+  snapshot: PermanentDeleteSnapshot,
+): PermanentShopDeleteBlock | null {
+  if (snapshot.isActive) return "SHOP_ACTIVE";
+  if (snapshot.couponRedemptionCount > 0) return "SHOP_HAS_COUPON_REDEMPTION";
+  if (snapshot.billingPaymentCount > 0) return "SHOP_HAS_BILLING_PAYMENTS";
+  if (snapshot.shopCouponCount > 0) return "SHOP_HAS_COUPON";
+  const subscriptionBlock = subscriptionDeleteBlock(snapshot.subscription);
+  if (subscriptionBlock) return subscriptionBlock;
+  if (!snapshot.owner) return null;
+  if (snapshot.owner.role !== "SHOPKEEPER") return "OWNER_IS_ADMIN";
+  if (snapshot.owner.auditCount > 0) return "OWNER_HAS_ADMIN_AUDIT";
+  return null;
+}
+
+function toPermanentDeletePreview(
+  snapshot: PermanentDeleteSnapshot,
+): PermanentShopDeletePreview {
+  const blockCode = permanentDeleteBlock(snapshot);
+  return {
+    allowed: blockCode == null,
+    blockCode,
+    printJobCount: snapshot.printJobCount,
+    submittedPageCount: snapshot.submittedPageCount,
+    totalPrintPrice: snapshot.totalPrintPrice,
+  };
+}
+
+async function loadPermanentDeleteSnapshot(
+  db: PermanentDeleteDb,
+  shopId: string,
+): Promise<PermanentDeleteSnapshot | null> {
+  const shop = await db.shop.findUnique({
+    where: { id: shopId },
+    select: {
+      id: true,
+      shopCode: true,
+      shopName: true,
+      isActive: true,
+      owner: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+        },
+      },
+      subscription: {
+        select: {
+          plan: true,
+          status: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          cancelledAt: true,
+          pastDueSince: true,
+          providerCustomerId: true,
+          providerPlanId: true,
+          providerSubscriptionId: true,
+        },
+      },
+    },
+  });
+  if (!shop) return null;
+
+  const [billingPaymentCount, couponRedemptionCount, shopCouponCount, printAgg, auditCount] =
+    await Promise.all([
+      db.billingPayment.count({ where: { shopId: shop.id } }),
+      db.couponRedemption.count({ where: { shopId: shop.id } }),
+      db.coupon.count({ where: { shopId: shop.id } }),
+      db.printJob.aggregate({
+        where: { shopId: shop.id },
+        _count: { _all: true },
+        _sum: { totalPages: true, totalPrice: true },
+      }),
+      shop.owner
+        ? db.adminAuditLog.count({ where: { adminUserId: shop.owner.id } })
+        : Promise.resolve(0),
+    ]);
+
+  return {
+    id: shop.id,
+    shopCode: shop.shopCode,
+    shopName: shop.shopName,
+    isActive: shop.isActive,
+    owner: shop.owner
+      ? {
+          id: shop.owner.id,
+          email: shop.owner.email,
+          role: shop.owner.role,
+          auditCount,
+        }
+      : null,
+    subscription: shop.subscription,
+    billingPaymentCount,
+    couponRedemptionCount,
+    shopCouponCount,
+    printJobCount: printAgg._count._all,
+    submittedPageCount: printAgg._sum.totalPages ?? 0,
+    totalPrintPrice: decimalString(printAgg._sum.totalPrice),
+  };
+}
+
+export async function getPermanentShopDeletePreview(
+  shopId: string,
+): Promise<PermanentShopDeletePreview | null> {
+  const snapshot = await loadPermanentDeleteSnapshot(prisma, shopId.trim());
+  if (!snapshot) return null;
+  return toPermanentDeletePreview(snapshot);
+}
+
+/**
+ * Permanently delete one deactivated test shop.
+ * Does not change deactivate/reactivate, coupons, billing rows, or platform settings.
+ * Upload files are removed only after the database transaction commits.
+ */
+export async function permanentlyDeleteAdminShop(input: {
+  adminUserId: string;
+  shopId: string;
+  body: unknown;
+}): Promise<
+  | { ok: true; shopId: string; shopCode: string }
+  | { ok: false; error: string; status: 404 | 409 }
+> {
+  const shopId = input.shopId.trim();
+  if (!shopId) {
+    return { ok: false, error: "CONFIRMATION_REQUIRED", status: 409 };
+  }
+
+  const parsed = parsePermanentDeleteBody(input.body);
+  if (!parsed.ok) {
+    return { ok: false, error: "CONFIRMATION_REQUIRED", status: 409 };
+  }
+
+  let committed: { shopId: string; shopCode: string; files: string[] };
+  try {
+    committed = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM Shop WHERE id = ${shopId} FOR UPDATE
+      `;
+      if (!Array.isArray(locked) || locked.length !== 1) {
+        throw new PermanentShopDeleteRollback({
+          error: "Shop not found.",
+          status: 404,
+        });
+      }
+
+      const snapshot = await loadPermanentDeleteSnapshot(tx, shopId);
+      if (!snapshot) {
+        throw new PermanentShopDeleteRollback({
+          error: "Shop not found.",
+          status: 404,
+        });
+      }
+      if (parsed.confirmShopCode !== snapshot.shopCode) {
+        throw new PermanentShopDeleteRollback({
+          error: "CONFIRMATION_MISMATCH",
+          status: 409,
+        });
+      }
+      const block = permanentDeleteBlock(snapshot);
+      if (block) {
+        throw new PermanentShopDeleteRollback({ error: block, status: 409 });
+      }
+
+      const fileRows = await tx.printJobFile.findMany({
+        where: {
+          fileDeletedAt: null,
+          printJob: { shopId: snapshot.id },
+        },
+        select: { storedFileName: true },
+      });
+      const files = [...new Set(fileRows.map((row) => row.storedFileName))];
+
+      await recordAdminAudit(
+        {
+          adminUserId: input.adminUserId,
+          action: "SHOP_PERMANENTLY_DELETED",
+          targetType: "Shop",
+          targetId: snapshot.id,
+          before: {
+            shopCode: snapshot.shopCode,
+            shopName: snapshot.shopName,
+            ownerEmail: snapshot.owner?.email ?? null,
+            counts: {
+              printJobs: snapshot.printJobCount,
+              submittedPages: snapshot.submittedPageCount,
+              totalPrintPrice: snapshot.totalPrintPrice,
+              billingPayments: snapshot.billingPaymentCount,
+              couponRedemptions: snapshot.couponRedemptionCount,
+              shopCoupons: snapshot.shopCouponCount,
+            },
+          },
+          after: { deleted: true },
+        },
+        tx,
+      );
+
+      const removedShop = await tx.shop.deleteMany({
+        where: { id: snapshot.id },
+      });
+      if (removedShop.count !== 1) {
+        throw new PermanentShopDeleteRollback({
+          error: "Shop not found.",
+          status: 404,
+        });
+      }
+
+      if (snapshot.owner) {
+        const owner = await tx.user.findUnique({
+          where: { id: snapshot.owner.id },
+          select: { id: true, role: true },
+        });
+        const auditCount = owner
+          ? await tx.adminAuditLog.count({ where: { adminUserId: owner.id } })
+          : 0;
+        if (!owner || owner.role !== "SHOPKEEPER") {
+          throw new PermanentShopDeleteRollback({
+            error: "OWNER_IS_ADMIN",
+            status: 409,
+          });
+        }
+        if (auditCount > 0) {
+          throw new PermanentShopDeleteRollback({
+            error: "OWNER_HAS_ADMIN_AUDIT",
+            status: 409,
+          });
+        }
+        const removedUser = await tx.user.deleteMany({
+          where: { id: owner.id, role: "SHOPKEEPER" },
+        });
+        if (removedUser.count !== 1) {
+          throw new PermanentShopDeleteRollback({
+            error: "Shop not found.",
+            status: 404,
+          });
+        }
+      }
+
+      return { shopId: snapshot.id, shopCode: snapshot.shopCode, files };
+    });
+  } catch (error) {
+    if (error instanceof PermanentShopDeleteRollback) {
+      return { ok: false, error: error.failure.error, status: error.failure.status };
+    }
+    throw error;
+  }
+
+  for (const storedFileName of committed.files) {
+    await deleteStoredUploadFile(storedFileName);
+  }
+
+  return { ok: true, shopId: committed.shopId, shopCode: committed.shopCode };
+}
