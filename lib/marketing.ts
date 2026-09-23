@@ -18,7 +18,7 @@ export const SITE = {
     "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram.",
   title: "PrintYantra | Print Shop Management Software",
   description:
-    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. Subscribe for ₹199/month after a 7-day free trial. Customers scan the shop QR code to submit documents for printing — they do not pay PrintYantra. Uploaded documents are deleted automatically after 1 hour.",
+    "PrintYantra is a Clauras product, powered by Ramyad Enterprises - Abhiram — print-shop management software for shopkeepers. A simple monthly subscription for local print shops. Customers scan the shop QR code to submit documents for printing — they do not pay PrintYantra. Uploaded documents are deleted automatically after 1 hour.",
   url: "https://printyantra.com",
   email: "support@printyantra.com",
   emailHref: "mailto:support@printyantra.com",

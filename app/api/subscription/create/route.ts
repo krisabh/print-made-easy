@@ -1,3 +1,4 @@
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import { requireShopApi } from "@/lib/auth";
 import { getPublicAppBaseUrl } from "@/lib/app-url";
 import {
@@ -48,6 +49,7 @@ export async function POST() {
       `shop-${session.shop.shopCode}@printmadeeasy.local`;
     const customerPhone = session.shop.phone || "9999999999";
 
+    const amountInr = await getCurrentPremiumPriceInr();
     let created;
     try {
       created = await createCashfreeSubscription({
@@ -58,6 +60,7 @@ export async function POST() {
           phone: customerPhone,
         },
         returnUrl,
+        amountInr,
       });
     } catch (error) {
       console.error("Cashfree create subscription failed");

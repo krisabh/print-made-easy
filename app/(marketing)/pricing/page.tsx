@@ -6,24 +6,42 @@ import {
   FinalCtaSection,
   PricingSection,
 } from "@/components/marketing/sections";
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { SITE } from "@/lib/marketing";
 
-export const metadata: Metadata = {
-  title: "Pricing",
-  description: `PrintYantra Premium is ₹${PREMIUM_PLAN.amountInr}/month (INR) for print-shop owners after a 7-day free trial. Customers who submit print jobs do not pay PrintYantra.`,
-  alternates: {
-    canonical: "/pricing",
-  },
-  openGraph: {
-    title: "PrintYantra Pricing — ₹199/month",
-    description:
-      "Shopkeeper subscription software for local print shops. 7-day free trial, then ₹199/month (INR).",
-    url: `${SITE.url}/pricing`,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
+  const trialBit =
+    trial.enabled && trial.days > 0
+      ? `after a ${trial.days}-day free trial`
+      : "with no free trial";
+  return {
+    title: "Pricing",
+    description: `PrintYantra Premium is ₹${premiumPriceInr}/month (INR) for print-shop owners ${trialBit}. Customers who submit print jobs do not pay PrintYantra.`,
+    alternates: {
+      canonical: "/pricing",
+    },
+    openGraph: {
+      title: `PrintYantra Pricing — ₹${premiumPriceInr}/month`,
+      description: `Shopkeeper subscription software for local print shops. ${trial.enabled ? `${trial.days}-day free trial, then ` : ""}₹${premiumPriceInr}/month (INR).`,
+      url: `${SITE.url}/pricing`,
+    },
+  };
+}
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
+  const offer = {
+    premiumPriceInr,
+    trialEnabled: trial.enabled,
+    trialDays: trial.days,
+  };
   return (
     <>
       <section className="border-b border-slate-200 bg-white py-14">
@@ -42,14 +60,14 @@ export default function PricingPage() {
           <div className="mt-8 max-w-xl rounded-2xl border border-blue-200 bg-blue-50/50 p-6">
             <p className="text-sm font-semibold text-blue-700">PrintYantra</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">
-              ₹{PREMIUM_PLAN.amountInr}
+              ₹{premiumPriceInr}
               <span className="text-lg font-medium text-slate-600">
                 {" "}
                 / month
               </span>
             </p>
             <p className="mt-2 text-sm font-medium text-slate-800">
-              7-day free trial
+              {trial.enabled ? `${trial.days}-day free trial` : "No free trial"}
             </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
               Subscription for shopkeepers / print-shop owners who use
@@ -59,7 +77,7 @@ export default function PricingPage() {
               href="/signup"
               className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Start Free Trial
+              {trial.enabled ? "Start Free Trial" : "Sign up"}
             </Link>
           </div>
 
@@ -69,8 +87,8 @@ export default function PricingPage() {
                 Shopkeeper
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Pays ₹{PREMIUM_PLAN.amountInr}/month subscription to
-                PrintYantra (after the free trial) for software access,
+                Pays ₹{premiumPriceInr}/month subscription to
+                PrintYantra{trial.enabled ? " (after the free trial)" : ""} for software access,
                 dashboard, QR workflow, and Windows Agent connectivity.
               </p>
             </div>
@@ -117,8 +135,8 @@ export default function PricingPage() {
           </aside>
         </div>
       </section>
-      <PricingSection />
-      <FinalCtaSection />
+      <PricingSection {...offer} />
+      <FinalCtaSection trialEnabled={trial.enabled} />
     </>
   );
 }

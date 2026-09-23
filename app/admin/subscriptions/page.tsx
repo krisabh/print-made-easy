@@ -37,7 +37,7 @@ export default async function AdminSubscriptionsPage({ searchParams }: PageProps
           Subscription Management
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Read-only view of trials, Premium plans, and estimated MRR.
+          Read-only view of trials, Premium plans, and list-price MRR.
         </p>
       </div>
 

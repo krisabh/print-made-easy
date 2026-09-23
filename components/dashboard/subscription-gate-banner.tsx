@@ -1,13 +1,14 @@
 import Link from "next/link";
 
-import { PREMIUM_PLAN } from "@/lib/billing/plan";
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import type { SubscriptionAccessState } from "@/lib/subscription";
 
 type SubscriptionGateBannerProps = {
   access: SubscriptionAccessState;
 };
 
-export function SubscriptionGateBanner({ access }: SubscriptionGateBannerProps) {
+export async function SubscriptionGateBanner({ access }: SubscriptionGateBannerProps) {
+  const premiumPriceInr = await getCurrentPremiumPriceInr();
   if (access.hasAccess) {
     if (access.isGracePeriod) {
       return (
@@ -59,7 +60,7 @@ export function SubscriptionGateBanner({ access }: SubscriptionGateBannerProps) 
       >
         {pastDueExpired
           ? "Restore Premium"
-          : `Subscribe for ₹${PREMIUM_PLAN.amountInr}/month`}
+          : `Subscribe for ₹${premiumPriceInr}/month`}
       </Link>
     </div>
   );

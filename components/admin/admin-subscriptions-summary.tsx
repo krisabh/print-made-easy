@@ -34,7 +34,7 @@ export function AdminSubscriptionsSummary({
     { label: "Past Due", value: formatNumber(summary.pastDue) },
     { label: "Expired", value: formatNumber(summary.expired) },
     {
-      label: "Estimated MRR",
+      label: "List-price MRR",
       value: formatAdminMoneyInr(summary.estimatedMrrInr),
     },
   ];
@@ -60,18 +60,17 @@ export function AdminSubscriptionsSummary({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-            Estimated MRR
+            List-price MRR
           </p>
           <p className="mt-2 text-sm text-slate-600">
-            Active Premium: {formatNumber(summary.activePremium)} · Plan price:{" "}
+            Active Premium: {formatNumber(summary.activePremium)} · List price:{" "}
             {formatAdminMoneyInr(summary.planPriceInr)}/month
           </p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
             {formatAdminMoneyInr(summary.estimatedMrrInr)}
           </p>
           <p className="mt-3 text-xs text-slate-500">
-            Does not include trials, past-due, expired, or cancelled subscriptions.
-            Sandbox/test payments are not counted as collected revenue.
+            Current monthly list price multiplied by active Premium shops. This is not collected revenue.
           </p>
         </div>
 

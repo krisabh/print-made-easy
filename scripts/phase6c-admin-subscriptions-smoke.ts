@@ -11,7 +11,7 @@ import {
   getAdminSubscriptionSummary,
   listAdminSubscriptions,
 } from "../lib/admin-subscriptions";
-import { PREMIUM_PLAN } from "../lib/cashfree";
+import { getCurrentPremiumPriceInr } from "../lib/admin-settings";
 import { hashPassword } from "../lib/auth";
 import { createNestedTrialSubscription } from "../lib/subscription";
 
@@ -384,12 +384,10 @@ async function main() {
     // L — Estimated MRR
     {
       const summary = await getAdminSubscriptionSummary(now);
-      assert.equal(summary.planPriceInr, PREMIUM_PLAN.amountInr);
-      assert.equal(
-        summary.estimatedMrrInr,
-        summary.activePremium * PREMIUM_PLAN.amountInr,
-      );
-      console.log("L PASS Estimated MRR calculation correct");
+      const listPriceInr = await getCurrentPremiumPriceInr();
+      assert.equal(summary.planPriceInr, listPriceInr);
+      assert.equal(summary.estimatedMrrInr, summary.activePremium * listPriceInr);
+      console.log("L PASS list-price MRR uses the current Admin price");
     }
 
     // M — Sandbox/test not treated as collected revenue

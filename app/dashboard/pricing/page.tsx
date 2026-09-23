@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
 import { SaasPricingPlans } from "@/components/dashboard/saas-pricing-plans";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { requireShop } from "@/lib/auth";
 import { getBillingConfig } from "@/lib/billing/config";
-import { PREMIUM_PLAN } from "@/lib/billing/plan";
 import { getCashfreeJsMode } from "@/lib/cashfree";
 import {
   getShopSubscription,
@@ -17,6 +17,10 @@ export default async function PlanBillingPage() {
   const { shop } = await requireShop();
   const subscription = await getShopSubscription(shop.id);
   const billing = getBillingConfig();
+  const [premiumPriceInr, trialOffer] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
 
   let cashfreeJsMode: "sandbox" | "production" = "sandbox";
   try {
@@ -36,9 +40,11 @@ export default async function PlanBillingPage() {
 
       <Suspense fallback={<p className="text-sm text-slate-500">Loading plans…</p>}>
         <SaasPricingPlans
-          subscription={toPublicSubscriptionView(subscription)}
+          subscription={toPublicSubscriptionView(subscription, new Date(), premiumPriceInr)}
           cashfreeJsMode={cashfreeJsMode}
-          premiumPriceInr={PREMIUM_PLAN.amountInr}
+          premiumPriceInr={premiumPriceInr}
+          trialEnabled={trialOffer.enabled}
+          trialDays={trialOffer.days}
           billingMode={billing.mode}
         />
       </Suspense>

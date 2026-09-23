@@ -5,7 +5,7 @@ import type {
   SubscriptionStatus,
 } from "@prisma/client";
 
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import { prisma } from "@/lib/prisma";
 import {
   getSubscriptionAccess,
@@ -256,7 +256,7 @@ export async function getAdminSubscriptionSummary(
     computeTrialConversion(now),
   ]);
 
-  const planPriceInr = PREMIUM_PLAN.amountInr;
+  const planPriceInr = await getCurrentPremiumPriceInr();
   const estimatedMrrInr = activePremium * planPriceInr;
 
   return {

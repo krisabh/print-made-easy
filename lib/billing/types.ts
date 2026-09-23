@@ -87,6 +87,8 @@ export type CreateSubscriptionCheckoutInput = {
   shopCode: string;
   customer: CreateCheckoutCustomer;
   returnUrl: string;
+  /** Server-resolved current Premium price. Not accepted from the browser. */
+  amountInr: number;
 };
 
 export type CreateSubscriptionCheckoutResult = {
@@ -108,6 +110,8 @@ export type BillingCheckoutResponse = {
   orderId?: string;
   subscriptionId?: string;
   environment: "sandbox" | "production";
-  amountInr: (typeof PREMIUM_PLAN)["amountInr"];
+  amountInr: number;
+  basePriceInr: number;
+  discountInr: number;
   currency: (typeof PREMIUM_PLAN)["currency"];
 };

@@ -1,10 +1,14 @@
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import { PricingForm } from "@/components/dashboard/pricing-form";
 import { SubscriptionGateBanner } from "@/components/dashboard/subscription-gate-banner";
 import { serializeShopForDashboard } from "@/lib/dashboard-service";
 import { requireDashboardSession } from "@/lib/require-product-access";
 
 export default async function PrintPricingPage() {
-  const { session, access } = await requireDashboardSession();
+  const [{ session, access }, premiumPriceInr] = await Promise.all([
+    requireDashboardSession(),
+    getCurrentPremiumPriceInr(),
+  ]);
   const serialized = serializeShopForDashboard(session.shop);
 
   return (
@@ -13,7 +17,7 @@ export default async function PrintPricingPage() {
         <h2 className="text-xl font-semibold text-slate-900">Print Pricing</h2>
         <p className="mt-1 text-sm text-slate-500">
           Set what customers pay for printing at your shop. Default Black &amp;
-          White is ₹5 per page. This is separate from your ₹199/month
+          White is ₹5 per page. This is separate from your ₹{premiumPriceInr}/month
           PrintYantra subscription.
         </p>
       </div>

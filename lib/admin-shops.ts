@@ -1,5 +1,6 @@
 import type { Prisma, Subscription } from "@prisma/client";
 
+import { recordAdminAudit } from "@/lib/admin-audit";
 import { AGENT_OFFLINE_MS } from "@/lib/print-agent-auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -624,6 +625,85 @@ export async function getAdminShopDetail(
       lastSeen: agent.lastSeen,
     },
   };
+}
+
+/**
+ * Admin-only shop active flag. Does not touch subscription, billing, jobs, or devices.
+ * A no-op request returns the current state and does not write an audit row.
+ */
+export async function setAdminShopActive(input: {
+  adminUserId: string;
+  shopId: string;
+  body: unknown;
+}): Promise<
+  | { ok: true; shop: { id: string; isActive: boolean }; changed: boolean }
+  | { ok: false; error: string; status: 400 | 404 }
+> {
+  const shopId = input.shopId.trim();
+  if (!shopId) {
+    return { ok: false, error: "Shop id is required.", status: 400 };
+  }
+
+  if (!input.body || typeof input.body !== "object" || Array.isArray(input.body)) {
+    return { ok: false, error: "Invalid shop update.", status: 400 };
+  }
+  const raw = input.body as Record<string, unknown>;
+  const keys = Object.keys(raw);
+  if (keys.length !== 1 || keys[0] !== "isActive" || typeof raw.isActive !== "boolean") {
+    return { ok: false, error: "Invalid shop update.", status: 400 };
+  }
+  const nextActive = raw.isActive;
+
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: { id: true, isActive: true },
+  });
+  if (!shop) {
+    return { ok: false, error: "Shop not found.", status: 404 };
+  }
+
+  if (shop.isActive === nextActive) {
+    return {
+      ok: true,
+      shop: { id: shop.id, isActive: shop.isActive },
+      changed: false,
+    };
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const changed = await tx.shop.updateMany({
+      where: { id: shop.id, isActive: shop.isActive },
+      data: { isActive: nextActive },
+    });
+    if (changed.count === 0) {
+      const current = await tx.shop.findUnique({
+        where: { id: shop.id },
+        select: { id: true, isActive: true },
+      });
+      return current ? { shop: current, changed: false } : null;
+    }
+    await recordAdminAudit(
+      {
+        adminUserId: input.adminUserId,
+        action: nextActive ? "SHOP_REACTIVATED" : "SHOP_DEACTIVATED",
+        targetType: "Shop",
+        targetId: shop.id,
+        before: { isActive: shop.isActive },
+        after: { isActive: nextActive },
+      },
+      tx,
+    );
+    return {
+      shop: { id: shop.id, isActive: nextActive },
+      changed: true,
+    };
+  });
+
+  if (!updated) {
+    return { ok: false, error: "Shop not found.", status: 404 };
+  }
+
+  return { ok: true, shop: updated.shop, changed: updated.changed };
 }
 
 export function formatAdminCreatedDate(iso: string) {

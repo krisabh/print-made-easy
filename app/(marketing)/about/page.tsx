@@ -6,6 +6,7 @@ import {
   RegistrationDetails,
 } from "@/components/marketing/company-identity";
 import { FinalCtaSection } from "@/components/marketing/sections";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { SITE } from "@/lib/marketing";
 
 export const metadata: Metadata = {
@@ -14,7 +15,11 @@ export const metadata: Metadata = {
     "About PrintYantra — a Clauras product powered by Ramyad Enterprises - Abhiram. Registered enterprise details and contact.",
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
   return (
     <>
       <section className="border-b border-slate-200 bg-[#f5f7fb] py-14">
@@ -33,8 +38,11 @@ export default function AboutPage() {
           </p>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
             Customers do not pay PrintYantra — they use the shop&apos;s QR
-            code to submit documents. Pricing is ₹199/month (INR) after a 7-day
-            free trial. Uploaded documents are automatically deleted after 1
+            code to submit documents. Pricing is ₹{premiumPriceInr}/month (INR)
+            {trial.enabled
+              ? ` after a ${trial.days}-day free trial`
+              : " with no free trial"}
+            . Uploaded documents are automatically deleted after 1
             hour.
           </p>
 
@@ -103,7 +111,7 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
-      <FinalCtaSection />
+      <FinalCtaSection trialEnabled={trial.enabled} />
     </>
   );
 }

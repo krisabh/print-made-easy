@@ -21,9 +21,17 @@ const AUTH_ACCOUNT_LINKS = [
 
 type MarketingFooterProps = {
   authenticated?: boolean;
+  premiumPriceInr?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
 };
 
-export function MarketingFooter({ authenticated = false }: MarketingFooterProps) {
+export function MarketingFooter({
+  authenticated = false,
+  premiumPriceInr = 199,
+  trialEnabled = true,
+  trialDays = 7,
+}: MarketingFooterProps) {
   const accountLinks = authenticated ? AUTH_ACCOUNT_LINKS : ANON_ACCOUNT_LINKS;
 
   return (
@@ -35,7 +43,8 @@ export function MarketingFooter({ authenticated = false }: MarketingFooterProps)
             {SITE.tagline}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            Shopkeeper software subscription · ₹199/month · 7-day free trial
+            Shopkeeper software subscription · ₹{premiumPriceInr}/month
+            {trialEnabled ? ` · ${trialDays}-day free trial` : " · No free trial"}
           </p>
         </div>
 

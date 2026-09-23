@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import { prisma } from "@/lib/prisma";
 import { AGENT_OFFLINE_MS } from "@/lib/print-agent-auth";
 import { computeTrialConversion } from "@/lib/admin-subscriptions";
@@ -40,15 +40,28 @@ export type AdminAnalytics = {
   business: {
     totalShops: number;
     activeShops: number;
+    deactivatedShops: number;
     trialShops: number;
     premiumShops: number;
     pastDueShops: number;
     cancelledShops: number;
     expiredShops: number;
-    estimatedMrrInr: number;
-    estimatedMrrLabel: "Estimated MRR";
-    collectedRevenueAvailable: false;
+    listPriceInr: number;
+    listPriceMrrInr: number;
+    listPriceMrrLabel: "List-price MRR";
+    listPriceMrrNote: string;
+  };
+  payments: {
+    successfulCount: number;
+    collectedRevenueInr: number;
+    pendingCount: number;
+    failedCount: number;
+    averageSuccessfulPaymentInr: number;
     collectedRevenueNote: string;
+  };
+  coupons: {
+    redemptionCount: number;
+    successfulPaymentsUsingCoupons: number;
   };
   shopGrowth: Array<{ bucket: string; label: string; shops: number }>;
   subscriptions: {
@@ -257,14 +270,22 @@ export async function getAdminAnalytics(input: {
   const printWhere = { createdAt: { gte: range.start, lt: range.end } };
   const onlineAfter = new Date(now.getTime() - AGENT_OFFLINE_MS);
 
+  const period = { gte: range.start, lt: range.end };
+  const successfulPaymentWhere = {
+    status: "SUCCESS",
+    currency: "INR",
+    paidAt: period,
+  };
   const [
     totalShops,
     activeShops,
+    deactivatedShops,
     trialShops,
     premiumShops,
     pastDueShops,
     cancelledShops,
     expiredShops,
+    listPriceInr,
     trialConversion,
     shopGrowthRows,
     printTrendRows,
@@ -275,14 +296,20 @@ export async function getAdminAnalytics(input: {
     topShopRows,
     onlineAgentsRows,
     offlineAgentsRows,
+    successfulPayments,
+    openPaymentRows,
+    redemptionCount,
+    successfulPaymentsUsingCoupons,
   ] = await Promise.all([
     prisma.shop.count(),
     prisma.shop.count({ where: { isActive: true } }),
+    prisma.shop.count({ where: { isActive: false } }),
     prisma.subscription.count({ where: { status: "TRIALING" } }),
     prisma.subscription.count({ where: { plan: "PREMIUM", status: "ACTIVE" } }),
     prisma.subscription.count({ where: { status: "PAST_DUE" } }),
     prisma.subscription.count({ where: { status: "CANCELLED" } }),
     prisma.subscription.count({ where: { status: "EXPIRED" } }),
+    getCurrentPremiumPriceInr(),
     computeTrialConversion(now),
     getTrendRows({ table: "Shop", range }),
     getTrendRows({ table: "PrintJob", range }),
@@ -342,6 +369,27 @@ export async function getAdminAnalytics(input: {
         )
       )
     `,
+    prisma.billingPayment.aggregate({
+      where: successfulPaymentWhere,
+      _count: { _all: true },
+      _sum: { amountInr: true },
+    }),
+    // Pending and failed rows have no paidAt. createdAt is the checkout time.
+    prisma.billingPayment.groupBy({
+      by: ["status"],
+      where: {
+        status: { in: ["PENDING", "FAILED"] },
+        createdAt: period,
+      },
+      _count: { _all: true },
+    }),
+    prisma.couponRedemption.count({ where: { redeemedAt: period } }),
+    prisma.billingPayment.count({
+      where: {
+        ...successfulPaymentWhere,
+        couponRedemptions: { some: {} },
+      },
+    }),
   ]);
 
   const onlineAgents = Number(onlineAgentsRows[0]?.c ?? 0);
@@ -378,6 +426,10 @@ export async function getAdminAnalytics(input: {
     modesByShop.set(row.shopId, current);
   }
 
+  const successfulCount = successfulPayments._count._all;
+  const collectedRevenueInr = successfulPayments._sum.amountInr || 0;
+  const pendingCount = openPaymentRows.find((row) => row.status === "PENDING")?._count._all || 0;
+  const failedCount = openPaymentRows.find((row) => row.status === "FAILED")?._count._all || 0;
   const statusMap = new Map(printStatusRows.map((row) => [row.status, row]));
   const completedJobs = (statusMap.get("READY_FOR_PICKUP")?._count._all || 0) +
     (statusMap.get("DELIVERED")?._count._all || 0);
@@ -395,15 +447,31 @@ export async function getAdminAnalytics(input: {
     business: {
       totalShops,
       activeShops,
+      deactivatedShops,
       trialShops,
       premiumShops,
       pastDueShops,
       cancelledShops,
       expiredShops,
-      estimatedMrrInr: premiumShops * PREMIUM_PLAN.amountInr,
-      estimatedMrrLabel: "Estimated MRR",
-      collectedRevenueAvailable: false,
-      collectedRevenueNote: "Not collected revenue. Actual collected revenue requires a verified payment transaction/history ledger.",
+      listPriceInr,
+      listPriceMrrInr: premiumShops * listPriceInr,
+      listPriceMrrLabel: "List-price MRR",
+      listPriceMrrNote:
+        "Current monthly list price multiplied by active Premium shops. This is not collected revenue.",
+    },
+    payments: {
+      successfulCount,
+      collectedRevenueInr,
+      pendingCount,
+      failedCount,
+      averageSuccessfulPaymentInr:
+        successfulCount === 0 ? 0 : collectedRevenueInr / successfulCount,
+      collectedRevenueNote:
+        "Collected revenue reflects successful one-time payments recorded in the billing ledger. Subscription-mode charges are not included.",
+    },
+    coupons: {
+      redemptionCount,
+      successfulPaymentsUsingCoupons,
     },
     shopGrowth: shopGrowthRows.map((row) => ({
       bucket: String(row.bucket),
@@ -416,7 +484,11 @@ export async function getAdminAnalytics(input: {
         count: ({ TRIALING: trialShops, ACTIVE: premiumShops, PAST_DUE: pastDueShops, CANCELLED: cancelledShops, EXPIRED: expiredShops } as Record<string, number>)[status],
       })),
       activePremium: premiumShops,
-      trialConversion: { ...trialConversion, isApproximate: true },
+      trialConversion: {
+        ...trialConversion,
+        isApproximate: true,
+        note: `${trialConversion.note} This is a current classification of shops whose trial period has ended; it is not a period-specific conversion funnel.`,
+      },
       statusTrendAvailable: false,
       statusTrendNote: "Historical subscription status trends require a subscription event/history model. This dashboard shows the current status snapshot.",
     },
@@ -484,7 +556,7 @@ export async function getAdminAnalytics(input: {
       online: onlineAgents,
       offline: offlineAgents,
       neverConnected,
-      snapshotNote: "Current snapshot based on the existing agent heartbeat offline threshold.",
+      snapshotNote: `Live agent snapshot. Online means a heartbeat within the last ${AGENT_OFFLINE_MS / 1000} seconds.`,
     },
   };
 }

@@ -12,23 +12,31 @@ import {
 } from "lucide-react";
 
 import { FinalCtaSection } from "@/components/marketing/sections";
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { SITE } from "@/lib/marketing";
 
-export const metadata: Metadata = {
-  title: "Products & Services",
-  description:
-    "PrintYantra provides print-shop management software with QR-based customer print submission, PrintYantra Agent, printer management, and print settings for ₹199/month.",
-  alternates: {
-    canonical: "/products",
-  },
-  openGraph: {
-    title: "PrintYantra — Products & Services",
-    description:
-      "Online printing management software for local print shops. Shopkeepers subscribe for ₹199/month after a 7-day free trial.",
-    url: `${SITE.url}/products`,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
+  const trialBit =
+    trial.enabled && trial.days > 0
+      ? ` after a ${trial.days}-day free trial`
+      : "";
+  return {
+    title: "Products & Services",
+    description: `PrintYantra provides print-shop management software with QR-based customer print submission, PrintYantra Agent, printer management, and print settings for ₹${premiumPriceInr}/month.`,
+    alternates: {
+      canonical: "/products",
+    },
+    openGraph: {
+      title: "PrintYantra — Products & Services",
+      description: `Online printing management software for local print shops. Shopkeepers subscribe for ₹${premiumPriceInr}/month${trialBit}.`,
+      url: `${SITE.url}/products`,
+    },
+  };
+}
 
 const CAPABILITIES = [
   {
@@ -63,7 +71,11 @@ const CAPABILITIES = [
   },
 ] as const;
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
   return (
     <>
       <section className="border-b border-slate-200 bg-[#f5f7fb] py-14 sm:py-16">
@@ -110,14 +122,14 @@ export default function ProductsPage() {
                   Subscription pricing (INR)
                 </p>
                 <p className="mt-3 text-3xl font-semibold text-slate-900">
-                  ₹{PREMIUM_PLAN.amountInr}
+                  ₹{premiumPriceInr}
                   <span className="text-base font-medium text-slate-600">
                     {" "}
                     / month
                   </span>
                 </p>
                 <p className="mt-2 text-sm font-medium text-slate-800">
-                  7-day free trial
+                  {trial.enabled ? `${trial.days}-day free trial` : "No free trial"}
                 </p>
                 <p className="mt-3 text-xs leading-relaxed text-slate-600">
                   Paid by the shopkeeper. Customers do not pay PrintYantra for
@@ -127,7 +139,7 @@ export default function ProductsPage() {
                   href="/signup"
                   className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  Start Free Trial
+                  {trial.enabled ? "Start Free Trial" : "Sign up"}
                 </Link>
                 <Link
                   href="/pricing"
@@ -189,7 +201,7 @@ export default function ProductsPage() {
         </div>
       </section>
 
-      <FinalCtaSection />
+      <FinalCtaSection trialEnabled={trial.enabled} />
     </>
   );
 }

@@ -74,18 +74,32 @@ export type PublicSubscriptionView = {
   canCancel: boolean;
 };
 
+function trialSpanDays(
+  start: Date | null | undefined,
+  end: Date | null | undefined,
+) {
+  if (!start || !end) return null;
+  const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  return days > 0 ? days : null;
+}
+
 function addDays(from: Date, days: number) {
   return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-export function buildTrialWindow(from: Date = new Date()) {
+export function buildTrialWindow(from: Date = new Date(), trialDays: number = 7) {
+  const days = Number.isInteger(trialDays) && trialDays > 0 ? trialDays : 7;
   const trialStartAt = from;
-  const trialEndAt = addDays(from, 7);
+  const trialEndAt = addDays(from, days);
   return { trialStartAt, trialEndAt };
 }
 
-export function createTrialSubscriptionData(shopId: string, from: Date = new Date()) {
-  const { trialStartAt, trialEndAt } = buildTrialWindow(from);
+export function createTrialSubscriptionData(
+  shopId: string,
+  from: Date = new Date(),
+  trialDays: number = 7,
+) {
+  const { trialStartAt, trialEndAt } = buildTrialWindow(from, trialDays);
   return {
     shopId,
     plan: "TRIAL" as const,
@@ -105,10 +119,49 @@ export function createTrialSubscriptionData(shopId: string, from: Date = new Dat
 }
 
 /** Nested Prisma create under Shop — shopId is inferred from the parent. */
-export function createNestedTrialSubscription(from: Date = new Date()) {
-  const { shopId: _ignored, ...data } = createTrialSubscriptionData("unused", from);
+export function createNestedTrialSubscription(
+  from: Date = new Date(),
+  trialDays: number = 7,
+) {
+  const { shopId: _ignored, ...data } = createTrialSubscriptionData(
+    "unused",
+    from,
+    trialDays,
+  );
   void _ignored;
   return data;
+}
+
+/**
+ * New shop with trials turned off. Uses the existing EXPIRED status so the
+ * shop has no access until they subscribe. Does not invent a new state.
+ */
+export function createNestedSubscriptionWithoutTrial() {
+  return {
+    plan: "TRIAL" as const,
+    status: "EXPIRED" as const,
+    trialStartAt: null,
+    trialEndAt: null,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    cancelledAt: null,
+    pastDueSince: null,
+    provider: null,
+    providerCustomerId: null,
+    providerSubscriptionId: null,
+    providerPlanId: null,
+  };
+}
+
+/** Signup-only. Existing subscriptions are never rewritten from Admin settings. */
+export async function createNestedSubscriptionForNewShop(from: Date = new Date()) {
+  const { getCurrentTrialOffer } = await import("@/lib/admin-settings");
+  const offer = await getCurrentTrialOffer();
+  if (!offer.enabled || offer.days < 1) {
+    return createNestedSubscriptionWithoutTrial();
+  }
+  return createNestedTrialSubscription(from, offer.days);
 }
 
 export async function getShopSubscription(shopId: string) {
@@ -241,6 +294,7 @@ function buildLabels(
   subscription: ShopSubscription,
   access: SubscriptionAccess,
   now: Date,
+  premiumPriceInr: number = PREMIUM_PLAN.amountInr,
 ): { label: string; detail: string; daysRemaining: number | null } {
   let daysRemaining: number | null = null;
   let label = "Subscription";
@@ -249,7 +303,11 @@ function buildLabels(
   if (subscription.status === "TRIALING") {
     daysRemaining = daysUntil(subscription.trialEndAt, now);
     if (access.hasAccess) {
-      label = "7-Day Free Trial";
+      const span = trialSpanDays(
+        subscription.trialStartAt,
+        subscription.trialEndAt,
+      );
+      label = span ? `${span}-Day Free Trial` : "Free Trial";
       detail =
         daysRemaining === 1
           ? "1 day remaining"
@@ -266,8 +324,8 @@ function buildLabels(
       detail = `Cancellation scheduled. Premium remains active until ${formatDateIn(subscription.currentPeriodEnd)}. No further renewal.`;
     } else {
       detail = subscription.currentPeriodEnd
-        ? `₹${PREMIUM_PLAN.amountInr}/month · Current period ends ${formatDateIn(subscription.currentPeriodEnd)}`
-        : `₹${PREMIUM_PLAN.amountInr}/month`;
+        ? `₹${premiumPriceInr}/month · Current period ends ${formatDateIn(subscription.currentPeriodEnd)}`
+        : `₹${premiumPriceInr}/month`;
     }
   } else if (subscription.status === "CANCELLED") {
     if (access.hasAccess && subscription.currentPeriodEnd) {
@@ -302,11 +360,17 @@ function buildLabels(
 export function toPublicSubscriptionView(
   subscription: ShopSubscription | null | undefined,
   now: Date = new Date(),
+  premiumPriceInr: number = PREMIUM_PLAN.amountInr,
 ): PublicSubscriptionView | null {
   if (!subscription) return null;
 
   const access = getSubscriptionAccess(subscription, now);
-  const { label, detail, daysRemaining } = buildLabels(subscription, access, now);
+  const { label, detail, daysRemaining } = buildLabels(
+    subscription,
+    access,
+    now,
+    premiumPriceInr,
+  );
   const checkout = canInitiatePremiumCheckout(subscription, now);
   const cancel = canCancelSubscription(subscription, now);
 
@@ -933,9 +997,11 @@ export function getDashboardSubscriptionSummary(
   }
 
   if (view.status === "ACTIVE" && view.hasAccess) {
+    const monthly =
+      view.detail.match(/^₹\d+\/month/)?.[0] ?? `₹${PREMIUM_PLAN.amountInr}/month`;
     return {
       title: "Premium",
-      subtitle: `₹${PREMIUM_PLAN.amountInr}/month`,
+      subtitle: monthly,
     };
   }
 

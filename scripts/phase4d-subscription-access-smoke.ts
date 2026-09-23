@@ -399,7 +399,8 @@ async function main() {
           patch: {
             status: "TRIALING",
             plan: "TRIAL",
-            trialEndAt: daysFrom(now, 3),
+            trialStartAt: now,
+            trialEndAt: daysFrom(now, 7),
             cancelAtPeriodEnd: false,
           },
           expectLabel: /7-Day Free Trial/i,

@@ -151,9 +151,9 @@ export function AdminSubscriptionsTable({
       </div>
 
       <p className="text-xs text-slate-500">
-        Estimated MRR uses Active Premium ×{" "}
-        {formatAdminMoneyInr(result.summary.planPriceInr)}/month. Collected
-        revenue is not available yet.
+        List-price MRR uses Active Premium × the current Admin list price of{" "}
+        {formatAdminMoneyInr(result.summary.planPriceInr)}/month. This is not
+        collected revenue.
       </p>
     </div>
   );

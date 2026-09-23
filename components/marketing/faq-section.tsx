@@ -53,7 +53,25 @@ const FAQS = [
   },
 ] as const;
 
-export function FaqSection() {
+export function FaqSection({
+  premiumPriceInr = 199,
+  trialEnabled = true,
+  trialDays = 7,
+}: {
+  premiumPriceInr?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
+} = {}) {
+  const faqs = FAQS.map((item) =>
+    item.q === "Who pays for PrintYantra?"
+      ? {
+          ...item,
+          a: trialEnabled
+            ? `The shopkeeper (print-shop owner) pays PrintYantra. Premium is ₹${premiumPriceInr} per month (INR) after a ${trialDays}-day free trial. Customers who scan a shop QR code and submit documents do not pay PrintYantra.`
+            : `The shopkeeper (print-shop owner) pays PrintYantra. Premium is ₹${premiumPriceInr} per month (INR). New shops do not receive a free trial. Customers who scan a shop QR code and submit documents do not pay PrintYantra.`,
+        }
+      : item,
+  );
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const baseId = useId();
 
@@ -70,7 +88,7 @@ export function FaqSection() {
         </div>
 
         <div className="mt-10 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {FAQS.map((item, index) => {
+          {faqs.map((item, index) => {
             const open = openIndex === index;
             const panelId = `${baseId}-panel-${index}`;
             const buttonId = `${baseId}-button-${index}`;

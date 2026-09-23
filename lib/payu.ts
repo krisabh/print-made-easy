@@ -1,7 +1,5 @@
 import { createHash } from "crypto";
 
-import { PREMIUM_PLAN } from "@/lib/billing/plan";
-
 export const PAYU_PROVIDER = "PAYU";
 
 export type PayUEnvironment = "test" | "production";
@@ -405,8 +403,12 @@ export async function createPayUHostedPayment(input: {
   cancelAction: string;
 }): Promise<PayUCreatePaymentResult> {
   const config = input.config || getPayUConfig();
-  if (input.amountInr !== PREMIUM_PLAN.amountInr) {
-    throw new Error("PayU checkout amount must match PREMIUM_PLAN.");
+  if (
+    !Number.isInteger(input.amountInr) ||
+    input.amountInr < 1 ||
+    input.amountInr > 100_000
+  ) {
+    throw new Error("PayU checkout amount is invalid.");
   }
   if (input.currency.toUpperCase() !== "INR") {
     throw new Error("PayU checkout currency must be INR.");

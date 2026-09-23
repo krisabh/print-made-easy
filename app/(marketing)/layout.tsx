@@ -1,6 +1,7 @@
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { WhatsAppFloatingButton } from "@/components/marketing/whatsapp-floating-button";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { getCurrentUser } from "@/lib/auth";
 
 /**
@@ -17,7 +18,11 @@ export default async function MarketingLayout({
 }) {
   // Read existing httpOnly session cookie — does not set/clear auth.
   // Anonymous visitors still get full public access.
-  const session = await getCurrentUser();
+  const [session, premiumPriceInr, trial] = await Promise.all([
+    getCurrentUser(),
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
   const authenticated = Boolean(session);
 
   return (
@@ -27,7 +32,12 @@ export default async function MarketingLayout({
         shopName={session?.shop.shopName ?? null}
       />
       <main className="pb-20 sm:pb-8">{children}</main>
-      <MarketingFooter authenticated={authenticated} />
+      <MarketingFooter
+        authenticated={authenticated}
+        premiumPriceInr={premiumPriceInr}
+        trialEnabled={trial.enabled}
+        trialDays={trial.days}
+      />
       <WhatsAppFloatingButton />
     </div>
   );

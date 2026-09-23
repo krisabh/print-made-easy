@@ -1,16 +1,31 @@
 import { requireShopApi } from "@/lib/auth";
 import { getPublicAppBaseUrl } from "@/lib/app-url";
 import { createBillingCheckout } from "@/lib/billing/service";
+import { parseCheckoutCouponRequest } from "@/lib/coupon-checkout";
 
 /**
  * POST /api/billing/checkout
  * Provider-agnostic Premium checkout for the authenticated shop.
- * Amount/mode/provider come from server config — never from the client body.
+ * The server resolves the price. The body may only include couponCode.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const session = await requireShopApi();
     if (session instanceof Response) return session;
+
+    let body: unknown = null;
+    const text = await request.text();
+    if (text.trim()) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        return Response.json({ error: "Invalid checkout." }, { status: 400 });
+      }
+    }
+    const parsed = parseCheckoutCouponRequest(body);
+    if (!parsed.ok) {
+      return Response.json({ error: parsed.error }, { status: 400 });
+    }
 
     const appBaseUrl = await getPublicAppBaseUrl();
     const returnUrl = `${appBaseUrl.replace(/\/$/, "")}/dashboard/pricing?payment=return`;
@@ -33,6 +48,7 @@ export async function POST() {
       },
       returnUrl,
       addressLine1: session.shop.address || undefined,
+      couponCode: parsed.couponCode,
     });
 
     if (!result.ok) {

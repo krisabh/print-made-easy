@@ -17,6 +17,7 @@ model User {
   updatedAt    DateTime @updatedAt
   shop         Shop?
   passwordResetTokens PasswordResetToken[]
+  adminAuditLogs      AdminAuditLog[]
 
   @@index([role])
 }
@@ -66,6 +67,8 @@ model Shop {
    * Pairing registration writes AgentDevice rows; Shop.agent* remains the legacy shim.
    */
   agentDevices           AgentDevice[]
+  coupons                Coupon[]
+  couponRedemptions      CouponRedemption[]
 
   @@index([agentId])
   @@index([agentPairingTokenHash])
@@ -279,6 +282,7 @@ model BillingPayment {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   shop               Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  couponRedemptions  CouponRedemption[]
 
   @@unique([provider, providerOrderId])
   @@index([shopId])
@@ -302,6 +306,89 @@ model PaymentWebhookEvent {
 
   @@unique([provider, eventId])
   @@index([eventType])
+}
+
+/**
+ * Platform-wide business settings (one row).
+ * Not per-shop. Not wired into checkout or signup trial in this phase.
+ */
+model AdminSetting {
+  /** Fixed singleton id — only "platform" is valid. */
+  id               String   @id @db.VarChar(32)
+  premiumAmountInr Int
+  trialEnabled     Boolean  @default(true)
+  trialDays        Int      @default(7)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/**
+ * Record of important Admin mutations.
+ * beforeJson/afterJson must never contain passwords, tokens, or provider secrets.
+ */
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  adminUserId String
+  action      String   @db.VarChar(64)
+  targetType  String   @db.VarChar(64)
+  targetId    String?  @db.VarChar(64)
+  beforeJson  Json?
+  afterJson   Json?
+  createdAt   DateTime @default(now())
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([adminUserId])
+  @@index([action])
+}
+
+/**
+ * Admin-managed discount. shopId null = global. Code is stored uppercase.
+ * Redemptions are recorded later against BillingPayment. Coupons are not deleted.
+ */
+model Coupon {
+  id              String             @id @default(uuid())
+  code            String             @unique @db.VarChar(32)
+  type            CouponType
+  value           Int
+  validFrom       DateTime
+  validUntil      DateTime
+  maxRedemptions  Int?
+  perShopLimit    Int?
+  isActive        Boolean            @default(true)
+  shopId          String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  shop            Shop?              @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  redemptions     CouponRedemption[]
+
+  @@index([shopId])
+  @@index([isActive])
+  @@index([validUntil])
+}
+
+/**
+ * One coupon use tied to the payment that redeemed it.
+ * Restrict deletes so billing history and the coupon record are preserved.
+ */
+model CouponRedemption {
+  id               String         @id @default(uuid())
+  couponId         String
+  shopId           String
+  billingPaymentId String         @unique
+  redeemedAt       DateTime       @default(now())
+  coupon           Coupon         @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  shop             Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  billingPayment   BillingPayment @relation(fields: [billingPaymentId], references: [id], onDelete: Restrict)
+
+  @@index([couponId])
+  @@index([shopId])
+  @@index([couponId, shopId])
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
 }
 
 enum UserRole {

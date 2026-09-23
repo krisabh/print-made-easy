@@ -14,7 +14,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { allocateUniqueShopCode } from "@/lib/shop-code";
 import { DEFAULT_PRINT_PRICING } from "@/lib/pricing-service";
-import { createNestedTrialSubscription } from "@/lib/subscription";
+import { createNestedSubscriptionForNewShop } from "@/lib/subscription";
 import type { ApiResponse } from "@/types";
 
 const signupSchema = z
@@ -94,7 +94,7 @@ export async function signupAction(
             },
           },
           subscription: {
-            create: createNestedTrialSubscription(),
+            create: await createNestedSubscriptionForNewShop(),
           },
         },
       });

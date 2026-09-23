@@ -21,8 +21,11 @@ import type { PublicSubscriptionView } from "@/lib/subscription";
 type SaasPricingPlansProps = {
   subscription: PublicSubscriptionView | null;
   cashfreeJsMode: "sandbox" | "production";
-  /** Shopkeeper Premium monthly price in INR (from server PREMIUM_PLAN). */
+  /** Current Premium monthly price in INR (server Admin settings). */
   premiumPriceInr: number;
+  /** Current new-shop trial offer (server Admin settings). */
+  trialEnabled?: boolean;
+  trialDays?: number;
   /** Server billing mode — drives CTA copy and checkout path. */
   billingMode: BillingMode;
 };
@@ -90,6 +93,8 @@ export function SaasPricingPlans({
   subscription: initialSubscription,
   cashfreeJsMode,
   premiumPriceInr,
+  trialEnabled = true,
+  trialDays = 7,
   billingMode,
 }: SaasPricingPlansProps) {
   const router = useRouter();
@@ -100,6 +105,15 @@ export function SaasPricingPlans({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [couponQuote, setCouponQuote] = useState<{
+    code: string;
+    basePriceInr: number;
+    discountInr: number;
+    finalAmountInr: number;
+  } | null>(null);
 
   useEffect(() => {
     // Server props are authoritative after refresh / navigation.
@@ -238,6 +252,11 @@ export function SaasPricingPlans({
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          couponQuote && couponCode.trim()
+            ? { couponCode: couponCode.trim() }
+            : {},
+        ),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -354,8 +373,9 @@ export function SaasPricingPlans({
           Simple, transparent pricing
         </h2>
         <p className="mt-3 text-base text-slate-500 sm:text-lg">
-          New shops get a 7-day Premium trial with signup. Continue with Premium
-          for ₹{premiumPriceInr}/month when the trial ends.
+          {trialEnabled
+            ? `New shops get a ${trialDays}-day Premium trial with signup. Continue with Premium for ₹${premiumPriceInr}/month when the trial ends.`
+            : `Premium is ₹${premiumPriceInr}/month. New shops subscribe to start printing.`}
         </p>
       </header>
 
@@ -453,7 +473,7 @@ export function SaasPricingPlans({
                 Trial is active
               </p>
               <p className="text-sm text-emerald-800/90">
-                Your 7-day free trial is included with signup.
+                Your free trial is included with signup.
               </p>
             </div>
           ) : null}
@@ -494,7 +514,7 @@ export function SaasPricingPlans({
                 Included with signup
               </p>
               <h3 className="mt-1 text-lg font-semibold text-slate-900">
-                7-Day Free Trial
+                {trialEnabled ? `${trialDays}-Day Free Trial` : "No free trial"}
               </h3>
             </div>
             <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
@@ -502,7 +522,9 @@ export function SaasPricingPlans({
             </span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            Try all Premium features for 7 days with no payment required.
+            {trialEnabled
+              ? `Try all Premium features for ${trialDays} days with no payment required.`
+              : "Subscribe to Premium to start printing."}
           </p>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {TRIAL_FEATURE_LABELS.map((feature) => (
@@ -600,6 +622,86 @@ export function SaasPricingPlans({
             ))}
           </ul>
 
+          {planCta.payEnabled ? (
+            <div className="mt-6 space-y-3">
+              <label htmlFor="coupon-code" className="text-sm font-medium text-slate-800">
+                Coupon code
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="coupon-code"
+                  value={couponCode}
+                  onChange={(event) => {
+                    setCouponCode(event.target.value);
+                    setCouponQuote(null);
+                    setCouponError(null);
+                  }}
+                  className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm uppercase outline-none focus-visible:border-blue-500 focus-visible:ring-3 focus-visible:ring-blue-500/20"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  disabled={applyingCoupon || busy || !couponCode.trim()}
+                  className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+                  onClick={() => {
+                    setApplyingCoupon(true);
+                    setCouponError(null);
+                    void fetch("/api/billing/coupon-quote", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ couponCode: couponCode.trim() }),
+                    })
+                      .then(async (response) => {
+                        const payload = (await response.json().catch(() => null)) as {
+                          error?: string;
+                          code?: string;
+                          basePriceInr?: number;
+                          discountInr?: number;
+                          finalAmountInr?: number;
+                        } | null;
+                        if (
+                          !response.ok ||
+                          !payload?.code ||
+                          payload.basePriceInr == null ||
+                          payload.discountInr == null ||
+                          payload.finalAmountInr == null
+                        ) {
+                          setCouponQuote(null);
+                          setCouponError(payload?.error || "This coupon is not valid.");
+                          return;
+                        }
+                        setCouponQuote({
+                          code: payload.code,
+                          basePriceInr: payload.basePriceInr,
+                          discountInr: payload.discountInr,
+                          finalAmountInr: payload.finalAmountInr,
+                        });
+                      })
+                      .catch(() => {
+                        setCouponQuote(null);
+                        setCouponError("Unable to apply this coupon.");
+                      })
+                      .finally(() => setApplyingCoupon(false));
+                  }}
+                >
+                  {applyingCoupon ? "Applying…" : "Apply"}
+                </button>
+              </div>
+              {couponError ? (
+                <p className="text-sm text-red-600" role="alert">
+                  {couponError}
+                </p>
+              ) : null}
+              <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                <p>Base price: ₹{couponQuote?.basePriceInr ?? premiumPriceInr}</p>
+                {couponQuote ? <p>Discount: -₹{couponQuote.discountInr}</p> : null}
+                <p className="font-semibold text-slate-900">
+                  You pay: ₹{couponQuote?.finalAmountInr ?? premiumPriceInr}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-8">
             {planCta.kind === "premium_active" ? (
               <div className="space-y-2">
@@ -630,7 +732,13 @@ export function SaasPricingPlans({
                 className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 onClick={() => void startPremiumCheckout()}
               >
-                {planCta.label}
+                {busy
+                  ? "Processing…"
+                  : couponQuote
+                    ? billingMode === "ONE_TIME"
+                      ? `Pay ₹${couponQuote.finalAmountInr}`
+                      : `Subscribe for ₹${couponQuote.finalAmountInr}/month`
+                    : planCta.label}
               </button>
             )}
             <p className="mt-3 text-center text-xs text-slate-500">
@@ -666,8 +774,12 @@ export function SaasPricingPlans({
 
       <p className="mt-8 text-center text-sm text-slate-500">
         {billingMode === "ONE_TIME"
-          ? "7-day free trial included with signup · Renew manually each month"
-          : "7-day free trial included with signup · Cancel anytime"}
+          ? trialEnabled
+            ? `${trialDays}-day free trial included with signup · Renew manually each month`
+            : "Renew manually each month"
+          : trialEnabled
+            ? `${trialDays}-day free trial included with signup · Cancel anytime`
+            : "Cancel anytime"}
       </p>
     </div>
   );

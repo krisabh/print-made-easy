@@ -122,6 +122,7 @@ async function main() {
         phone: shopA.phone,
       },
       returnUrl: "https://example.com/dashboard/pricing?payment=return",
+      amountInr: PREMIUM_PLAN.amountInr,
       fetchImpl: async (_url, init) => {
         captured.body = JSON.parse(String(init?.body || "{}")) as {
           plan_details?: Record<string, unknown>;
@@ -150,7 +151,7 @@ async function main() {
     assert.equal(captured.body.plan_details?.plan_amount, 199);
     assert.equal(captured.body.plan_details?.plan_max_amount, 199);
     assert.equal(captured.body.authorization_details?.authorization_amount, 199);
-    console.log("E PASS Cashfree create payload uses ₹199 from PREMIUM_PLAN");
+    console.log("E PASS Cashfree create payload uses the supplied ₹199");
 
     await prisma.subscription.update({
       where: { id: shopA.subscription!.id },

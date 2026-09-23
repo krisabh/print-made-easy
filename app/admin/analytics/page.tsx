@@ -22,7 +22,10 @@ export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
         </div>
         <AdminAnalyticsRangeSelector range={range} />
       </div>
-      <p className="text-xs text-slate-500">Calendar boundaries use Asia/Kolkata. Selected period: {analytics.range.label}.</p>
+      <p className="text-xs text-slate-500">
+        Reporting period: {analytics.range.label}. Calendar boundaries use Asia/Kolkata.
+        Current platform state, list-price MRR, trial conversion, and the live agent snapshot are not filtered by this period.
+      </p>
       <AdminAnalyticsDashboard analytics={analytics} />
     </div>
   );

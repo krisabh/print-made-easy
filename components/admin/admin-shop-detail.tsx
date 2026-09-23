@@ -1,3 +1,4 @@
+import { AdminShopStatusControl } from "@/components/admin/admin-shop-status-control";
 import {
   formatAdminCreatedDate,
   formatAdminLastSeen,
@@ -37,9 +38,10 @@ export function AdminShopDetailView({ shop }: AdminShopDetailViewProps) {
           />
           <Field
             label="Shop status"
-            value={shop.isActive ? "Active" : "Inactive"}
+            value={shop.isActive ? "Active" : "Deactivated"}
           />
         </dl>
+        <AdminShopStatusControl shopId={shop.id} isActive={shop.isActive} />
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

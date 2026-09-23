@@ -11,6 +11,7 @@ import {
   PricingSection,
   ProblemSection,
 } from "@/components/marketing/sections";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import type { Metadata } from "next";
 import { SITE } from "@/lib/marketing";
 
@@ -22,18 +23,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
+  const offer = {
+    premiumPriceInr,
+    trialEnabled: trial.enabled,
+    trialDays: trial.days,
+  };
+
   return (
     <>
-      <HeroSection />
+      <HeroSection {...offer} />
       <ProblemSection />
       <ProductWorkflowSection />
       <PrivacyWorkflowSection />
       <FeaturesSection compact />
       <AgentOverviewSection />
-      <PricingSection />
-      <FaqSection />
-      <FinalCtaSection />
+      <PricingSection {...offer} />
+      <FaqSection {...offer} />
+      <FinalCtaSection trialEnabled={trial.enabled} />
     </>
   );
 }

@@ -13,7 +13,7 @@ import {
   getAdminAnalyticsDateRange,
   normalizeAdminAnalyticsRange,
 } from "../lib/admin-analytics";
-import { PREMIUM_PLAN } from "../lib/cashfree";
+import { getCurrentPremiumPriceInr } from "../lib/admin-settings";
 
 const prisma = new PrismaClient();
 
@@ -85,12 +85,13 @@ async function main() {
     const activePremium = await prisma.subscription.count({
       where: { plan: "PREMIUM", status: "ACTIVE" },
     });
-    assert.equal(analytics.business.estimatedMrrInr, activePremium * PREMIUM_PLAN.amountInr);
-    assert.equal(analytics.business.collectedRevenueAvailable, false);
-    assert.match(analytics.business.collectedRevenueNote, /Not collected revenue/i);
+    const listPriceInr = await getCurrentPremiumPriceInr();
+    assert.equal(analytics.business.listPriceMrrInr, activePremium * listPriceInr);
+    assert.match(analytics.business.listPriceMrrNote, /not collected revenue/i);
+    assert.match(analytics.payments.collectedRevenueNote, /one-time payments/i);
     assert.equal(analytics.subscriptions.trialConversion.isApproximate, true);
-    assert.match(analytics.subscriptions.trialConversion.note, /Approximate|No ended trials/i);
-    console.log("J-M PASS safe response, MRR, unavailable revenue, and approximate conversion disclosure");
+    assert.match(analytics.subscriptions.trialConversion.note, /not a period-specific conversion funnel/i);
+    console.log("J-M PASS safe response, list-price MRR, ledger revenue note, and approximate conversion disclosure");
 
     // N — Existing admin pages remain present; build/typecheck validate their compilation.
     console.log("N PASS existing admin routes are preserved (validated by TypeScript/build checks)");

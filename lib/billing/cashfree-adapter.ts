@@ -92,6 +92,7 @@ export function createCashfreeAdapter(): PaymentProviderAdapter {
           merchantSubscriptionId,
           customer: input.customer,
           returnUrl: input.returnUrl,
+          amountInr: input.amountInr,
         });
         return {
           provider: "cashfree",

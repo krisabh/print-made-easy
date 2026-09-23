@@ -8,9 +8,13 @@ import {
   CreditCard,
   LayoutDashboard,
   LogOut,
+  ScrollText,
+  Settings,
+  Ticket,
 } from "lucide-react";
 
 import { logoutAction } from "@/app/auth/actions";
+import { SiteLogo } from "@/components/brand/site-logo";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -18,6 +22,9 @@ const NAV = [
   { href: "/admin/shops", label: "Shops", icon: Building2 },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/coupons", label: "Coupons", icon: Ticket },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
 ] as const;
 
 type AdminShellProps = {
@@ -37,11 +44,9 @@ export function AdminShell({ adminName, children }: AdminShellProps) {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col lg:flex-row">
         <aside className="border-b border-slate-200 bg-white lg:w-64 lg:border-r lg:border-b-0">
-          <div className="px-5 py-5">
-            <p className="text-xs font-semibold tracking-[0.16em] text-blue-600 uppercase">
-              PrintYantra
-            </p>
-            <h1 className="mt-1 text-lg font-semibold text-slate-900">
+          <div className="px-5 py-4">
+            <SiteLogo href="/admin" size="sm" />
+            <h1 className="mt-2 text-lg font-semibold text-slate-900">
               Admin Console
             </h1>
             <p className="mt-1 truncate text-sm text-slate-500">{adminName}</p>

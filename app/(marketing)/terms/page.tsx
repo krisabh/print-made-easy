@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { SITE } from "@/lib/marketing";
 
 export const metadata: Metadata = {
@@ -13,7 +13,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
   return (
     <section className="bg-white py-14">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
@@ -57,10 +61,20 @@ export default function TermsPage() {
           <p>
             Premium access is priced at{" "}
             <span className="font-medium text-slate-800">
-              ₹{PREMIUM_PLAN.amountInr} (INR) per month
-            </span>{" "}
-            after a{" "}
-            <span className="font-medium text-slate-800">7-day free trial</span>,
+              ₹{premiumPriceInr} (INR) per month
+            </span>
+            {trial.enabled ? (
+              <>
+                {" "}
+                after a{" "}
+                <span className="font-medium text-slate-800">
+                  {trial.days}-day free trial
+                </span>
+              </>
+            ) : (
+              <> with no free trial</>
+            )}
+            ,
             unless we communicate a different offer in writing for your account.
           </p>
 
@@ -117,7 +131,9 @@ export default function TermsPage() {
             7. Trial, subscription, cancellation, and termination
           </h2>
           <p>
-            New shops may receive a 7-day free trial as offered in the product.
+            New shops may receive a{" "}
+            {trial.enabled ? `${trial.days}-day free trial` : "subscription with no free trial"}{" "}
+            as offered in the product.
             After the trial, continued Premium access requires payment of the
             applicable subscription fee. You may cancel or stop renewing from My
             Plan / Billing in the shopkeeper dashboard, subject to the{" "}

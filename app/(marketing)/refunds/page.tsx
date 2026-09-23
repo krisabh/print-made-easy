@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { PREMIUM_PLAN } from "@/lib/cashfree";
+import { getCurrentPremiumPriceInr, getCurrentTrialOffer } from "@/lib/admin-settings";
 import { SITE } from "@/lib/marketing";
 
-export const metadata: Metadata = {
-  title: "Refund & Cancellation Policy",
-  description:
-    "Refund and cancellation policy for PrintYantra Premium (₹199/month) for print-shop owners.",
-  alternates: {
-    canonical: "/refunds",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const premiumPriceInr = await getCurrentPremiumPriceInr();
+  return {
+    title: "Refund & Cancellation Policy",
+    description: `Refund and cancellation policy for PrintYantra Premium (₹${premiumPriceInr}/month) for print-shop owners.`,
+    alternates: {
+      canonical: "/refunds",
+    },
+  };
+}
 
-export default function RefundsPage() {
+export default async function RefundsPage() {
+  const [premiumPriceInr, trial] = await Promise.all([
+    getCurrentPremiumPriceInr(),
+    getCurrentTrialOffer(),
+  ]);
   return (
     <section className="bg-white py-14">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
@@ -41,10 +47,20 @@ export default function RefundsPage() {
           <p>
             Premium is priced at{" "}
             <span className="font-medium text-slate-800">
-              ₹{PREMIUM_PLAN.amountInr} (INR) per month
-            </span>{" "}
-            after a{" "}
-            <span className="font-medium text-slate-800">7-day free trial</span>.
+              ₹{premiumPriceInr} (INR) per month
+            </span>
+            {trial.enabled ? (
+              <>
+                {" "}
+                after a{" "}
+                <span className="font-medium text-slate-800">
+                  {trial.days}-day free trial
+                </span>
+              </>
+            ) : (
+              <> with no free trial</>
+            )}
+            .
             The trial lets you evaluate PrintYantra before purchasing Premium.
             If you do not pay for Premium after the trial ends, Premium access
             ends according to the product&apos;s entitlement rules.

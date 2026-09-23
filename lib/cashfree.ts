@@ -161,10 +161,20 @@ export async function createCashfreeSubscription(input: {
     phone: string;
   };
   returnUrl: string;
+  /** Server-resolved price. Callers must pass the current Admin amount. */
+  amountInr: number;
   fetchImpl?: typeof fetch;
 }): Promise<CashfreeCreateSubscriptionResult> {
   const config = input.config || getCashfreeConfig();
   const fetchImpl = input.fetchImpl || fetch;
+  if (
+    !Number.isInteger(input.amountInr) ||
+    input.amountInr < 1 ||
+    input.amountInr > 100_000
+  ) {
+    throw new Error("Cashfree checkout amount is invalid.");
+  }
+  const amountInr = input.amountInr;
   const phone = input.customer.phone.replace(/\D/g, "").slice(-10) || "9999999999";
 
   const planDetails = config.planId
@@ -174,8 +184,8 @@ export async function createCashfreeSubscription(input: {
     : {
         plan_name: PREMIUM_PLAN.planName,
         plan_type: "PERIODIC",
-        plan_amount: PREMIUM_PLAN.amountInr,
-        plan_max_amount: PREMIUM_PLAN.amountInr,
+        plan_amount: amountInr,
+        plan_max_amount: amountInr,
         plan_intervals: PREMIUM_PLAN.intervals,
         plan_interval_type: PREMIUM_PLAN.intervalType,
         plan_currency: PREMIUM_PLAN.currency,
@@ -191,7 +201,7 @@ export async function createCashfreeSubscription(input: {
     },
     plan_details: planDetails,
     authorization_details: {
-      authorization_amount: PREMIUM_PLAN.amountInr,
+      authorization_amount: amountInr,
       authorization_amount_refund: false,
       payment_methods: ["upi", "card"],
     },

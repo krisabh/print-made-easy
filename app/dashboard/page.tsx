@@ -11,6 +11,7 @@ import {
   getShopAgentStatus,
   listShopPrintersWithLiveStatus,
 } from "@/lib/print-agent-service";
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
 import { requireDashboardSession } from "@/lib/require-product-access";
 import {
   getShopSubscription,
@@ -21,13 +22,14 @@ export default async function DashboardPage() {
   const { session, access } = await requireDashboardSession();
   const { shop } = session;
 
-  const [summary, jobs, subscription, agentStatus, printers] =
+  const [summary, jobs, subscription, agentStatus, printers, premiumPriceInr] =
     await Promise.all([
       getDashboardSummary(shop.id),
       getShopJobs({ shopId: shop.id, date: "today", status: "ALL" }),
       getShopSubscription(shop.id),
       getShopAgentStatus(shop.id),
       listShopPrintersWithLiveStatus(shop.id),
+      getCurrentPremiumPriceInr(),
     ]);
 
   const agentConnected = Boolean(agentStatus?.connected);
@@ -51,7 +53,7 @@ export default async function DashboardPage() {
       </div>
       <SubscriptionGateBanner access={access} />
       <SubscriptionStatusCard
-        subscription={toPublicSubscriptionView(subscription)}
+        subscription={toPublicSubscriptionView(subscription, new Date(), premiumPriceInr)}
         showGraceWarning={access.isGracePeriod}
       />
       <PrintingPrerequisites

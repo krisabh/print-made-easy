@@ -1,5 +1,7 @@
 import { randomBytes } from "crypto";
 
+import { getCurrentPremiumPriceInr } from "@/lib/admin-settings";
+import { quoteCouponForCheckout, recordCouponRedemptionForPayment } from "@/lib/coupon-checkout";
 import { getBillingConfig } from "@/lib/billing/config";
 import { PREMIUM_PLAN } from "@/lib/billing/plan";
 import { getPaymentProviderAdapter } from "@/lib/billing/registry";
@@ -64,12 +66,33 @@ export async function createBillingCheckout(input: {
   customer: CreateCheckoutCustomer;
   returnUrl: string;
   addressLine1?: string;
+  /** Optional coupon code. Amount is never taken from the caller. */
+  couponCode?: string | null;
   now?: Date;
 }): Promise<
   | { ok: true; checkout: BillingCheckoutResponse }
-  | { ok: false; error: string; status: 409 | 502 | 500 }
+  | { ok: false; error: string; status: 400 | 409 | 502 | 500 }
 > {
   const now = input.now || new Date();
+  const basePriceInr = await getCurrentPremiumPriceInr();
+  let amountInr = basePriceInr;
+  let discountInr = 0;
+  let couponId: string | null = null;
+  let couponCode: string | null = null;
+  const requestedCode = input.couponCode?.trim() || "";
+  if (requestedCode) {
+    const quote = await quoteCouponForCheckout({
+      shopId: input.shopId,
+      couponCode: requestedCode,
+      basePriceInr,
+      now,
+    });
+    if (!quote.ok) return quote;
+    amountInr = quote.quote.finalAmountInr;
+    discountInr = quote.quote.discountInr;
+    couponId = quote.quote.couponId;
+    couponCode = quote.quote.code;
+  }
   const config = getBillingConfig();
   const adapter = getPaymentProviderAdapter(config.provider);
   const subscription = await getShopSubscription(input.shopId);
@@ -96,10 +119,13 @@ export async function createBillingCheckout(input: {
         provider: ledgerProvider,
         mode: "ONE_TIME",
         status: "PENDING",
-        amountInr: PREMIUM_PLAN.amountInr,
+        amountInr,
         currency: PREMIUM_PLAN.currency,
         providerOrderId,
-        metadataJson: JSON.stringify({ shopCode: input.shopCode }),
+        metadataJson: JSON.stringify({
+          shopCode: input.shopCode,
+          ...(couponId ? { couponId, couponCode } : {}),
+        }),
       },
     });
 
@@ -109,7 +135,7 @@ export async function createBillingCheckout(input: {
         shopCode: input.shopCode,
         customer: input.customer,
         returnUrl: input.returnUrl,
-        amountInr: PREMIUM_PLAN.amountInr,
+        amountInr,
         currency: PREMIUM_PLAN.currency,
         providerOrderId,
         addressLine1: input.addressLine1,
@@ -124,7 +150,9 @@ export async function createBillingCheckout(input: {
           checkoutSessionId: created.checkoutSessionId,
           orderId: created.orderId,
           environment: created.environment,
-          amountInr: PREMIUM_PLAN.amountInr,
+          amountInr,
+          basePriceInr,
+          discountInr,
           currency: PREMIUM_PLAN.currency,
         },
       };
@@ -174,6 +202,7 @@ export async function createBillingCheckout(input: {
       shopCode: input.shopCode,
       customer: input.customer,
       returnUrl: input.returnUrl,
+      amountInr,
     });
 
     const finalized = await finalizePremiumCheckoutClaim({
@@ -209,7 +238,9 @@ export async function createBillingCheckout(input: {
         checkoutSessionId: created.checkoutSessionId,
         subscriptionId: created.subscriptionId,
         environment: created.environment,
-        amountInr: PREMIUM_PLAN.amountInr,
+        amountInr,
+        basePriceInr,
+        discountInr,
         currency: PREMIUM_PLAN.currency,
       },
     };
@@ -263,24 +294,6 @@ export async function applyNormalizedOneTimePayment(
     return { ok: true as const, result: "ignored" as const };
   }
 
-  if (
-    payment.amountInr !== PREMIUM_PLAN.amountInr ||
-    payment.currency.toUpperCase() !== PREMIUM_PLAN.currency
-  ) {
-    await prisma.billingPayment.updateMany({
-      where: {
-        provider: ledgerProvider,
-        providerOrderId: payment.providerOrderId,
-      },
-      data: {
-        status: "FAILED",
-        failureReason: `Amount/currency mismatch: ${payment.amountInr} ${payment.currency}`,
-        providerPaymentId: payment.providerPaymentId || undefined,
-      },
-    });
-    return { ok: false as const, result: "amount_mismatch" as const };
-  }
-
   const existing = await prisma.billingPayment.findUnique({
     where: {
       provider_providerOrderId: {
@@ -295,12 +308,31 @@ export async function applyNormalizedOneTimePayment(
   }
 
   if (existing.status === "SUCCESS") {
-    // Idempotent: already applied — do not extend again.
+    // Idempotent: already applied — do not extend again or rewrite the ledger amount.
     return {
       ok: true as const,
       result: "already_applied" as const,
       shopId: existing.shopId,
     };
+  }
+
+  // Authoritative amount is the one stored when THIS payment was created.
+  if (
+    payment.amountInr !== existing.amountInr ||
+    payment.currency.toUpperCase() !== existing.currency.toUpperCase()
+  ) {
+    await prisma.billingPayment.updateMany({
+      where: {
+        id: existing.id,
+        status: { not: "SUCCESS" },
+      },
+      data: {
+        status: "FAILED",
+        failureReason: `Amount/currency mismatch: ${payment.amountInr} ${payment.currency}`,
+        providerPaymentId: payment.providerPaymentId || undefined,
+      },
+    });
+    return { ok: false as const, result: "amount_mismatch" as const };
   }
 
   // Same provider payment id already succeeded on another order → no second extension.
@@ -382,6 +414,12 @@ export async function applyNormalizedOneTimePayment(
         cancelledAt: null,
         pastDueSince: null,
       },
+    });
+    await recordCouponRedemptionForPayment(tx, {
+      billingPaymentId: existing.id,
+      shopId: existing.shopId,
+      metadataJson: existing.metadataJson,
+      now,
     });
     return true;
   });
@@ -539,6 +577,9 @@ export function makeTestOrderId(shopCode: string) {
 }
 
 export async function getPublicBillingView(shopId: string, now: Date = new Date()) {
-  const subscription = await getShopSubscription(shopId);
-  return toPublicSubscriptionView(subscription, now);
+  const [subscription, premiumPriceInr] = await Promise.all([
+    getShopSubscription(shopId),
+    getCurrentPremiumPriceInr(),
+  ]);
+  return toPublicSubscriptionView(subscription, now, premiumPriceInr);
 }

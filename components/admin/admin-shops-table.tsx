@@ -33,6 +33,7 @@ export function AdminShopsTable({ result, search }: AdminShopsTableProps) {
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             <tr>
               <th className="px-4 py-3">Shop</th>
+              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Owner</th>
               <th className="px-4 py-3">Subscription</th>
               <th className="px-4 py-3">Agent</th>
@@ -45,7 +46,7 @@ export function AdminShopsTable({ result, search }: AdminShopsTableProps) {
             {shops.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-10 text-center text-sm text-slate-500"
                 >
                   No shops found{q ? ` for “${q}”` : ""}.
@@ -67,6 +68,17 @@ export function AdminShopsTable({ result, search }: AdminShopsTableProps) {
                     <p className="mt-0.5 font-mono text-xs text-slate-500">
                       {shop.shopCode}
                     </p>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <span
+                      className={
+                        shop.isActive
+                          ? "font-medium text-emerald-700"
+                          : "font-medium text-slate-500"
+                      }
+                    >
+                      {shop.isActive ? "Active" : "Deactivated"}
+                    </span>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <p className="font-medium text-slate-900">

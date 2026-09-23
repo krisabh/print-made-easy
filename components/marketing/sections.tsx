@@ -19,7 +19,15 @@ import {
   TRIAL_FEATURE_LABELS,
 } from "@/lib/premium-features";
 
-export function HeroSection() {
+export function HeroSection({
+  premiumPriceInr = PREMIUM_PLAN.amountInr,
+  trialEnabled = true,
+  trialDays = 7,
+}: {
+  premiumPriceInr?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
+} = {}) {
   return (
     <section className="relative overflow-hidden border-b border-slate-200 bg-[#f5f7fb]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.08),_transparent_55%)]" />
@@ -35,15 +43,19 @@ export function HeroSection() {
           <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
             PrintYantra is print-shop management software for shopkeepers.
             Customers scan your shop QR code to submit documents; your Windows
-            Agent prints them. Shopkeepers subscribe for ₹{PREMIUM_PLAN.amountInr}
-            /month after a 7-day free trial — customers do not pay PrintYantra.
+            Agent prints them. Shopkeepers subscribe for ₹{premiumPriceInr}
+            /month
+            {trialEnabled
+              ? ` after a ${trialDays}-day free trial`
+              : ""}{" "}
+            — customers do not pay PrintYantra.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/signup"
               className="inline-flex h-12 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
-              Start Free Trial
+              {trialEnabled ? "Start Free Trial" : "Sign up"}
             </Link>
             <Link
               href="/products"
@@ -402,7 +414,15 @@ export function AgentOverviewSection() {
   );
 }
 
-export function PricingSection() {
+export function PricingSection({
+  premiumPriceInr = PREMIUM_PLAN.amountInr,
+  trialEnabled = true,
+  trialDays = 7,
+}: {
+  premiumPriceInr?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
+} = {}) {
   return (
     <section id="pricing" className="border-y border-slate-200 bg-[#f5f7fb] py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -414,12 +434,13 @@ export function PricingSection() {
             Simple pricing for growing print shops
           </h2>
           <p className="mt-4 text-base text-slate-600">
-            Every new shopkeeper gets a 7-day Premium trial with signup. After
-            that,{" "}
+            {trialEnabled
+              ? `Every new shopkeeper gets a ${trialDays}-day Premium trial with signup. After that, `
+              : "New shops subscribe to start printing. "}
             <span className="font-medium text-slate-800">PrintYantra</span>{" "}
             Premium is{" "}
             <span className="font-medium text-slate-800">
-              ₹{PREMIUM_PLAN.amountInr}/month (INR)
+              ₹{premiumPriceInr}/month (INR)
             </span>
             . Only shopkeepers pay PrintYantra — customers who submit
             documents via the shop QR code do not pay PrintYantra.
@@ -432,11 +453,12 @@ export function PricingSection() {
               Included with signup
             </p>
             <h3 className="mt-2 text-xl font-semibold text-slate-900">
-              7-day free trial
+              {trialEnabled ? `${trialDays}-day free trial` : "No free trial"}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Try all Premium features for 7 days with no payment required. Your
-              trial starts automatically when you sign up.
+              {trialEnabled
+                ? `Try all Premium features for ${trialDays} days with no payment required. Your trial starts automatically when you sign up.`
+                : "New shops do not receive a free trial. Subscribe to Premium to start printing."}
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
               {TRIAL_FEATURE_LABELS.map((item) => (
@@ -456,7 +478,7 @@ export function PricingSection() {
               PrintYantra Premium
             </p>
             <h3 className="mt-2 text-2xl font-semibold text-slate-900">
-              ₹{PREMIUM_PLAN.amountInr}
+              ₹{premiumPriceInr}
               <span className="text-base font-medium text-slate-500">
                 {" "}
                 / month (INR)
@@ -464,7 +486,7 @@ export function PricingSection() {
             </h3>
             <p className="mt-2 text-sm text-slate-600">
               Everything you need to simplify printing at your shop. Paid by the
-              shopkeeper after the free trial. Customers do not pay
+              shopkeeper{trialEnabled ? " after the free trial" : ""}. Customers do not pay
               PrintYantra.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-600">
@@ -479,7 +501,7 @@ export function PricingSection() {
               href="/signup"
               className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Start Free Trial
+              {trialEnabled ? "Start Free Trial" : "Sign up"}
             </Link>
           </article>
         </div>
@@ -488,7 +510,11 @@ export function PricingSection() {
   );
 }
 
-export function FinalCtaSection() {
+export function FinalCtaSection({
+  trialEnabled = true,
+}: {
+  trialEnabled?: boolean;
+} = {}) {
   return (
     <section className="bg-blue-700 py-16 sm:py-20">
       <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
@@ -504,7 +530,7 @@ export function FinalCtaSection() {
             href="/signup"
             className="inline-flex h-12 items-center justify-center rounded-xl bg-white px-6 text-sm font-semibold text-blue-700 hover:bg-blue-50"
           >
-            Start Free Trial
+            {trialEnabled ? "Start Free Trial" : "Sign up"}
           </Link>
           <Link
             href="/login"
