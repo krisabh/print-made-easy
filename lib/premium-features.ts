@@ -1,24 +1,19 @@
 /**
  * Customer-facing PrintYantra Premium feature labels (English).
  * Shared by marketing pricing and dashboard My Plan / Billing.
+ * UI lists titles only (exact order).
  */
 export const PREMIUM_FEATURE_LABELS = [
   "QR Code Printing",
   "PDF & Image Printing",
-  "Color & Black & White Printing",
+  "Preview & Adjust",
+  "Brightness & Scale",
+  "Color & B&W Printing",
   "ID Card — Front & Back",
+  "Auto Print",
+  "Privacy — Auto Delete & Temporary Storage",
   "Multi-Device Support",
-  "Easy Agent Reconnect",
-  "Automatic Agent Startup",
-  "Printer Status & Capability Detection",
-  "Live Print Job Workflow",
-  "Default Printer Selection",
-  "Advanced Print Settings",
-  "1-hour document deletion",
-  "Job tracking",
-  "Daily Job revenue",
-  "WhatsApp support",
-  "Manual monthly renewal",
+  "WhatsApp Support",
 ] as const;
 
 export const TRIAL_FEATURE_LABELS = [
