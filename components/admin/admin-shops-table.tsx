@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminShopStatusControl } from "@/components/admin/admin-shop-status-control";
 import {
   formatAdminCreatedDate,
   formatAdminLastSeen,
@@ -40,13 +41,14 @@ export function AdminShopsTable({ result, search }: AdminShopsTableProps) {
               <th className="px-4 py-3">Printers</th>
               <th className="px-4 py-3">Jobs</th>
               <th className="px-4 py-3">Created</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {shops.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-10 text-center text-sm text-slate-500"
                 >
                   No shops found{q ? ` for “${q}”` : ""}.
@@ -117,6 +119,13 @@ export function AdminShopsTable({ result, search }: AdminShopsTableProps) {
                   </td>
                   <td className="px-4 py-3 align-top text-slate-600">
                     {formatAdminCreatedDate(shop.createdAt)}
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <AdminShopStatusControl
+                      shopId={shop.id}
+                      isActive={shop.isActive}
+                      layout="compact"
+                    />
                   </td>
                 </tr>
               ))

@@ -16,11 +16,14 @@ import {
 type AdminShopStatusControlProps = {
   shopId: string;
   isActive: boolean;
+  /** Table cells show only the action. The detail page also shows the status line. */
+  layout?: "detail" | "compact";
 };
 
 export function AdminShopStatusControl({
   shopId,
   isActive,
+  layout = "detail",
 }: AdminShopStatusControlProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,24 +51,40 @@ export function AdminShopStatusControl({
     });
   }
 
+  const actionButton = (
+    <Button
+      type="button"
+      className={
+        isActive
+          ? "h-10 bg-red-600 px-4 text-white hover:bg-red-700"
+          : "h-10 bg-emerald-600 px-4 text-white hover:bg-emerald-700"
+      }
+      onClick={() => {
+        setError(null);
+        setOpen(true);
+      }}
+    >
+      {isActive ? "Deactivate Shop" : "Reactivate Shop"}
+    </Button>
+  );
+
   return (
-    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-      <p className="text-sm text-slate-700">
-        Status:{" "}
-        <span className="font-semibold text-slate-900">
-          {isActive ? "Active" : "Deactivated"}
-        </span>
-      </p>
-      <Button
-        type="button"
-        variant={isActive ? "destructive" : "default"}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {isActive ? "Deactivate Shop" : "Reactivate Shop"}
-      </Button>
+    <div
+      className={
+        layout === "compact"
+          ? "flex items-center"
+          : "mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"
+      }
+    >
+      {layout === "detail" ? (
+        <p className="text-sm text-slate-700">
+          Status:{" "}
+          <span className="font-semibold text-slate-900">
+            {isActive ? "Active" : "Deactivated"}
+          </span>
+        </p>
+      ) : null}
+      {actionButton}
       <Dialog
         open={open}
         onOpenChange={(next) => {

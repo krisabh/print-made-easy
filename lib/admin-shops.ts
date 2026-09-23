@@ -706,6 +706,163 @@ export async function setAdminShopActive(input: {
   return { ok: true, shop: updated.shop, changed: updated.changed };
 }
 
+export const ADMIN_TRIAL_EXTENSION_MAX_DAYS = 365;
+const TRIAL_EXTENSION_DAY_MS = 24 * 60 * 60 * 1000;
+
+export type AdminTrialExtensionState = {
+  plan: string;
+  status: string;
+  trialStartAt: string | null;
+  trialEndAt: string | null;
+};
+
+function trialExtensionSnapshot(row: {
+  plan: string;
+  status: string;
+  trialStartAt: Date | null;
+  trialEndAt: Date | null;
+}): AdminTrialExtensionState {
+  return {
+    plan: row.plan,
+    status: row.status,
+    trialStartAt: toIso(row.trialStartAt),
+    trialEndAt: toIso(row.trialEndAt),
+  };
+}
+
+/**
+ * Body must be exactly `{ days: N }` where N is an integer from 1 through 365.
+ * Strings, decimals, NaN, and Infinity are rejected.
+ */
+export function parseAdminTrialExtensionDays(
+  body: unknown,
+): { ok: true; days: number } | { ok: false; error: string } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, error: "Invalid trial extension." };
+  }
+  const raw = body as Record<string, unknown>;
+  const keys = Object.keys(raw);
+  if (keys.length !== 1 || keys[0] !== "days") {
+    return { ok: false, error: "Invalid trial extension." };
+  }
+  const value = raw.days;
+  if (typeof value !== "number" || !Number.isInteger(value) || !Number.isFinite(value)) {
+    return { ok: false, error: "Enter a whole number of days." };
+  }
+  if (value < 1 || value > ADMIN_TRIAL_EXTENSION_MAX_DAYS) {
+    return {
+      ok: false,
+      error: `Trial extension must be from 1 to ${ADMIN_TRIAL_EXTENSION_MAX_DAYS} days.`,
+    };
+  }
+  return { ok: true, days: value };
+}
+
+function canExtendShopTrial(row: { plan: string; status: string }) {
+  if (row.status === "TRIALING") return true;
+  return row.status === "EXPIRED" && row.plan === "TRIAL";
+}
+
+/**
+ * Extend one shop's trial. Does not create a subscription, change AdminSetting,
+ * or rewrite payments, provider ids, paid periods, or cancellation fields.
+ */
+export async function extendAdminShopTrial(input: {
+  adminUserId: string;
+  shopId: string;
+  body: unknown;
+  now?: Date;
+}): Promise<
+  | { ok: true; days: number; before: AdminTrialExtensionState; after: AdminTrialExtensionState }
+  | { ok: false; error: string; status: 400 | 404 }
+> {
+  const shopId = input.shopId.trim();
+  if (!shopId) {
+    return { ok: false, error: "Shop id is required.", status: 400 };
+  }
+
+  const parsed = parseAdminTrialExtensionDays(input.body);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error, status: 400 };
+  }
+
+  const now = input.now ?? new Date();
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: { id: true },
+  });
+  if (!shop) {
+    return { ok: false, error: "Shop not found.", status: 404 };
+  }
+
+  const existing = await prisma.subscription.findUnique({
+    where: { shopId: shop.id },
+  });
+  if (!existing) {
+    return {
+      ok: false,
+      error: "This shop has no subscription, so the trial was not extended.",
+      status: 400,
+    };
+  }
+  if (!canExtendShopTrial(existing)) {
+    return {
+      ok: false,
+      error: "Trial extension applies only to a trial subscription. Paid subscription data was not changed.",
+      status: 400,
+    };
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const current = await tx.subscription.findUnique({
+      where: { shopId: shop.id },
+    });
+    if (!current || !canExtendShopTrial(current)) {
+      return null;
+    }
+    const stillActive =
+      current.status === "TRIALING" &&
+      current.trialEndAt != null &&
+      current.trialEndAt.getTime() > now.getTime();
+    const trialEndAt = new Date(
+      (stillActive ? current.trialEndAt!.getTime() : now.getTime()) +
+        parsed.days * TRIAL_EXTENSION_DAY_MS,
+    );
+    const status = current.status === "TRIALING" ? current.status : "TRIALING";
+    const before = trialExtensionSnapshot(current);
+    const saved = await tx.subscription.update({
+      where: { id: current.id },
+      data: {
+        trialEndAt,
+        status,
+      },
+    });
+    const after = trialExtensionSnapshot(saved);
+    await recordAdminAudit(
+      {
+        adminUserId: input.adminUserId,
+        action: "SHOP_TRIAL_EXTENDED",
+        targetType: "Shop",
+        targetId: shop.id,
+        before,
+        after,
+      },
+      tx,
+    );
+    return { before, after };
+  });
+
+  if (!updated) {
+    return {
+      ok: false,
+      error: "Trial extension applies only to a trial subscription. Paid subscription data was not changed.",
+      status: 400,
+    };
+  }
+
+  return { ok: true, days: parsed.days, before: updated.before, after: updated.after };
+}
+
 export function formatAdminCreatedDate(iso: string) {
   return formatDateIn(new Date(iso)) ?? iso;
 }

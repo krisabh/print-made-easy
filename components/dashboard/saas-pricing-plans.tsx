@@ -94,7 +94,7 @@ export function SaasPricingPlans({
   cashfreeJsMode,
   premiumPriceInr,
   trialEnabled = true,
-  trialDays = 7,
+  trialDays,
   billingMode,
 }: SaasPricingPlansProps) {
   const router = useRouter();
@@ -233,6 +233,14 @@ export function SaasPricingPlans({
     subscription?.status === "PAST_DUE" && subscription.hasAccess;
   const expired = Boolean(subscription && !subscription.hasAccess);
   const canCancel = Boolean(subscription?.canCancel);
+  const signupTrialDays =
+    !subscription &&
+    trialEnabled &&
+    typeof trialDays === "number" &&
+    Number.isInteger(trialDays) &&
+    trialDays > 0
+      ? trialDays
+      : null;
   const planCta = resolveBillingPlanCta(subscription, {
     billingMode,
     premiumPriceInr,
@@ -373,9 +381,11 @@ export function SaasPricingPlans({
           Simple, transparent pricing
         </h2>
         <p className="mt-3 text-base text-slate-500 sm:text-lg">
-          {trialEnabled
-            ? `New shops get a ${trialDays}-day Premium trial with signup. Continue with Premium for ₹${premiumPriceInr}/month when the trial ends.`
-            : `Premium is ₹${premiumPriceInr}/month. New shops subscribe to start printing.`}
+          {subscription
+            ? `Premium is ₹${premiumPriceInr}/month.`
+            : signupTrialDays
+              ? `New shops get a ${signupTrialDays}-day Premium trial with signup. Continue with Premium for ₹${premiumPriceInr}/month when the trial ends.`
+              : `Premium is ₹${premiumPriceInr}/month. New shops subscribe to start printing.`}
         </p>
       </header>
 
@@ -468,14 +478,9 @@ export function SaasPricingPlans({
             </>
           )}
           {trialActive ? (
-            <div className="mt-2 space-y-1">
-              <p className="text-sm font-medium text-emerald-700">
-                Trial is active
-              </p>
-              <p className="text-sm text-emerald-800/90">
-                Your free trial is included with signup.
-              </p>
-            </div>
+            <p className="mt-2 text-sm font-medium text-emerald-700">
+              Your trial is already active
+            </p>
           ) : null}
           {confirming ? (
             <p className="mt-2 text-sm text-slate-500">
@@ -507,6 +512,7 @@ export function SaasPricingPlans({
       ) : null}
 
       <div className="mt-8 space-y-5">
+        {subscription ? null : (
         <article className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
@@ -514,7 +520,7 @@ export function SaasPricingPlans({
                 Included with signup
               </p>
               <h3 className="mt-1 text-lg font-semibold text-slate-900">
-                {trialEnabled ? `${trialDays}-Day Free Trial` : "No free trial"}
+                {signupTrialDays ? `${signupTrialDays}-Day Free Trial` : "No free trial"}
               </h3>
             </div>
             <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
@@ -522,8 +528,8 @@ export function SaasPricingPlans({
             </span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            {trialEnabled
-              ? `Try all Premium features for ${trialDays} days with no payment required.`
+            {signupTrialDays
+              ? `Try all Premium features for ${signupTrialDays} days with no payment required.`
               : "Subscribe to Premium to start printing."}
           </p>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -551,6 +557,7 @@ export function SaasPricingPlans({
                   : "Your trial starts automatically when you sign up"}
           </p>
         </article>
+        )}
 
         <article className="relative rounded-3xl border-2 border-blue-600 bg-white p-6 shadow-md sm:p-8">
           <p className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold tracking-wide text-white uppercase">
@@ -773,13 +780,17 @@ export function SaasPricingPlans({
       </section>
 
       <p className="mt-8 text-center text-sm text-slate-500">
-        {billingMode === "ONE_TIME"
-          ? trialEnabled
-            ? `${trialDays}-day free trial included with signup · Renew manually each month`
-            : "Renew manually each month"
-          : trialEnabled
-            ? `${trialDays}-day free trial included with signup · Cancel anytime`
-            : "Cancel anytime"}
+        {subscription
+          ? billingMode === "ONE_TIME"
+            ? "Renew manually each month"
+            : "Cancel anytime"
+          : billingMode === "ONE_TIME"
+            ? signupTrialDays
+              ? `${signupTrialDays}-day free trial included with signup · Renew manually each month`
+              : "Renew manually each month"
+            : signupTrialDays
+              ? `${signupTrialDays}-day free trial included with signup · Cancel anytime`
+              : "Cancel anytime"}
       </p>
     </div>
   );

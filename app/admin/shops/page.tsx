@@ -39,7 +39,9 @@ export default async function AdminShopsPage({ searchParams }: PageProps) {
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Shop Management</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Read-only directory of all PrintYantra shops.
+          Directory of all PrintYantra shops. Use Deactivate Shop or Reactivate
+          Shop in the list, or open a shop for the same action. Shops are not
+          deleted.
         </p>
       </div>
 

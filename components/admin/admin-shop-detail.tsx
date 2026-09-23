@@ -1,4 +1,5 @@
 import { AdminShopStatusControl } from "@/components/admin/admin-shop-status-control";
+import { AdminShopTrialControl } from "@/components/admin/admin-shop-trial-control";
 import {
   formatAdminCreatedDate,
   formatAdminLastSeen,
@@ -82,6 +83,14 @@ export function AdminShopDetailView({ shop }: AdminShopDetailViewProps) {
         {shop.subscription?.detail ? (
           <p className="mt-4 text-sm text-slate-600">{shop.subscription.detail}</p>
         ) : null}
+        <AdminShopTrialControl
+          shopId={shop.id}
+          plan={sub.plan}
+          status={sub.status}
+          trialEndAt={sub.trialEndAt}
+          hasAccess={sub.hasAccess}
+          label={sub.label}
+        />
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
