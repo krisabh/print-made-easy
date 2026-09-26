@@ -9,6 +9,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Sun,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -101,13 +102,14 @@ type PrintPreviewDialogProps = {
   onApply?: () => void;
   applyLabel?: string;
   /**
-   * When true, brightness/scale changes re-fetch server PDF (ID card / normal bake).
+   * When true, shows a lightweight “updating” hint (must NOT replace the document).
+   * Live brightness/scale must remain instant CSS — never gate the preview behind a re-bake.
    */
   adjustmentsPending?: boolean;
   /**
-   * When true, the PDF already has brightness/scale baked in via the same
-   * server path as submit (sharp.linear / transformPdfWithAdjustments).
-   * Do not also apply CSS brightness/scale transforms.
+   * When true, server already baked brightness/scale into the PDF (rare).
+   * Prefer false so CSS provides an instant visual approximation of the
+   * authoritative server-side transform applied on Submit.
    */
   adjustmentsBaked?: boolean;
 };
@@ -365,14 +367,17 @@ function PdfPreviewSurface({
   );
 }
 
-function AdjustmentControls({
+/**
+ * Minimal vertical overlay: brightness (left) + scale (right).
+ * Icons / thin bars / +/- only — document stays dominant.
+ */
+function VerticalAdjustmentOverlay({
   brightness,
   contentScale,
   onBrightnessChange,
   onContentScaleChange,
   onReset,
   disabled,
-  compact = false,
 }: {
   brightness: number;
   contentScale: number;
@@ -380,25 +385,17 @@ function AdjustmentControls({
   onContentScaleChange: (v: number) => void;
   onReset: () => void;
   disabled?: boolean;
-  compact?: boolean;
 }) {
+  const atDefault = brightness === 100 && contentScale === 100;
+
   return (
-    <div
-      className={
-        compact
-          ? "space-y-3 rounded-xl border border-slate-200/90 bg-white/95 p-3 shadow-lg backdrop-blur-sm"
-          : "space-y-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
-      }
-    >
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <label htmlFor="preview-brightness" className="text-sm font-medium text-slate-800">
-            Brightness
-          </label>
-          <span className="tabular-nums text-sm font-semibold text-slate-900">
-            {brightness}%
-          </span>
-        </div>
+    <>
+      {/* Brightness — left vertical */}
+      <div
+        className="pointer-events-auto absolute left-1 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-slate-200/80 bg-white/85 px-1 py-1.5 shadow-sm backdrop-blur-[2px] sm:left-1.5"
+        title={`Brightness ${brightness}%`}
+      >
+        <Sun className="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
         <input
           id="preview-brightness"
           type="range"
@@ -417,85 +414,102 @@ function AdjustmentControls({
               ),
             )
           }
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-600 disabled:opacity-50"
+          className="h-28 w-4 cursor-pointer appearance-none bg-transparent accent-blue-600 disabled:opacity-40 sm:h-32"
+          style={{ writingMode: "vertical-lr", direction: "rtl" }}
           aria-valuemin={BRIGHTNESS_MIN}
           aria-valuemax={BRIGHTNESS_MAX}
           aria-valuenow={brightness}
-          aria-label="Brightness"
+          aria-label={`Brightness ${brightness}%`}
         />
-        <div className="flex justify-between text-[11px] text-slate-400">
-          <span>{BRIGHTNESS_MIN}%</span>
-          <span>100%</span>
-          <span>{BRIGHTNESS_MAX}%</span>
-        </div>
+        <Sun
+          className="size-3 shrink-0 text-slate-400 opacity-70"
+          aria-hidden="true"
+        />
+        <span className="sr-only">{brightness}%</span>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-800">Scale</p>
-        <div className="flex items-center justify-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-11 shrink-0"
-            disabled={disabled || contentScale <= CONTENT_SCALE_MIN}
-            aria-label="Decrease scale"
-            onClick={() =>
-              onContentScaleChange(
-                snapPercent(
-                  contentScale - CONTENT_SCALE_STEP,
-                  CONTENT_SCALE_MIN,
-                  CONTENT_SCALE_MAX,
-                  CONTENT_SCALE_STEP,
-                ),
-              )
-            }
-          >
-            <Minus className="size-4" />
-          </Button>
-          <span className="min-w-16 text-center text-base font-semibold tabular-nums text-slate-900">
-            {contentScale}%
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-11 shrink-0"
-            disabled={disabled || contentScale >= CONTENT_SCALE_MAX}
-            aria-label="Increase scale"
-            onClick={() =>
-              onContentScaleChange(
-                snapPercent(
-                  contentScale + CONTENT_SCALE_STEP,
-                  CONTENT_SCALE_MIN,
-                  CONTENT_SCALE_MAX,
-                  CONTENT_SCALE_STEP,
-                ),
-              )
-            }
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
-        <p className="text-center text-[11px] text-slate-500">
-          Print size on the page · {CONTENT_SCALE_MIN}%–{CONTENT_SCALE_MAX}%
-        </p>
-      </div>
-
-      <div className="flex justify-center">
-        <Button
+      {/* Scale — right vertical */}
+      <div
+        className="pointer-events-auto absolute right-1 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-slate-200/80 bg-white/85 px-0.5 py-1 shadow-sm backdrop-blur-[2px] sm:right-1.5"
+        title={`Scale ${contentScale}%`}
+      >
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled || (brightness === 100 && contentScale === 100)}
-          onClick={onReset}
-          className="text-slate-600"
+          disabled={disabled || contentScale >= CONTENT_SCALE_MAX}
+          aria-label="Increase scale"
+          className="flex size-7 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+          onClick={() =>
+            onContentScaleChange(
+              snapPercent(
+                contentScale + CONTENT_SCALE_STEP,
+                CONTENT_SCALE_MIN,
+                CONTENT_SCALE_MAX,
+                CONTENT_SCALE_STEP,
+              ),
+            )
+          }
         >
-          <RotateCcw className="size-3.5" aria-hidden="true" />
-          Reset
-        </Button>
+          <Plus className="size-3.5" />
+        </button>
+        <input
+          id="preview-content-scale"
+          type="range"
+          min={CONTENT_SCALE_MIN}
+          max={CONTENT_SCALE_MAX}
+          step={CONTENT_SCALE_STEP}
+          value={contentScale}
+          disabled={disabled}
+          onChange={(e) =>
+            onContentScaleChange(
+              snapPercent(
+                Number(e.target.value),
+                CONTENT_SCALE_MIN,
+                CONTENT_SCALE_MAX,
+                CONTENT_SCALE_STEP,
+              ),
+            )
+          }
+          className="h-20 w-4 cursor-pointer appearance-none bg-transparent accent-blue-600 disabled:opacity-40 sm:h-24"
+          style={{ writingMode: "vertical-lr", direction: "rtl" }}
+          aria-valuemin={CONTENT_SCALE_MIN}
+          aria-valuemax={CONTENT_SCALE_MAX}
+          aria-valuenow={contentScale}
+          aria-label={`Scale ${contentScale}%`}
+        />
+        <button
+          type="button"
+          disabled={disabled || contentScale <= CONTENT_SCALE_MIN}
+          aria-label="Decrease scale"
+          className="flex size-7 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+          onClick={() =>
+            onContentScaleChange(
+              snapPercent(
+                contentScale - CONTENT_SCALE_STEP,
+                CONTENT_SCALE_MIN,
+                CONTENT_SCALE_MAX,
+                CONTENT_SCALE_STEP,
+              ),
+            )
+          }
+        >
+          <Minus className="size-3.5" />
+        </button>
+        <span className="sr-only">{contentScale}%</span>
       </div>
-    </div>
+
+      {!atDefault ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onReset}
+          aria-label="Reset brightness and scale"
+          title="Reset"
+          className="pointer-events-auto absolute bottom-2 left-1/2 z-10 flex size-7 -translate-x-1/2 items-center justify-center rounded-full border border-slate-200/80 bg-white/85 text-slate-600 shadow-sm backdrop-blur-[2px] hover:bg-white disabled:opacity-40"
+        >
+          <RotateCcw className="size-3" aria-hidden="true" />
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -524,7 +538,7 @@ export function PrintPreviewDialog({
   onResetAdjustments,
   onApply,
   applyLabel = "Save & Continue",
-  adjustmentsPending = false,
+  adjustmentsPending: _adjustmentsPending = false,
   adjustmentsBaked = false,
 }: PrintPreviewDialogProps) {
   const safeIndex =
@@ -608,14 +622,10 @@ export function PrintPreviewDialog({
               Print preview
             </p>
             <div className="relative min-h-[220px]">
-              {loading || adjustmentsPending ? (
+              {loading ? (
                 <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-slate-600">
                   <Loader2 className="size-8 animate-spin text-blue-600" />
-                  <p className="text-sm">
-                    {adjustmentsPending
-                      ? "Updating preview…"
-                      : "Generating preview…"}
-                  </p>
+                  <p className="text-sm">Generating preview…</p>
                 </div>
               ) : error ? (
                 <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl bg-amber-50 px-4 text-center">
@@ -627,7 +637,7 @@ export function PrintPreviewDialog({
               ) : pdfUrl ? (
                 <PdfPreviewSurface
                   url={pdfUrl}
-                  title="ID card A4 preview"
+                  title="Document preview"
                   grayscale={grayscale}
                   brightness={previewBrightness}
                   contentScale={previewContentScale}
@@ -683,18 +693,15 @@ export function PrintPreviewDialog({
               )}
 
               {!loading && !error && (pdfUrl || pages.length > 0) ? (
-                <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center px-2 sm:bottom-3">
-                  <div className="pointer-events-auto w-full max-w-sm">
-                    <AdjustmentControls
-                      brightness={brightness}
-                      contentScale={contentScale}
-                      onBrightnessChange={onBrightnessChange}
-                      onContentScaleChange={onContentScaleChange}
-                      onReset={onResetAdjustments}
-                      disabled={loading || adjustmentsPending}
-                      compact
-                    />
-                  </div>
+                <div className="pointer-events-none absolute inset-0 z-10">
+                  <VerticalAdjustmentOverlay
+                    brightness={brightness}
+                    contentScale={contentScale}
+                    onBrightnessChange={onBrightnessChange}
+                    onContentScaleChange={onContentScaleChange}
+                    onReset={onResetAdjustments}
+                    disabled={false}
+                  />
                 </div>
               ) : null}
             </div>
@@ -707,7 +714,7 @@ export function PrintPreviewDialog({
                 variant="outline"
                 size="sm"
                 className="min-h-10"
-                disabled={safeIndex <= 0 || adjustmentsPending}
+                disabled={safeIndex <= 0}
                 onClick={() => onPageIndexChange?.(safeIndex - 1)}
               >
                 <ChevronLeft className="size-4" aria-hidden="true" />
@@ -721,9 +728,7 @@ export function PrintPreviewDialog({
                 variant="outline"
                 size="sm"
                 className="min-h-10"
-                disabled={
-                  safeIndex >= pages.length - 1 || adjustmentsPending
-                }
+                disabled={safeIndex >= pages.length - 1}
                 onClick={() => onPageIndexChange?.(safeIndex + 1)}
               >
                 Next

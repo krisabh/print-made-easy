@@ -105,33 +105,59 @@ async function main() {
   );
   console.log("PASS image brightness (100 neutral, 80 darker, 150 brighter)");
 
-  // Preview dialog: overlay controls + baked-adjustment flag
+  // Preview: compact vertical overlay + instant CSS (no per-slider re-bake)
   const previewSrc = fs.readFileSync(
     path.join(process.cwd(), "components/print-preview-dialog.tsx"),
     "utf8",
   );
-  assert.match(previewSrc, /adjustmentsBaked/);
-  assert.match(previewSrc, /pointer-events-auto/);
+  assert.match(previewSrc, /VerticalAdjustmentOverlay/);
+  assert.match(previewSrc, /writingMode:\s*"vertical-lr"/);
+  assert.match(previewSrc, /left-1/);
+  assert.match(previewSrc, /right-1/);
+  assert.match(previewSrc, /aria-label=\{`Brightness/);
+  assert.match(previewSrc, /aria-label="Increase scale"/);
+  assert.match(previewSrc, /aria-label="Decrease scale"/);
+  // No large labeled Brightness/Scale panels
+  assert.equal(/Brightness\s*<\/label>/.test(previewSrc), false);
+  assert.equal(/text-sm font-medium[^>]*>\s*Scale\s*</.test(previewSrc), false);
+  // Instant CSS filter/transform on preview content
+  assert.match(previewSrc, /brightness\(\$\{previewBrightness \/ 100\}\)/);
+  assert.match(previewSrc, /scale\(\$\{previewContentScale \/ 100\}\)/);
+  // Slider changes must NOT swap the document for a loading state
+  assert.equal(
+    /loading \|\| adjustmentsPending/.test(previewSrc),
+    false,
+  );
+
   const uploadSrc = fs.readFileSync(
     path.join(process.cwd(), "components/upload-form.tsx"),
     "utf8",
   );
-  assert.match(uploadSrc, /previewNormalAdjustmentsAction/);
-  assert.match(uploadSrc, /fetchNormalAdjustedPreview/);
+  // Normal preview must NOT call server re-bake on slider movement
+  assert.equal(uploadSrc.includes("previewNormalAdjustmentsAction"), false);
+  assert.equal(uploadSrc.includes("fetchNormalAdjustedPreview"), false);
   assert.match(uploadSrc, /fetchIdCardPreviewPdf/);
-  assert.match(uploadSrc, /adjustmentsBaked=\{Boolean\(previewPdfUrl\)\}/);
-  assert.equal(uploadSrc.includes("brightness: 100,\n      contentScale: 100"), false);
+  assert.match(uploadSrc, /adjustmentsBaked=\{false\}/);
+  // ID-card preview bakes once at neutral 100/100; live adjust is CSS
+  assert.match(uploadSrc, /brightness: 100/);
+  assert.match(uploadSrc, /contentScale: 100/);
+  // Submit must not require preview generation
+  assert.match(
+    uploadSrc,
+    /Preview is optional — never block Submit on preview loading/,
+  );
 
   const actionsSrc = fs.readFileSync(
     path.join(process.cwd(), "app/upload/[shopCode]/actions.ts"),
     "utf8",
   );
-  assert.match(actionsSrc, /export async function previewNormalAdjustmentsAction/);
+  // Final print still uses authoritative server bake on submit
+  assert.match(actionsSrc, /saveUploadFilesWithPrintAdjustments/);
+  assert.match(actionsSrc, /needsArtifactAdjustment/);
   assert.match(actionsSrc, /createAdjustedImagePrintablePdf/);
   assert.match(actionsSrc, /transformPdfWithAdjustments/);
-  // Preview + submit share the same bake helpers.
-  assert.match(actionsSrc, /saveUploadFilesWithPrintAdjustments/);
-  console.log("PASS preview uses same bake path as submit (normal + ID-card)");
+  console.log("PASS compact vertical overlay + instant CSS preview (server bake on submit only)");
+
 
   // Scale clamp in box
   const scaled = scaleDrawInBox(
@@ -194,6 +220,56 @@ async function main() {
   );
   assert.ok(id.backDraw.x + id.backDraw.width <= ID_CARD_A4_PORTRAIT_PT.width);
   console.log("PASS ID-card side-by-side with adjustments");
+
+  // Multi-page PDF preview is client blob (no server bake) — 1 / 16 pages
+  const { buildNormalPreviewPages } = await import(
+    "../components/print-preview-dialog"
+  );
+  async function makePdfFile(pages: number, name: string) {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < pages; i++) {
+      const page = doc.addPage([595, 842]);
+      page.drawRectangle({
+        x: 40,
+        y: 40,
+        width: 100,
+        height: 100,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+    }
+    const bytes = await doc.save();
+    return new File([Buffer.from(bytes)], name, { type: "application/pdf" });
+  }
+
+  const onePage = await makePdfFile(1, "one.pdf");
+  const sixteen = await makePdfFile(16, "sixteen.pdf");
+  const pages1 = buildNormalPreviewPages(
+    [{ id: "f1", file: onePage }],
+    { f1: 1 },
+  );
+  const pages16 = buildNormalPreviewPages(
+    [{ id: "f16", file: sixteen }],
+    { f16: 16 },
+  );
+  assert.equal(pages1.length, 1);
+  assert.equal(pages1[0]?.kind, "pdf");
+  assert.equal(pages16.length, 1);
+  assert.equal(pages16[0]?.kind, "pdf");
+  if (pages16[0]?.kind === "pdf") {
+    assert.equal(pages16[0].estimatedPages, 16);
+    assert.ok(pages16[0].url.startsWith("blob:") || pages16[0].url.length > 0);
+  }
+  // Authoritative submit bake still works for adjusted multi-page PDFs
+  const sixteenBytes = Buffer.from(await sixteen.arrayBuffer());
+  const srcDoc = await PDFDocument.load(sixteenBytes);
+  assert.equal(srcDoc.getPageCount(), 16, "test PDF must have 16 pages");
+  const adjusted16 = await transformPdfWithAdjustments(sixteenBytes, {
+    brightness: 100,
+    contentScale: 90,
+  });
+  const adjustedDoc = await PDFDocument.load(adjusted16);
+  assert.equal(adjustedDoc.getPageCount(), 16);
+  console.log("PASS 1-page + 16-page client preview pages; submit bake keeps 16 pages");
 
   console.log("\nbrightness-scale-smoke: ALL PASS");
 }

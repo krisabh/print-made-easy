@@ -16,7 +16,6 @@ import {
 
 import {
   previewIdCardPdfAction,
-  previewNormalAdjustmentsAction,
   submitPrintJobAction,
 } from "@/app/upload/[shopCode]/actions";
 import { CustomerDocumentPrivacyNotice } from "@/components/customer-document-privacy-notice";
@@ -430,10 +429,7 @@ export function UploadForm({ shop }: UploadFormProps) {
   );
   const [isPreviewPending, startPreviewTransition] = useTransition();
   const idCardPreviewRequestRef = useRef(0);
-  const normalAdjustRequestRef = useRef(0);
   const submitLockRef = useRef(false);
-  const [previewAdjustmentsPending, setPreviewAdjustmentsPending] =
-    useState(false);
 
   const isIdCardMode = jobMode === JOB_MODE_ID_CARD_FRONT_BACK;
   const idCardReady = Boolean(idCardFront && idCardBack);
@@ -752,7 +748,6 @@ export function UploadForm({ shop }: UploadFormProps) {
     setPreviewError(null);
     setPreviewLoading(false);
     setPreviewSettingsNote(null);
-    setPreviewAdjustmentsPending(false);
   }
 
   function closePreview() {
@@ -798,15 +793,11 @@ export function UploadForm({ shop }: UploadFormProps) {
     setPreviewPages(pages);
     setPreviewPageIndex(0);
     setPreviewSettingsNote(notes.length ? notes.join(" ") : null);
+    setPreviewLoading(false);
     setPreviewOpen(true);
 
     if (onlyUnsupported) {
       setPreviewError("Preview isn't available for this file type.");
-      setPreviewLoading(false);
-    } else if (previewable.length > 0) {
-      // First bake runs via the normal-adjust effect (same path as submit).
-      setPreviewLoading(true);
-      setPreviewPdfUrl(null);
     }
   }
 
@@ -821,7 +812,7 @@ export function UploadForm({ shop }: UploadFormProps) {
     }
     if (!idCardFront || !idCardBack) return;
 
-    // Bake brightness + contentScale on the server so preview matches final print.
+    // One-time layout bake at neutral 100/100. Live brightness/scale use CSS.
     const requestId = ++idCardPreviewRequestRef.current;
 
     if (previewPdfUrl) {
@@ -834,33 +825,24 @@ export function UploadForm({ shop }: UploadFormProps) {
     setPreviewError(null);
     setPreviewOpen(true);
     setPreviewLoading(true);
-    setPreviewAdjustmentsPending(false);
     setPreviewSettingsNote(
       copies > 1 ? "Copies do not duplicate the preview sheet." : null,
     );
 
-    void fetchIdCardPreviewPdf(requestId, brightness, contentScale, true);
+    void fetchIdCardPreviewPdf(requestId);
   }
 
-  function fetchIdCardPreviewPdf(
-    requestId: number,
-    nextBrightness: number,
-    nextContentScale: number,
-    initial: boolean,
-  ) {
+  function fetchIdCardPreviewPdf(requestId: number) {
     if (!idCardFront || !idCardBack) return;
 
+    // Neutral bake only — slider changes are CSS approximations until Submit.
     const formData = buildIdCardPreviewFormData({
       shopCode: shop.shopCode,
       front: idCardFront.file,
       back: idCardBack.file,
-      brightness: nextBrightness,
-      contentScale: nextContentScale,
+      brightness: 100,
+      contentScale: 100,
     });
-
-    if (!initial) {
-      setPreviewAdjustmentsPending(true);
-    }
 
     startPreviewTransition(async () => {
       try {
@@ -872,7 +854,6 @@ export function UploadForm({ shop }: UploadFormProps) {
               "Preview couldn't be generated. You can still submit the print job.",
           );
           setPreviewLoading(false);
-          setPreviewAdjustmentsPending(false);
           return;
         }
         const binary = atob(result.data.pdfBase64);
@@ -888,144 +869,15 @@ export function UploadForm({ shop }: UploadFormProps) {
         });
         setPreviewError(null);
         setPreviewLoading(false);
-        setPreviewAdjustmentsPending(false);
       } catch {
         if (requestId !== idCardPreviewRequestRef.current) return;
         setPreviewError(
           "Preview couldn't be generated. You can still submit the print job.",
         );
         setPreviewLoading(false);
-        setPreviewAdjustmentsPending(false);
       }
     });
   }
-
-  function fetchNormalAdjustedPreview(
-    requestId: number,
-    sourceFile: File,
-    nextBrightness: number,
-    nextContentScale: number,
-    initial: boolean,
-  ) {
-    const formData = new FormData();
-    formData.set("shopCode", shop.shopCode);
-    formData.set("file", sourceFile);
-    formData.set("brightness", String(nextBrightness));
-    formData.set("contentScale", String(nextContentScale));
-    formData.set("orientation", orientation);
-    formData.set(
-      "margins",
-      aggregateFileCategory === "IMAGE" ? margins : "normal",
-    );
-
-    if (!initial) {
-      setPreviewAdjustmentsPending(true);
-    } else {
-      setPreviewLoading(true);
-    }
-
-    startPreviewTransition(async () => {
-      try {
-        const result = await previewNormalAdjustmentsAction(formData);
-        if (requestId !== normalAdjustRequestRef.current) return;
-        if (!result.success || !result.data) {
-          setPreviewError(
-            result.error ??
-              "Preview couldn't be generated. You can still submit the print job.",
-          );
-          setPreviewLoading(false);
-          setPreviewAdjustmentsPending(false);
-          return;
-        }
-        const binary = atob(result.data.pdfBase64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        setPreviewPdfUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return url;
-        });
-        setPreviewError(null);
-        setPreviewLoading(false);
-        setPreviewAdjustmentsPending(false);
-      } catch {
-        if (requestId !== normalAdjustRequestRef.current) return;
-        setPreviewError(
-          "Preview couldn't be generated. You can still submit the print job.",
-        );
-        setPreviewLoading(false);
-        setPreviewAdjustmentsPending(false);
-      }
-    });
-  }
-
-  // Re-bake ID-card preview when brightness/scale change (debounced).
-  useEffect(() => {
-    if (!previewOpen || !isIdCardMode || !idCardFront || !idCardBack) return;
-    // Initial open owns the first fetch while loading with no PDF yet.
-    if (previewLoading && !previewPdfUrl) return;
-
-    const timer = window.setTimeout(() => {
-      const requestId = ++idCardPreviewRequestRef.current;
-      fetchIdCardPreviewPdf(requestId, brightness, contentScale, false);
-    }, 350);
-
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional slider debounce
-  }, [brightness, contentScale, previewOpen, isIdCardMode]);
-
-  // Normal preview: same sharp/PDF bake as submit (debounced + stale-guarded).
-  useEffect(() => {
-    if (!previewOpen || isIdCardMode) return;
-    const current = previewPages[previewPageIndex];
-    if (!current || current.kind === "unavailable") {
-      setPreviewPdfUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-      setPreviewLoading(false);
-      setPreviewAdjustmentsPending(false);
-      return;
-    }
-
-    const selected = files.find((f) => f.id === current.key);
-    if (!selected) return;
-
-    const requestId = ++normalAdjustRequestRef.current;
-    // Always show loading for the bake that matches this request; CSS must not
-    // approximate brightness while a server bake is pending.
-    setPreviewAdjustmentsPending(true);
-
-    const timer = window.setTimeout(() => {
-      fetchNormalAdjustedPreview(
-        requestId,
-        selected.file,
-        brightness,
-        contentScale,
-        true,
-      );
-    }, 350);
-
-    return () => {
-      window.clearTimeout(timer);
-      normalAdjustRequestRef.current += 1;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional debounce
-  }, [
-    previewOpen,
-    isIdCardMode,
-    brightness,
-    contentScale,
-    previewPageIndex,
-    orientation,
-    margins,
-    aggregateFileCategory,
-    previewPages,
-    files,
-  ]);
 
   function handleBrightnessChange(value: number) {
     setBrightness(
@@ -1062,12 +914,8 @@ export function UploadForm({ shop }: UploadFormProps) {
     event.preventDefault();
     setFormError(null);
 
-    if (isPending || submitLockRef.current || isPreviewPending || previewAdjustmentsPending) {
-      if (isPreviewPending || previewAdjustmentsPending) {
-        setFormError(
-          "Preview is still updating. Please wait a moment, then submit again.",
-        );
-      }
+    // Preview is optional — never block Submit on preview loading/transitions.
+    if (isPending || submitLockRef.current) {
       return;
     }
 
@@ -1861,8 +1709,7 @@ export function UploadForm({ shop }: UploadFormProps) {
         onContentScaleChange={handleContentScaleChange}
         onResetAdjustments={handleResetAdjustments}
         applyLabel="Save & Continue"
-        adjustmentsPending={previewAdjustmentsPending}
-        adjustmentsBaked={Boolean(previewPdfUrl)}
+        adjustmentsBaked={false}
       />
     </form>
   );

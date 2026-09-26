@@ -122,7 +122,10 @@ async function scalePdfVector(
   const scaleFactor = contentScalePercent / 100;
   const src = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
   const out = await PDFDocument.create();
-  const embeddedPages = await out.embedPdf(src);
+  const pageCount = src.getPageCount();
+  const pageIndices = Array.from({ length: pageCount }, (_, i) => i);
+  // Explicit indices — some pdf-lib builds only embed page 0 when omitted.
+  const embeddedPages = await out.embedPdf(src, pageIndices);
 
   for (let i = 0; i < embeddedPages.length; i++) {
     const { width, height } = src.getPage(i).getSize();

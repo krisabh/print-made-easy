@@ -125,7 +125,10 @@ function toFriendlyError(message: string) {
   ) {
     return "We couldn't finish print adjustments for this file. Try again or reset brightness to 100%.";
   }
-  if (lower.includes("page") && !lower.includes("homepage")) {
+  if (
+    lower.includes("page range") ||
+    (lower.includes("valid page") && lower.includes("range"))
+  ) {
     return "Please enter a valid page range (e.g. 1-5 or 1,3,7).";
   }
 

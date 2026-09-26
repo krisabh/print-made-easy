@@ -366,6 +366,76 @@ async function main() {
     console.log("N PASS preview returns PDF bytes suitable for object URL");
   }
 
+  // O — skip preview: 16-page PDF submits successfully (no preview prerequisite)
+  {
+    const pdf = await PDFDocument.create();
+    for (let i = 0; i < 16; i++) {
+      pdf.addPage([595, 842]);
+    }
+    const pdfBytes = await pdf.save();
+    const pdfFile = new File([Buffer.from(pdfBytes)], "sixteen.pdf", {
+      type: "application/pdf",
+    });
+    const formData = new FormData();
+    formData.set("shopCode", shop.shopCode);
+    formData.set("copies", "1");
+    formData.set("printMode", "BW");
+    formData.set("orientation", "portrait");
+    formData.set("scale", "fit");
+    formData.set("margins", "normal");
+    formData.set("pagesMode", "all");
+    formData.set("pageRange", "");
+    formData.set("brightness", "100");
+    formData.set("contentScale", "100");
+    formData.append("files", pdfFile);
+    const result = await submitPrintJobAction(formData);
+    assert.equal(result.success, true, result.error ?? "16-page skip-preview submit failed");
+    assert.equal(result.data?.totalPages, 16);
+    const job = await prisma.printJob.findUnique({
+      where: { id: result.data!.jobId },
+      include: { files: true },
+    });
+    assert.ok(job);
+    assert.equal(job!.files.length, 1);
+    console.log("O PASS skip-preview 16-page PDF submit creates PrintJob");
+  }
+
+  // P — adjusted submit: brightness/scale bake on server during submit
+  {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([595, 842]);
+    const pdfBytes = await pdf.save();
+    const pdfFile = new File([Buffer.from(pdfBytes)], "adj.pdf", {
+      type: "application/pdf",
+    });
+    const formData = new FormData();
+    formData.set("shopCode", shop.shopCode);
+    formData.set("copies", "1");
+    formData.set("printMode", "BW");
+    formData.set("orientation", "portrait");
+    formData.set("scale", "fit");
+    formData.set("margins", "normal");
+    formData.set("pagesMode", "all");
+    formData.set("pageRange", "");
+    formData.set("brightness", "120");
+    formData.set("contentScale", "90");
+    formData.append("files", pdfFile);
+    const result = await submitPrintJobAction(formData);
+    assert.equal(result.success, true, result.error ?? "adjusted submit failed");
+    assert.ok((result.data?.totalPages ?? 0) >= 1);
+    const job = await prisma.printJob.findUnique({
+      where: { id: result.data!.jobId },
+    });
+    assert.ok(job?.printSettings);
+    const settings = job!.printSettings as {
+      brightness?: number;
+      contentScale?: number;
+    };
+    assert.equal(settings.brightness, 120);
+    assert.equal(settings.contentScale, 90);
+    console.log("P PASS adjusted submit stores brightness/scale in printSettings");
+  }
+
   // cleanup
   const jobs = await prisma.printJob.findMany({
     where: { shopId: shop.id },
