@@ -3,6 +3,8 @@
  * Run: npx tsx scripts/brightness-scale-smoke.ts
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { PDFDocument, rgb } from "pdf-lib";
 import sharp from "sharp";
 
@@ -94,7 +96,42 @@ async function main() {
   const darkMean = await meanLuma(dark);
   const brightMean = await meanLuma(bright);
   assert.ok(brightMean > darkMean + 5, "150% should brighten");
-  console.log("PASS image brightness");
+  const at100 = await applyBrightnessToImageBytes(dark, 100);
+  assert.equal(await meanLuma(at100), darkMean, "100% is neutral/original");
+  const at80 = await applyBrightnessToImageBytes(dark, 80);
+  assert.ok(
+    (await meanLuma(at80)) < darkMean - 2,
+    "80% should darken vs 100%",
+  );
+  console.log("PASS image brightness (100 neutral, 80 darker, 150 brighter)");
+
+  // Preview dialog: overlay controls + baked-adjustment flag
+  const previewSrc = fs.readFileSync(
+    path.join(process.cwd(), "components/print-preview-dialog.tsx"),
+    "utf8",
+  );
+  assert.match(previewSrc, /adjustmentsBaked/);
+  assert.match(previewSrc, /pointer-events-auto/);
+  const uploadSrc = fs.readFileSync(
+    path.join(process.cwd(), "components/upload-form.tsx"),
+    "utf8",
+  );
+  assert.match(uploadSrc, /previewNormalAdjustmentsAction/);
+  assert.match(uploadSrc, /fetchNormalAdjustedPreview/);
+  assert.match(uploadSrc, /fetchIdCardPreviewPdf/);
+  assert.match(uploadSrc, /adjustmentsBaked=\{Boolean\(previewPdfUrl\)\}/);
+  assert.equal(uploadSrc.includes("brightness: 100,\n      contentScale: 100"), false);
+
+  const actionsSrc = fs.readFileSync(
+    path.join(process.cwd(), "app/upload/[shopCode]/actions.ts"),
+    "utf8",
+  );
+  assert.match(actionsSrc, /export async function previewNormalAdjustmentsAction/);
+  assert.match(actionsSrc, /createAdjustedImagePrintablePdf/);
+  assert.match(actionsSrc, /transformPdfWithAdjustments/);
+  // Preview + submit share the same bake helpers.
+  assert.match(actionsSrc, /saveUploadFilesWithPrintAdjustments/);
+  console.log("PASS preview uses same bake path as submit (normal + ID-card)");
 
   // Scale clamp in box
   const scaled = scaleDrawInBox(

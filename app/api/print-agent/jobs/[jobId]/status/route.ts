@@ -7,7 +7,9 @@ import {
   MAX_PRINT_ATTEMPTS,
 } from "@/lib/print-agent-auth";
 import {
+  cancelJobFromAgent,
   claimJob,
+  getJobPrintControl,
   markFilePrinted,
   markJobReady,
   releaseJobToPending,
@@ -20,10 +22,43 @@ type RouteContext = {
 };
 
 const statusSchema = z.object({
-  status: z.enum(["PRINTING", "READY_FOR_PICKUP", "PENDING", "FILE_PRINTED"]),
+  status: z.enum([
+    "PRINTING",
+    "READY_FOR_PICKUP",
+    "PENDING",
+    "FILE_PRINTED",
+    "CANCELLED",
+  ]),
   error: z.string().trim().max(500).optional(),
   fileId: z.string().trim().min(1).optional(),
 });
+
+/** Agent poll: is this job still allowed to print? */
+export async function GET(request: NextRequest, context: RouteContext) {
+  try {
+    const auth = await authenticateAgentContext(request);
+    if (!auth) {
+      return Response.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    const { jobId } = await context.params;
+    const control = await getJobPrintControl(auth.shop.id, jobId, {
+      agentDeviceId: auth.agentDeviceId,
+    });
+
+    if (!control.ok && control.reason === "missing") {
+      return Response.json({ error: "Job not found." }, { status: 404 });
+    }
+
+    return Response.json({ ok: true, control });
+  } catch (error) {
+    logError("agent_job_status_get_failed", error);
+    return Response.json(
+      { error: "Unable to read job status." },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -55,6 +90,31 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!job) {
       return Response.json({ error: "Job not found." }, { status: 404 });
+    }
+
+    if (job.status === PrintStatus.CANCELLED) {
+      return Response.json(
+        { error: "Job was cancelled.", cancelled: true },
+        { status: 409 },
+      );
+    }
+
+    if (parsed.data.status === "CANCELLED") {
+      const cancelled = await cancelJobFromAgent(shop.id, jobId, {
+        ...deviceScope,
+        reason: parsed.data.error || "Cancelled from Print Agent.",
+      });
+      if (!cancelled) {
+        return Response.json(
+          { error: "Unable to cancel job." },
+          { status: 409 },
+        );
+      }
+      logInfo("job_cancelled_by_agent", `${job.jobNumber} shop=${shop.shopCode}`);
+      return Response.json({
+        ok: true,
+        job: { id: jobId, status: PrintStatus.CANCELLED },
+      });
     }
 
     if (parsed.data.status === "PRINTING") {

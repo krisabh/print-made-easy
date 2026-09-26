@@ -1,6 +1,15 @@
 /**
  * Brightness + content-scale helpers for printable artifacts.
- * Server-safe (sharp). Preview may mirror via CSS using the same percents.
+ *
+ * Semantics (preview and final print must share these):
+ * - brightness 100% = neutral / original (no pixel change)
+ * - brightness <100% = darker (linear gain)
+ * - brightness >100% = brighter (linear gain)
+ * - contentScale 100% = neutral fit size; lower shrinks, higher enlarges (clamped to box)
+ *
+ * Server applies sharp.linear(factor, 0). Preview should use the same baked
+ * artifact when possible; CSS filter is only a live fallback and must not
+ * double-apply when the PDF/image is already baked.
  */
 
 import sharp from "sharp";
@@ -34,6 +43,7 @@ export function resolvePrintAdjustments(input?: PrintAdjustmentOptions): {
 /**
  * Apply brightness to image bytes. 100% returns original buffer (copy).
  * Uses linear gain so 50% darkens and 150% brightens predictably.
+ * Matches the intended preview semantics (factor = percent / 100).
  */
 export async function applyBrightnessToImageBytes(
   bytes: Uint8Array | Buffer,

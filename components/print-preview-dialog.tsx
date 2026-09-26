@@ -100,8 +100,16 @@ type PrintPreviewDialogProps = {
   /** Called when customer confirms adjustments (keeps dialog values). */
   onApply?: () => void;
   applyLabel?: string;
-  /** When true, brightness/scale changes re-fetch server PDF (ID card). */
+  /**
+   * When true, brightness/scale changes re-fetch server PDF (ID card / normal bake).
+   */
   adjustmentsPending?: boolean;
+  /**
+   * When true, the PDF already has brightness/scale baked in via the same
+   * server path as submit (sharp.linear / transformPdfWithAdjustments).
+   * Do not also apply CSS brightness/scale transforms.
+   */
+  adjustmentsBaked?: boolean;
 };
 
 export type { PdfOpenFallbackEnv, PdfPreviewEnv } from "@/lib/pdf-preview-env";
@@ -364,6 +372,7 @@ function AdjustmentControls({
   onContentScaleChange,
   onReset,
   disabled,
+  compact = false,
 }: {
   brightness: number;
   contentScale: number;
@@ -371,9 +380,16 @@ function AdjustmentControls({
   onContentScaleChange: (v: number) => void;
   onReset: () => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+    <div
+      className={
+        compact
+          ? "space-y-3 rounded-xl border border-slate-200/90 bg-white/95 p-3 shadow-lg backdrop-blur-sm"
+          : "space-y-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
+      }
+    >
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <label htmlFor="preview-brightness" className="text-sm font-medium text-slate-800">
@@ -509,13 +525,18 @@ export function PrintPreviewDialog({
   onApply,
   applyLabel = "Save & Continue",
   adjustmentsPending = false,
+  adjustmentsBaked = false,
 }: PrintPreviewDialogProps) {
   const safeIndex =
     pages.length === 0 ? 0 : Math.min(Math.max(0, pageIndex), pages.length - 1);
   const current = pages[safeIndex];
-  const totalPages = pdfUrl ? 1 : pages.length;
+  // Server-baked pdfUrl can overlay the current file while multi-file page nav stays on pages[].
+  const totalPages = pages.length > 0 ? pages.length : pdfUrl ? 1 : 0;
   const grayscale = printMode === "BW";
   const [preferCanvas, setPreferCanvas] = useState(false);
+  // When the server already baked adjustments into the PDF, CSS must stay neutral.
+  const previewBrightness = adjustmentsBaked ? 100 : brightness;
+  const previewContentScale = adjustmentsBaked ? 100 : contentScale;
 
   const frameClass = useMemo(() => {
     const pad = margins === "none" ? "p-1" : "p-4 sm:p-5";
@@ -530,13 +551,13 @@ export function PrintPreviewDialog({
 
   const infoLine = useMemo(() => {
     if (fileInfoLabel) return fileInfoLabel;
-    if (pdfUrl) return printTypeLabel;
     if (current?.kind === "pdf") {
       return `${current.fileName} · ${current.estimatedPages} page${current.estimatedPages === 1 ? "" : "s"} · ${printTypeLabel}`;
     }
     if (current?.fileName) {
       return `${current.fileName} · ${printTypeLabel}`;
     }
+    if (pdfUrl) return printTypeLabel;
     return printTypeLabel;
   }, [current, fileInfoLabel, pdfUrl, printTypeLabel]);
 
@@ -582,11 +603,11 @@ export function PrintPreviewDialog({
             </p>
           ) : null}
 
-          <div className="rounded-xl bg-slate-100/90 px-3 py-4 sm:px-4">
+          <div className="relative rounded-xl bg-slate-100/90 px-3 py-4 sm:px-4">
             <p className="mb-2 text-center text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
               Print preview
             </p>
-            <div className="min-h-[220px]">
+            <div className="relative min-h-[220px]">
               {loading || adjustmentsPending ? (
                 <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-slate-600">
                   <Loader2 className="size-8 animate-spin text-blue-600" />
@@ -608,8 +629,8 @@ export function PrintPreviewDialog({
                   url={pdfUrl}
                   title="ID card A4 preview"
                   grayscale={grayscale}
-                  brightness={brightness}
-                  contentScale={contentScale}
+                  brightness={previewBrightness}
+                  contentScale={previewContentScale}
                   frameClass={frameClass}
                   preferCanvas={preferCanvas}
                 />
@@ -632,11 +653,11 @@ export function PrintPreviewDialog({
                     style={{
                       filter: [
                         grayscale ? "grayscale(1)" : null,
-                        `brightness(${brightness / 100})`,
+                        `brightness(${previewBrightness / 100})`,
                       ]
                         .filter(Boolean)
                         .join(" "),
-                      transform: `scale(${contentScale / 100})`,
+                      transform: `scale(${previewContentScale / 100})`,
                       transformOrigin: "center center",
                     }}
                     className={[
@@ -650,8 +671,8 @@ export function PrintPreviewDialog({
                   url={current.url}
                   title="Document preview"
                   grayscale={grayscale}
-                  brightness={brightness}
-                  contentScale={contentScale}
+                  brightness={previewBrightness}
+                  contentScale={previewContentScale}
                   frameClass={frameClass}
                   preferCanvas={preferCanvas}
                 />
@@ -660,17 +681,33 @@ export function PrintPreviewDialog({
                   Nothing to preview.
                 </div>
               )}
+
+              {!loading && !error && (pdfUrl || pages.length > 0) ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center px-2 sm:bottom-3">
+                  <div className="pointer-events-auto w-full max-w-sm">
+                    <AdjustmentControls
+                      brightness={brightness}
+                      contentScale={contentScale}
+                      onBrightnessChange={onBrightnessChange}
+                      onContentScaleChange={onContentScaleChange}
+                      onReset={onResetAdjustments}
+                      disabled={loading || adjustmentsPending}
+                      compact
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
-          {!loading && !error && !pdfUrl && pages.length > 1 ? (
+          {!loading && !error && pages.length > 1 ? (
             <div className="flex items-center justify-between gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="min-h-10"
-                disabled={safeIndex <= 0}
+                disabled={safeIndex <= 0 || adjustmentsPending}
                 onClick={() => onPageIndexChange?.(safeIndex - 1)}
               >
                 <ChevronLeft className="size-4" aria-hidden="true" />
@@ -684,7 +721,9 @@ export function PrintPreviewDialog({
                 variant="outline"
                 size="sm"
                 className="min-h-10"
-                disabled={safeIndex >= pages.length - 1}
+                disabled={
+                  safeIndex >= pages.length - 1 || adjustmentsPending
+                }
                 onClick={() => onPageIndexChange?.(safeIndex + 1)}
               >
                 Next
@@ -692,15 +731,6 @@ export function PrintPreviewDialog({
               </Button>
             </div>
           ) : null}
-
-          <AdjustmentControls
-            brightness={brightness}
-            contentScale={contentScale}
-            onBrightnessChange={onBrightnessChange}
-            onContentScaleChange={onContentScaleChange}
-            onReset={onResetAdjustments}
-            disabled={loading}
-          />
         </div>
 
         <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">

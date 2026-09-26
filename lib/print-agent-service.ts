@@ -482,8 +482,142 @@ export async function listPendingJobsForShop(
           fileExtension: true,
           fileSize: true,
           totalPages: true,
+          printedAt: true,
         },
       },
+    },
+  });
+}
+
+/** Lightweight Agent poll: is this job still printable? */
+export async function getJobPrintControl(
+  shopId: string,
+  jobId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const job = await prisma.printJob.findFirst({
+    where: { id: jobId, shopId },
+    select: {
+      id: true,
+      jobNumber: true,
+      status: true,
+      claimedByAgentDeviceId: true,
+      files: {
+        where: { fileDeletedAt: null },
+        select: {
+          id: true,
+          printedAt: true,
+          totalPages: true,
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!job) {
+    return { ok: false as const, reason: "missing" as const };
+  }
+
+  if (job.status === PrintStatus.CANCELLED) {
+    return {
+      ok: false as const,
+      reason: "cancelled" as const,
+      jobNumber: job.jobNumber,
+    };
+  }
+
+  if (
+    job.status !== PrintStatus.PRINTING &&
+    job.status !== PrintStatus.PENDING
+  ) {
+    return {
+      ok: false as const,
+      reason: "not_printable" as const,
+      status: job.status,
+      jobNumber: job.jobNumber,
+    };
+  }
+
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
+  if (
+    job.status === PrintStatus.PRINTING &&
+    agentDeviceId &&
+    job.claimedByAgentDeviceId &&
+    job.claimedByAgentDeviceId !== agentDeviceId
+  ) {
+    return {
+      ok: false as const,
+      reason: "owned_elsewhere" as const,
+      jobNumber: job.jobNumber,
+    };
+  }
+
+  const printed = job.files.filter((f) => f.printedAt).length;
+  const remaining = job.files.filter((f) => !f.printedAt).length;
+
+  return {
+    ok: true as const,
+    jobNumber: job.jobNumber,
+    status: job.status,
+    printedFiles: printed,
+    remainingFiles: remaining,
+    totalFiles: job.files.length,
+  };
+}
+
+/** Agent-initiated cancel (interrupted-job dialog Cancel). */
+export async function cancelJobFromAgent(
+  shopId: string,
+  jobId: string,
+  options?: { agentDeviceId?: string | null; reason?: string },
+) {
+  const owned = await assertPrintJobActor(shopId, jobId, options);
+  if (!owned && options?.agentDeviceId) {
+    // Allow cancel of PENDING jobs this device is about to resume.
+    const pending = await prisma.printJob.findFirst({
+      where: {
+        id: jobId,
+        shopId,
+        status: { in: [PrintStatus.PENDING, PrintStatus.PRINTING] },
+      },
+      select: { id: true },
+    });
+    if (!pending) return null;
+  } else if (!owned) {
+    const any = await prisma.printJob.findFirst({
+      where: {
+        id: jobId,
+        shopId,
+        status: { in: [PrintStatus.PENDING, PrintStatus.PRINTING] },
+      },
+      select: { id: true },
+    });
+    if (!any) return null;
+  }
+
+  for (const file of await prisma.printJobFile.findMany({
+    where: { printJobId: jobId, fileDeletedAt: null },
+    select: { storedFileName: true },
+  })) {
+    try {
+      await unlink(getStoredFilePath(file.storedFileName));
+    } catch {
+      // already gone
+    }
+  }
+
+  await prisma.printJobFile.updateMany({
+    where: { printJobId: jobId, fileDeletedAt: null },
+    data: { fileDeletedAt: new Date() },
+  });
+
+  return prisma.printJob.update({
+    where: { id: jobId },
+    data: {
+      status: PrintStatus.CANCELLED,
+      claimedByAgentDeviceId: null,
+      claimedAt: null,
+      lastError: options?.reason?.slice(0, 500) || "Cancelled from Print Agent.",
     },
   });
 }

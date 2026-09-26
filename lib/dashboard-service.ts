@@ -261,7 +261,11 @@ export function serializeShopForDashboard(shop: AuthShop) {
   };
 }
 
-/** Delete a job for the shop: removes DB row and any remaining server files. */
+/**
+ * Delete a job for the shop.
+ * PENDING/PRINTING → soft-cancel (CANCELLED) so the Agent can stop and cancel
+ * related Windows spool work. Finished jobs are hard-deleted as before.
+ */
 export async function deleteShopJob(shopId: string, jobId: string) {
   const job = await prisma.printJob.findFirst({
     where: { id: jobId, shopId },
@@ -287,6 +291,30 @@ export async function deleteShopJob(shopId: string, jobId: string) {
     } catch {
       // File may already be gone
     }
+  }
+
+  await prisma.printJobFile.updateMany({
+    where: {
+      printJobId: job.id,
+      fileDeletedAt: null,
+    },
+    data: { fileDeletedAt: new Date() },
+  });
+
+  const isActive =
+    job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
+
+  if (isActive) {
+    await prisma.printJob.update({
+      where: { id: job.id },
+      data: {
+        status: PrintStatus.CANCELLED,
+        claimedByAgentDeviceId: null,
+        claimedAt: null,
+        lastError: "Cancelled by shopkeeper.",
+      },
+    });
+    return { ...job, status: PrintStatus.CANCELLED };
   }
 
   await prisma.printJob.delete({

@@ -25,13 +25,15 @@ export const NORMAL_A4_MARGIN_PT = 48;
 
 /**
  * Customer print brightness (%). Applied to the printable artifact.
- * 100 = unchanged. Independent of Sumatra fit/noscale (`scale`).
+ * 100 = neutral/original (unchanged). Below 100 darkens; above 100 brightens.
+ * Independent of Sumatra fit/noscale (`scale`).
  */
 export type PrintBrightnessPercent = number;
 /**
  * Customer content scale (%). Scales print content inside the page.
- * 100 = unchanged. Independent of Sumatra fit/noscale (`scale`) and
- * independent of on-screen preview viewport zoom.
+ * 100 = neutral/original fit size. Lower shrinks; higher enlarges (clamped).
+ * Independent of Sumatra fit/noscale (`scale`) and independent of on-screen
+ * preview viewport zoom.
  */
 export type PrintContentScalePercent = number;
 

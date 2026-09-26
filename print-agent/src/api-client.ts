@@ -411,6 +411,84 @@ export async function fetchPendingJobs(): Promise<PendingJob[]> {
   return (data.jobs || []) as PendingJob[];
 }
 
+export async function fetchJobPrintControl(jobId: string): Promise<
+  | {
+      ok: true;
+      jobNumber: string;
+      status: string;
+      printedFiles: number;
+      remainingFiles: number;
+      totalFiles: number;
+    }
+  | {
+      ok: false;
+      reason: "missing" | "cancelled" | "not_printable" | "owned_elsewhere";
+      jobNumber?: string;
+      status?: string;
+    }
+> {
+  const response = await fetch(
+    `${baseUrl()}/api/print-agent/jobs/${jobId}/status`,
+    {
+      method: "GET",
+      headers: authHeaders(),
+    },
+  );
+  if (response.status === 404) {
+    return { ok: false, reason: "missing" };
+  }
+  const data = await parseJson(response);
+  const control = data.control as
+    | {
+        ok: boolean;
+        reason?: string;
+        jobNumber?: string;
+        status?: string;
+        printedFiles?: number;
+        remainingFiles?: number;
+        totalFiles?: number;
+      }
+    | undefined;
+  if (!control) {
+    return { ok: false, reason: "missing" };
+  }
+  if (!control.ok) {
+    return {
+      ok: false,
+      reason: (control.reason as
+        | "missing"
+        | "cancelled"
+        | "not_printable"
+        | "owned_elsewhere") || "missing",
+      jobNumber: control.jobNumber,
+      status: control.status,
+    };
+  }
+  return {
+    ok: true,
+    jobNumber: String(control.jobNumber || ""),
+    status: String(control.status || ""),
+    printedFiles: Number(control.printedFiles || 0),
+    remainingFiles: Number(control.remainingFiles || 0),
+    totalFiles: Number(control.totalFiles || 0),
+  };
+}
+
+export async function cancelJobOnServer(jobId: string, reason?: string) {
+  const response = await fetch(
+    `${baseUrl()}/api/print-agent/jobs/${jobId}/status`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        status: "CANCELLED",
+        error: reason || "Cancelled from Print Agent.",
+      }),
+    },
+  );
+  return parseJson(response);
+}
+
 export async function claimJob(jobId: string) {
   const response = await fetch(
     `${baseUrl()}/api/print-agent/jobs/${jobId}/status`,

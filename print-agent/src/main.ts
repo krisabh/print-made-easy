@@ -25,7 +25,8 @@ import {
   isAgentPaired,
 } from "./config";
 import { connectWithPairingUrl, PairingError } from "./pairing";
-import { processPendingJobs, runTestPrint, isPrintOperationBusy } from "./job-service";
+import { processPendingJobs, runTestPrint, isPrintOperationBusy, setInterruptConfirmHandler } from "./job-service";
+import { describeInterruptedProgress } from "./interrupted-job-store";
 import { detectPrinters } from "./printer-service";
 import {
   applyFirstRunPrinterIfNeeded,
@@ -444,6 +445,30 @@ async function syncWithCloud() {
 function startBackgroundLoops() {
   if (backgroundLoopsStarted) return;
   backgroundLoopsStarted = true;
+
+  setInterruptConfirmHandler(async (info) => {
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const described = describeInterruptedProgress(info);
+    const options: Electron.MessageBoxOptions = {
+      type: "warning",
+      title: described.title,
+      message: described.title,
+      detail: described.detail,
+      buttons: described.allowContinue
+        ? ["Continue Printing", "Cancel Job"]
+        : ["Cancel Job"],
+      defaultId: 0,
+      cancelId: described.allowContinue ? 1 : 0,
+      noLink: true,
+    };
+    const result = parent
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options);
+    if (!described.allowContinue) {
+      return "cancel";
+    }
+    return result.response === 0 ? "continue" : "cancel";
+  });
 
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (pollTimer) clearInterval(pollTimer);

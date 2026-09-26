@@ -121,7 +121,7 @@ async function main() {
   assert.match(ui, /Page range/);
   // Mixed branch only shows Paper size A4 (no pagesMode/scale/margins selectors in that arm)
   assert.match(ui, /MIXED/);
-  assert.equal(/Print type/i.test(ui), false);
+  // Duplex printType was removed; "Print type" label is Normal vs ID Card job mode.
   assert.equal(/Single Side/i.test(ui), false);
   assert.equal(/Double Side/i.test(ui), false);
   assert.equal(/\bprintType\b/.test(ui), false);

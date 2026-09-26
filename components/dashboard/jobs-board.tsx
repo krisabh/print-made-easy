@@ -209,7 +209,7 @@ export function JobsBoard({
       job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
     const confirmed = window.confirm(
       isActive
-        ? `Delete job ${job.jobNumber}?\n\nThis removes the job from the dashboard and stops Agent processing. If the printer already started, that page may still finish.`
+        ? `Delete job ${job.jobNumber}?\n\nThis cancels the job and tells the Agent to stop. Queued Windows print work for this job is cancelled when possible. A page already leaving the printer may still finish.`
         : `Delete job ${job.jobNumber}?\n\nThis permanently removes the job from the dashboard.`,
     );
     if (!confirmed) return;

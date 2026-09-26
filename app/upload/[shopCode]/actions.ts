@@ -96,7 +96,36 @@ function toFriendlyError(message: string) {
   if (lower.includes("invalid shop")) {
     return "Sorry, this print shop link is no longer available.";
   }
-  if (lower.includes("page")) {
+  if (
+    lower.includes("body") &&
+    (lower.includes("limit") || lower.includes("exceed") || lower.includes("large"))
+  ) {
+    return "These files together are too large to upload at once. Remove a file or use a smaller PDF.";
+  }
+  if (
+    lower.includes("timeout") ||
+    lower.includes("timed out") ||
+    lower.includes("aborted")
+  ) {
+    return "Processing took too long. Try fewer pages or submit without changing brightness first.";
+  }
+  if (
+    lower.includes("pdf") &&
+    (lower.includes("invalid") ||
+      lower.includes("corrupt") ||
+      lower.includes("failed") ||
+      lower.includes("load"))
+  ) {
+    return "We couldn't process this PDF. Try exporting it again or use a different file.";
+  }
+  if (
+    lower.includes("sharp") ||
+    (lower.includes("image") && lower.includes("process")) ||
+    lower.includes("raster")
+  ) {
+    return "We couldn't finish print adjustments for this file. Try again or reset brightness to 100%.";
+  }
+  if (lower.includes("page") && !lower.includes("homepage")) {
     return "Please enter a valid page range (e.g. 1-5 or 1,3,7).";
   }
 
@@ -351,9 +380,10 @@ export async function submitPrintJobAction(
   } catch (error) {
     await cleanupIdCardArtifact(idCardArtifact);
     logError("job_create_failed", error);
+    const message = error instanceof Error ? error.message : "";
     return {
       success: false,
-      error: "Something went wrong while uploading. Please try again.",
+      error: toFriendlyError(message || "upload failed"),
     };
   }
 }
@@ -425,6 +455,109 @@ export async function previewIdCardPdfAction(
     };
   } catch (error) {
     logError("id_card_preview_failed", error);
+    return {
+      success: false,
+      error:
+        "Preview couldn't be generated. You can still submit the print job.",
+    };
+  }
+}
+
+export type NormalAdjustPreviewData = {
+  pdfBase64: string;
+  pageCount: number;
+};
+
+/**
+ * Live Normal Print preview using the SAME bake path as submit
+ * (createAdjustedImagePrintablePdf / transformPdfWithAdjustments).
+ * No PrintJob or permanent storage.
+ */
+export async function previewNormalAdjustmentsAction(
+  formData: FormData,
+): Promise<ApiResponse<NormalAdjustPreviewData>> {
+  try {
+    const shopCodeRaw = formData.get("shopCode");
+    const shopCode =
+      typeof shopCodeRaw === "string" ? shopCodeRaw.trim() : "";
+    if (!shopCode || shopCode.length > 64 || !/^[A-Za-z0-9_-]+$/.test(shopCode)) {
+      return { success: false, error: "Invalid shop code." };
+    }
+
+    const shop = await getShopWithPricing(shopCode);
+    if (!shop) {
+      return {
+        success: false,
+        error: "Sorry, this print shop link is no longer available.",
+      };
+    }
+
+    const shopHasAccess = await hasSubscriptionAccess(shop.id);
+    if (!shopHasAccess) {
+      return {
+        success: false,
+        error:
+          "This print shop is temporarily unavailable. Please try again later.",
+      };
+    }
+
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size <= 0) {
+      return { success: false, error: "Please upload at least one document." };
+    }
+
+    const brightness = normalizeBrightnessPercent(formData.get("brightness"));
+    const contentScale = normalizeContentScalePercent(
+      formData.get("contentScale"),
+    );
+    const orientationRaw = formData.get("orientation");
+    const orientation =
+      orientationRaw === "landscape" ? "landscape" : "portrait";
+    const marginsRaw = formData.get("margins");
+    const margins = marginsRaw === "none" ? "none" : "normal";
+    const marginPt = margins === "none" ? 0 : undefined;
+
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (ext === "png" || ext === "jpg" || ext === "jpeg") {
+      const pdfBytes = await createAdjustedImagePrintablePdf(buffer, ext, {
+        orientation,
+        marginPt,
+        brightness,
+        contentScale,
+      });
+      return {
+        success: true,
+        data: {
+          pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+          pageCount: 1,
+        },
+      };
+    }
+
+    if (ext === "pdf") {
+      const pdfBytes = await transformPdfWithAdjustments(buffer, {
+        brightness,
+        contentScale,
+      });
+      const { PDFDocument } = await import("pdf-lib");
+      const loaded = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      return {
+        success: true,
+        data: {
+          pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+          pageCount: loaded.getPageCount(),
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: "Preview isn't available for this file type.",
+    };
+  } catch (error) {
+    logError("normal_adjust_preview_failed", error);
     return {
       success: false,
       error:
