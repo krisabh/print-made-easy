@@ -402,13 +402,33 @@ export async function ensureAgentAuthenticated(input: {
   });
 }
 
-export async function fetchPendingJobs(): Promise<PendingJob[]> {
+export async function fetchAgentJobQueue(): Promise<{
+  jobs: PendingJob[];
+  ownedPrinting: Array<{ id: string; jobNumber: string }>;
+}> {
   const response = await fetch(`${baseUrl()}/api/print-agent/jobs`, {
     method: "GET",
     headers: authHeaders(),
   });
   const data = await parseJson(response);
-  return (data.jobs || []) as PendingJob[];
+  const owned = Array.isArray(data.ownedPrinting) ? data.ownedPrinting : [];
+  return {
+    jobs: (data.jobs || []) as PendingJob[],
+    ownedPrinting: owned
+      .filter(
+        (row: { id?: unknown; jobNumber?: unknown }) =>
+          typeof row?.id === "string" && typeof row?.jobNumber === "string",
+      )
+      .map((row: { id: string; jobNumber: string }) => ({
+        id: row.id,
+        jobNumber: row.jobNumber,
+      })),
+  };
+}
+
+export async function fetchPendingJobs(): Promise<PendingJob[]> {
+  const queue = await fetchAgentJobQueue();
+  return queue.jobs;
 }
 
 export async function fetchJobPrintControl(jobId: string): Promise<

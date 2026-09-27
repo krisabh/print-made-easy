@@ -1,25 +1,17 @@
-import fs from "fs/promises";
+﻿import fs from "fs/promises";
 
 import {
   cancelJobOnServer,
   claimJob,
   downloadJobFile,
+  fetchAgentJobQueue,
   fetchJobPrintControl,
-  fetchPendingJobs,
   reportFilePrinted,
-  reportJobFailed,
   reportJobReady,
   type PendingJob,
 } from "./api-client";
 import { loadConfig } from "./config";
-import {
-  clearInterruptedPrintJob,
-  describeInterruptedProgress,
-  loadInterruptedPrintJob,
-  saveInterruptedPrintJob,
-  type InterruptedPrintJob,
-  type PageResumeState,
-} from "./interrupted-job-store";
+import { clearInterruptedPrintJob, loadInterruptedPrintJob } from "./interrupted-job-store";
 import {
   createImagePrintablePdf,
   type PrintableOrientation,
@@ -34,25 +26,21 @@ import {
   unmarkLocalFileActive,
 } from "./storage-service";
 import { runTestPrint as runInternalTestPrint } from "./test-print";
-import { cancelWindowsPrintJobsForYantraJob } from "./windows-print-jobs";
+import {
+  cancelWindowsPrintJobsForYantraJob,
+  listWindowsPrintJobs,
+} from "./windows-print-jobs";
+
+const INTERRUPT_STOP_MESSAGE =
+  "Printing stopped because the printer or Agent was interrupted. Remaining pages were not printed. Submit the pages you still need with a custom page range.";
+
+/** Windows spool JobIds submitted for the active PrintYantra job. */
+const spoolIdsByJobNumber = new Map<string, number[]>();
 
 let processing = false;
 let testPrintBusy = false;
 
-export type InterruptDecision = "continue" | "cancel";
-
-type InterruptConfirmFn = (
-  info: InterruptedPrintJob,
-) => Promise<InterruptDecision>;
-
-let interruptConfirmFn: InterruptConfirmFn | null = null;
-
-/** Wire Electron dialog from main.ts (keeps this module testable without Electron). */
-export function setInterruptConfirmHandler(fn: InterruptConfirmFn | null) {
-  interruptConfirmFn = fn;
-}
-
-export { describeInterruptedProgress, resolvePrintPageList };
+export { resolvePrintPageList };
 
 /** True while a cloud print job or test print is in progress. */
 export function isPrintOperationBusy(): boolean {
@@ -111,18 +99,50 @@ class JobCancelledError extends Error {
   }
 }
 
-async function assertJobStillPrintable(jobId: string, jobNumber: string) {
-  const control = await fetchJobPrintControl(jobId);
-  if (!control.ok) {
-    if (control.reason === "cancelled" || control.reason === "missing") {
-      throw new JobCancelledError(
-        control.reason === "cancelled"
-          ? `Job ${jobNumber} was cancelled.`
-          : `Job ${jobNumber} was deleted.`,
-      );
-    }
-    throw new JobCancelledError(`Job ${jobNumber} is no longer printable.`);
+class JobUnconfirmedError extends Error {
+  constructor(message = "Job print status could not be confirmed.") {
+    super(message);
+    this.name = "JobUnconfirmedError";
   }
+}
+
+async function assertJobStillPrintable(jobId: string, jobNumber: string) {
+  let control: Awaited<ReturnType<typeof fetchJobPrintControl>>;
+  try {
+    control = await fetchJobPrintControl(jobId);
+  } catch (error) {
+    console.warn(
+      `Could not confirm job ${jobNumber} is still printable:`,
+      error,
+    );
+    throw new JobUnconfirmedError(
+      `Job ${jobNumber} could not be confirmed as printable.`,
+    );
+  }
+  if (!control.ok) {
+    throw new JobCancelledError(
+      control.reason === "cancelled"
+        ? `Job ${jobNumber} was cancelled.`
+        : control.reason === "missing"
+          ? `Job ${jobNumber} was deleted.`
+          : `Job ${jobNumber} is no longer printable.`,
+    );
+  }
+}
+
+function rememberSpoolIds(jobNumber: string, jobIds: number[]) {
+  if (jobIds.length === 0) return;
+  const current = spoolIdsByJobNumber.get(jobNumber) || [];
+  spoolIdsByJobNumber.set(jobNumber, [...new Set([...current, ...jobIds])]);
+}
+
+function spoolIdsFor(jobNumber: string) {
+  return spoolIdsByJobNumber.get(jobNumber) || [];
+}
+
+async function snapshotSpoolJobIds(): Promise<Set<number>> {
+  const jobs = await listWindowsPrintJobs();
+  return new Set(jobs.map((job) => job.jobId));
 }
 
 async function cancelSpoolForJob(jobNumber: string, printerName: string) {
@@ -130,76 +150,67 @@ async function cancelSpoolForJob(jobNumber: string, printerName: string) {
     const result = await cancelWindowsPrintJobsForYantraJob({
       jobNumber,
       printerName,
+      extraJobIds: spoolIdsFor(jobNumber),
     });
-    if (result.cancelled > 0) {
-      console.log(
-        `Cancelled ${result.cancelled} Windows spool job(s) for ${jobNumber}`,
-      );
-    }
+    console.log(
+      `Spool cancel for ${jobNumber}: matched=${result.matched} removed=${result.cancelled}${result.error ? ` error=${result.error}` : ""}`,
+    );
   } catch (error) {
     console.warn("Spool cancel failed:", error);
+  } finally {
+    spoolIdsByJobNumber.delete(jobNumber);
   }
 }
 
-async function confirmInterruptedJob(
-  info: InterruptedPrintJob,
-): Promise<InterruptDecision> {
-  if (!interruptConfirmFn) {
-    return "cancel";
-  }
-  return interruptConfirmFn(info);
-}
-
-async function handleInterruptedDecision(
-  info: InterruptedPrintJob,
-): Promise<"continue" | "stop"> {
-  if (info.userConfirmedContinue && info.canSafelyContinue) {
-    return "continue";
-  }
-
-  const decision = await confirmInterruptedJob(info);
-  if (decision === "continue" && info.canSafelyContinue) {
-    saveInterruptedPrintJob({
-      ...info,
-      userConfirmedContinue: true,
-      savedAt: new Date().toISOString(),
-    });
-    return "continue";
-  }
-
-  await cancelSpoolForJob(info.jobNumber, info.printerName);
+async function stopInterruptedJobOnServer(jobId: string) {
   try {
-    await cancelJobOnServer(info.jobId, "Cancelled after print interruption.");
+    await cancelJobOnServer(jobId, INTERRUPT_STOP_MESSAGE);
   } catch (error) {
-    console.warn("Failed to cancel interrupted job on server:", error);
+    console.warn("Failed to stop interrupted job on server:", error);
   }
-  clearInterruptedPrintJob(info.jobId);
-  return "stop";
-}
-
-function persistPageProgress(input: {
-  jobId: string;
-  jobNumber: string;
-  printerName: string;
-  printedFiles: number;
-  remainingFiles: number;
-  pageResume: PageResumeState;
-}) {
-  saveInterruptedPrintJob({
-    jobId: input.jobId,
-    jobNumber: input.jobNumber,
-    printerName: input.printerName,
-    printedFiles: input.printedFiles,
-    remainingFiles: input.remainingFiles,
-    savedAt: new Date().toISOString(),
-    canSafelyContinue: true,
-    pageResume: input.pageResume,
-  });
 }
 
 /**
- * Print one PDF file page-by-page so interruption can resume without duplicates.
- * Progress is persisted after each successful printPdfFile return (spooler accept).
+ * Submit one PDF page and remember any new Windows spool JobIds.
+ * Caller must already have confirmed the server job is still printable.
+ */
+async function submitPdfPage(input: {
+  jobNumber: string;
+  printablePath: string;
+  printerName: string;
+  copies: number;
+  printMode: "BW" | "COLOR";
+  printType: "SINGLE" | "DOUBLE";
+  orientation: "portrait" | "landscape" | undefined;
+  scale: "fit" | "noscale";
+  pages: string;
+  paperSize: string | undefined;
+}) {
+  const before = await snapshotSpoolJobIds();
+  await printPdfFile(input.printablePath, input.printerName, {
+    copies: input.copies,
+    printMode: input.printMode,
+    printType: input.printType,
+    orientation: input.orientation,
+    scale: input.scale,
+    pages: input.pages,
+    paperSize: input.paperSize,
+  });
+  const after = await listWindowsPrintJobs();
+  const created = after
+    .filter((job) => !before.has(job.jobId))
+    .map((job) => job.jobId);
+  rememberSpoolIds(input.jobNumber, created);
+  if (created.length > 0) {
+    console.log(
+      `[spool] ${input.jobNumber} page ${input.pages} windowsJobIds=${created.join(",")}`,
+    );
+  }
+}
+
+/**
+ * Print one PDF file page-by-page so cancellation can stop before the next page.
+ * Does not persist a resume cursor. An interruption stops the job permanently.
  */
 async function printPdfFilePageByPage(input: {
   jobId: string;
@@ -214,9 +225,6 @@ async function printPdfFilePageByPage(input: {
   scale: "fit" | "noscale";
   paperSize: string | undefined;
   plannedPageRange: string | undefined;
-  startPageIndex: number;
-  printedFiles: number;
-  remainingFiles: number;
 }) {
   const totalPages = await countPdfPages(input.printablePath);
   const pageList = resolvePrintPageList(input.plannedPageRange, totalPages);
@@ -224,33 +232,14 @@ async function printPdfFilePageByPage(input: {
     throw new Error("No printable pages in this PDF.");
   }
 
-  let startIndex = Math.max(0, Math.min(input.startPageIndex, pageList.length));
-
-  // All pages already submitted (e.g. crash after last page, before file report).
-  if (startIndex >= pageList.length) {
-    return;
-  }
-
-  // Single-page PDF: one Sumatra call (same as before).
-  if (pageList.length === 1) {
-    await assertJobStillPrintable(input.jobId, input.jobNumber);
-    await printPdfFile(input.printablePath, input.printerName, {
-      copies: input.copies,
-      printMode: input.printMode,
-      printType: input.printType,
-      orientation: input.orientation,
-      scale: input.scale,
-      pages: String(pageList[0]),
-      paperSize: input.paperSize,
-    });
-    return;
-  }
-
-  for (let i = startIndex; i < pageList.length; i++) {
+  for (let i = 0; i < pageList.length; i++) {
     await assertJobStillPrintable(input.jobId, input.jobNumber);
 
     const pageNumber = pageList[i];
-    await printPdfFile(input.printablePath, input.printerName, {
+    await submitPdfPage({
+      jobNumber: input.jobNumber,
+      printablePath: input.printablePath,
+      printerName: input.printerName,
       copies: input.copies,
       printMode: input.printMode,
       printType: input.printType,
@@ -258,20 +247,6 @@ async function printPdfFilePageByPage(input: {
       scale: input.scale,
       pages: String(pageNumber),
       paperSize: input.paperSize,
-    });
-
-    // Persist AFTER spooler accept so Continue starts at the next page.
-    persistPageProgress({
-      jobId: input.jobId,
-      jobNumber: input.jobNumber,
-      printerName: input.printerName,
-      printedFiles: input.printedFiles,
-      remainingFiles: input.remainingFiles,
-      pageResume: {
-        fileId: input.fileId,
-        nextPageIndex: i + 1,
-        pageList,
-      },
     });
 
     console.log(
@@ -283,15 +258,10 @@ async function printPdfFilePageByPage(input: {
 async function printCloudJob(job: PendingJob, printerName: string) {
   let claimed = false;
   const localFiles: string[] = [];
-  let printedBeforeFail = 0;
-  let remainingAtFail = 0;
-  let activePageResume: PageResumeState | null = null;
-
-  const priorInterrupt = loadInterruptedPrintJob();
-  const resumeForThisJob =
-    priorInterrupt && priorInterrupt.jobId === job.id ? priorInterrupt : null;
 
   try {
+    await assertJobStillPrintable(job.id, job.jobNumber);
+
     const claim = await claimJob(job.id);
     const claimedJob = claim.job as
       | (PendingJob & {
@@ -305,9 +275,13 @@ async function printCloudJob(job: PendingJob, printerName: string) {
         })
       | null;
     if (!claimedJob) {
-      throw new Error("Job could not be claimed.");
+      await assertJobStillPrintable(job.id, job.jobNumber);
+      console.warn(`Job ${job.jobNumber} was not claimed; it stays pending.`);
+      return;
     }
     claimed = true;
+
+    await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
     const plan = planJobPrint(
       claimedJob.printSettings ?? job.printSettings,
@@ -328,41 +302,6 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       printedAt?: string | null;
     }>;
 
-    const alreadyPrinted = claimedFiles.filter((f) => f.printedAt).length;
-    const remaining = claimedFiles.filter((f) => !f.printedAt).length;
-    printedBeforeFail = alreadyPrinted;
-    remainingAtFail = remaining;
-
-    // Ask before resuming when we have saved interrupt state or partial files.
-    const alreadyConfirmed = Boolean(resumeForThisJob?.userConfirmedContinue);
-    const needsConfirm =
-      !alreadyConfirmed &&
-      ((resumeForThisJob &&
-        (resumeForThisJob.pageResume ||
-          !resumeForThisJob.canSafelyContinue ||
-          (alreadyPrinted > 0 && remaining > 0))) ||
-        (alreadyPrinted > 0 && remaining > 0));
-
-    if (needsConfirm) {
-      const info: InterruptedPrintJob = resumeForThisJob || {
-        jobId: claimedJob.id,
-        jobNumber: claimedJob.jobNumber,
-        printerName,
-        printedFiles: alreadyPrinted,
-        remainingFiles: remaining,
-        savedAt: new Date().toISOString(),
-        canSafelyContinue: true,
-      };
-      const decision = await handleInterruptedDecision(info);
-      if (decision === "stop") {
-        return;
-      }
-      activePageResume =
-        loadInterruptedPrintJob()?.pageResume || info.pageResume || null;
-    } else if (resumeForThisJob?.pageResume) {
-      activePageResume = resumeForThisJob.pageResume;
-    }
-
     for (const file of claimedFiles) {
       if (file.printedAt) {
         console.log(
@@ -373,7 +312,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
 
       await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
-      const localName = `job-${claimedJob.jobNumber}-${file.id}.${file.fileExtension}`;
+      const localName = `PrintYantra-${claimedJob.jobNumber}-${file.id}.${file.fileExtension}`;
       const localPath = getTempFilePath(localName);
       await downloadJobFile(job.id, file.id, localPath);
       trackLocalFile(localFiles, localPath);
@@ -399,15 +338,6 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
       if (isPdf) {
-        const startPageIndex =
-          activePageResume && activePageResume.fileId === file.id
-            ? activePageResume.nextPageIndex
-            : 0;
-        // Consume resume for this file only once.
-        if (activePageResume && activePageResume.fileId === file.id) {
-          activePageResume = null;
-        }
-
         await printPdfFilePageByPage({
           jobId: claimedJob.id,
           jobNumber: claimedJob.jobNumber,
@@ -421,17 +351,18 @@ async function printCloudJob(job: PendingJob, printerName: string) {
           scale: plan.scale,
           paperSize: plan.paperSize,
           plannedPageRange: plan.pages,
-          startPageIndex,
-          printedFiles: printedBeforeFail,
-          remainingFiles: remainingAtFail,
         });
       } else {
-        await printPdfFile(printablePath, printerName, {
+        await submitPdfPage({
+          jobNumber: claimedJob.jobNumber,
+          printablePath,
+          printerName,
           copies: claimedJob.copies,
           printMode: claimedJob.printMode,
           printType: claimedJob.printType,
           orientation: plan.sumatraOrientation,
           scale: plan.scale,
+          pages: "all",
           paperSize: plan.paperSize,
         });
       }
@@ -439,81 +370,29 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
       await reportFilePrinted(job.id, file.id);
-      printedBeforeFail += 1;
-      remainingAtFail = Math.max(0, remainingAtFail - 1);
       clearInterruptedPrintJob(claimedJob.id);
       console.log(`Printed file ${file.id} for job ${claimedJob.jobNumber}`);
     }
 
     await reportJobReady(job.id);
     clearInterruptedPrintJob(claimedJob.id);
+    spoolIdsByJobNumber.delete(job.jobNumber);
   } catch (error) {
-    const cancelled = error instanceof JobCancelledError;
     const message =
       error instanceof Error ? error.message : "Unknown print failure";
 
     await cancelSpoolForJob(job.jobNumber, printerName);
+    clearInterruptedPrintJob(job.id);
 
-    if (cancelled) {
-      clearInterruptedPrintJob(job.id);
-      console.warn(`Stopped cancelled job ${job.jobNumber}: ${message}`);
-      return;
+    // Once this Agent has claimed the job, any stop is permanent.
+    // A shopkeeper delete is already CANCELLED; this call is idempotent.
+    // A printer/Agent failure must not fall back to PENDING (that reprints).
+    if (claimed || error instanceof JobCancelledError) {
+      await stopInterruptedJobOnServer(job.id);
     }
 
-    if (claimed && remainingAtFail > 0) {
-      const existing = loadInterruptedPrintJob();
-      const pageResume =
-        existing && existing.jobId === job.id ? existing.pageResume : undefined;
-
-      if (pageResume) {
-        // Keep pageResume even when nextPageIndex === length (file pages done;
-        // Continue skips reprint and reports the file). Mid-file → remaining pages only.
-        saveInterruptedPrintJob({
-          jobId: job.id,
-          jobNumber: job.jobNumber,
-          printerName,
-          printedFiles: printedBeforeFail,
-          remainingFiles: remainingAtFail,
-          savedAt: new Date().toISOString(),
-          canSafelyContinue: true,
-          pageResume,
-        });
-      } else if (printedBeforeFail > 0) {
-        // Next whole files remain — safe file-level continue.
-        saveInterruptedPrintJob({
-          jobId: job.id,
-          jobNumber: job.jobNumber,
-          printerName,
-          printedFiles: printedBeforeFail,
-          remainingFiles: remainingAtFail,
-          savedAt: new Date().toISOString(),
-          canSafelyContinue: true,
-        });
-      } else {
-        // Interrupted before any page progress on the first remaining file —
-        // Continue would resubmit from page 1 (acceptable for never-started).
-        // If we cannot prove no pages left the spooler, Prefer cancel-only only
-        // for legacy records without pageResume that claim mid-file work.
-        saveInterruptedPrintJob({
-          jobId: job.id,
-          jobNumber: job.jobNumber,
-          printerName,
-          printedFiles: printedBeforeFail,
-          remainingFiles: remainingAtFail,
-          savedAt: new Date().toISOString(),
-          canSafelyContinue: true,
-        });
-      }
-    }
-
-    if (claimed) {
-      try {
-        await reportJobFailed(job.id, message);
-      } catch (reportError) {
-        console.error("Failed to report job failure:", reportError);
-      }
-    }
-    throw error;
+    console.warn(`Stopped job ${job.jobNumber}: ${message}`);
+    return;
   } finally {
     for (const localPath of localFiles) {
       deleteFileSafe(localPath, {
@@ -522,6 +401,20 @@ async function printCloudJob(job: PendingJob, printerName: string) {
       });
       unmarkLocalFileActive(localPath);
     }
+  }
+}
+
+async function abandonOwnedPrintingJobs(
+  jobs: Array<{ id: string; jobNumber: string }>,
+  printerName: string,
+) {
+  for (const job of jobs) {
+    console.log(
+      `Stopping owned PRINTING job ${job.jobNumber} - automatic resume is disabled`,
+    );
+    await cancelSpoolForJob(job.jobNumber, printerName);
+    await stopInterruptedJobOnServer(job.id);
+    clearInterruptedPrintJob(job.id);
   }
 }
 
@@ -535,30 +428,26 @@ export async function processPendingJobs() {
       return { processed: 0, skipped: true };
     }
 
-    const interrupted = loadInterruptedPrintJob();
-    if (interrupted) {
-      const control = await fetchJobPrintControl(interrupted.jobId).catch(
-        () => ({ ok: false as const, reason: "missing" as const }),
+    const legacyInterrupt = loadInterruptedPrintJob();
+    if (legacyInterrupt) {
+      console.log(
+        `Clearing leftover interrupt record for ${legacyInterrupt.jobNumber} without resuming`,
       );
-      if (
-        !control.ok &&
-        (control.reason === "cancelled" || control.reason === "missing")
-      ) {
-        await cancelSpoolForJob(
-          interrupted.jobNumber,
-          interrupted.printerName || config.selectedPrinter,
-        );
-        clearInterruptedPrintJob(interrupted.jobId);
-      } else {
-        const decision = await handleInterruptedDecision({
-          ...interrupted,
-          printerName: interrupted.printerName || config.selectedPrinter,
-        });
-        if (decision === "stop") {
-          return { processed: 0, skipped: false };
-        }
-        // Continue: fall through so claim/print resumes with pageResume still saved.
-      }
+      await cancelSpoolForJob(
+        legacyInterrupt.jobNumber,
+        legacyInterrupt.printerName || config.selectedPrinter,
+      );
+      await stopInterruptedJobOnServer(legacyInterrupt.jobId);
+      clearInterruptedPrintJob(legacyInterrupt.jobId);
+    }
+
+    const queue = await fetchAgentJobQueue();
+    if (queue.ownedPrinting.length > 0) {
+      await abandonOwnedPrintingJobs(
+        queue.ownedPrinting,
+        config.selectedPrinter,
+      );
+      return { processed: 0, skipped: false };
     }
 
     const printers = await detectPrinters().catch(() => []);
@@ -567,13 +456,12 @@ export async function processPendingJobs() {
     );
     if (!selected || selected.status !== "Online") {
       console.warn(
-        `Printer not ready (status: ${selected?.status ?? "missing"}) — skipping jobs.`,
+        `Printer not ready (status: ${selected?.status ?? "missing"}) - skipping jobs.`,
       );
       return { processed: 0, skipped: true };
     }
 
-    const jobs = await fetchPendingJobs();
-    const printable = jobs.filter((job) => job.files?.length > 0);
+    const printable = queue.jobs.filter((job) => job.files?.length > 0);
     if (printable.length === 0) {
       return { processed: 0, skipped: false };
     }

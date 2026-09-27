@@ -15,12 +15,12 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 export const WINDOWS_AGENT_RELEASE = {
   productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.5.2",
-  fileName: "PrintYantra-Agent-Setup-1.5.2.exe",
+  version: "1.6.0",
+  fileName: "PrintYantra-Agent-Setup-1.6.0.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
   notes:
-    "PrintYantra Agent 1.5.2: PrintYantra branded Windows application icons with improved Windows taskbar, Start Menu, and shortcut branding. Continues Reconnect, PrintYantra product identity, printyantra.com production API, same-account multi-computer login, per-device authentication, device-scoped printers and job ownership, Windows auto-start, and in-app update check with secure download and SHA-256 verification.",
+    "PrintYantra Agent 1.6.0: dashboard cancellation stops remaining pages, printer interruptions do not auto-resume, and only this job's Windows spooler entries are cancelled. Same app identity, ProgramData config, printer settings, and SHA-256 update check as previous releases.",
 } as const;
 
 /**

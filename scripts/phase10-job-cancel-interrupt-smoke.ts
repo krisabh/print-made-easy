@@ -11,9 +11,15 @@ import { PrismaClient, PrintStatus } from "@prisma/client";
 import { deleteShopJob } from "../lib/dashboard-service";
 import {
   cancelJobFromAgent,
+  claimJob,
   getJobPrintControl,
+  listOwnedPrintingJobs,
+  listPendingJobsForShop,
+  releaseJobToPending,
 } from "../lib/print-agent-service";
 import { hashPassword } from "../lib/auth";
+import { spoolJobMatchesYantraJob } from "../print-agent/src/windows-print-jobs";
+import { resolvePrintPageList } from "../print-agent/src/pdf-page-list";
 
 const prisma = new PrismaClient();
 
@@ -180,19 +186,19 @@ async function main() {
     assert.equal(gone, null);
     console.log("3 PASS finished job hard-delete still works");
 
-    // Source asserts for Agent cancel/interrupt plumbing
+    // Source asserts: cancellation stays, automatic resume popup is gone
     const jobService = fs.readFileSync(
       path.join(process.cwd(), "print-agent/src/job-service.ts"),
       "utf8",
     );
     assert.match(jobService, /assertJobStillPrintable/);
     assert.match(jobService, /cancelWindowsPrintJobsForYantraJob/);
-    assert.match(jobService, /setInterruptConfirmHandler/);
-    assert.match(jobService, /loadInterruptedPrintJob/);
     assert.match(jobService, /printPdfFilePageByPage/);
-    assert.match(jobService, /persistPageProgress/);
-    assert.match(jobService, /nextPageIndex/);
-    assert.match(jobService, /canSafelyContinue/);
+    assert.match(jobService, /abandonOwnedPrintingJobs/);
+    assert.equal(jobService.includes("Continue Printing"), false);
+    assert.equal(jobService.includes("setInterruptConfirmHandler"), false);
+    assert.equal(jobService.includes("reportJobFailed"), false);
+    assert.equal(jobService.includes("handleInterruptedDecision"), false);
     const preview = fs.readFileSync(
       path.join(process.cwd(), "components/print-preview-dialog.tsx"),
       "utf8",
@@ -203,90 +209,106 @@ async function main() {
       path.join(process.cwd(), "print-agent/src/main.ts"),
       "utf8",
     );
-    assert.match(mainSrc, /allowContinue/);
-    assert.match(mainSrc, /Continue Printing/);
-    assert.match(mainSrc, /Cancel Job/);
-    console.log("4 PASS agent + preview source guards");
-
-    // Page-level resume units (16-page PDF, continue remaining, cancel-only unsafe)
-    const { resolvePrintPageList } = await import(
-      "../print-agent/src/pdf-page-list"
+    assert.equal(mainSrc.includes("Continue Printing"), false);
+    assert.equal(mainSrc.includes("setInterruptConfirmHandler"), false);
+    const serviceSrc = fs.readFileSync(
+      path.join(process.cwd(), "lib/print-agent-service.ts"),
+      "utf8",
     );
-    const { describeInterruptedProgress } = await import(
-      "../print-agent/src/interrupted-job-store"
+    assert.equal(
+      serviceSrc.includes("Recovered stale PRINTING job after Agent disconnect."),
+      false,
     );
+    assert.match(serviceSrc, /automatic resume/i);
+    console.log("4 PASS cancel plumbing kept; resume popup removed");
 
+    // 16-page custom range still selects only those pages (no auto-resume)
     const pageList = resolvePrintPageList("all", 16);
     assert.equal(pageList.length, 16);
-    assert.deepEqual(pageList.slice(0, 3), [1, 2, 3]);
-    assert.equal(pageList[15], 16);
+    const custom = resolvePrintPageList("6-16", 16);
+    assert.deepEqual(custom, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    console.log("5 PASS custom page range 6-16 still works");
 
-    // Interrupted after pages 1–5 submitted → resume from index 5 (page 6)
-    const midFile = describeInterruptedProgress({
-      jobId: "job-16",
-      jobNumber: "PY-16",
-      printerName: "Test",
-      printedFiles: 0,
-      remainingFiles: 1,
-      savedAt: new Date().toISOString(),
-      canSafelyContinue: true,
-      pageResume: {
-        fileId: "file-a",
-        nextPageIndex: 5,
-        pageList,
+    // Spooler identity: job number in Sumatra document / recorded name
+    assert.equal(
+      spoolJobMatchesYantraJob(
+        {
+          document: "PrintYantra-CN-1-file.pdf",
+          name: "HP LaserJet, 4",
+        },
+        "CN-1",
+      ),
+      true,
+    );
+    assert.equal(
+      spoolJobMatchesYantraJob(
+        { document: "other-customer.pdf", name: "HP LaserJet, 9" },
+        "CN-1",
+      ),
+      false,
+    );
+    console.log("6 PASS spooler match uses job number and ignores unrelated jobs");
+
+    // Claim after cancel must fail (PENDING delete race)
+    const claimAfter = await claimJob(shop.id, pending.id, {
+      agentDeviceId: null,
+    });
+    assert.equal(claimAfter, null);
+    const stillCancelled = await getJobPrintControl(shop.id, pending.id);
+    assert.equal(stillCancelled.ok, false);
+    console.log("7 PASS claim after PENDING delete returns null");
+
+    // PRINTING delete then release must not return the job to the queue
+    const storedRace = `cancel-race-${stamp}.pdf`;
+    fs.writeFileSync(
+      path.join(uploadDir, storedRace),
+      Buffer.from("%PDF-1.4 race"),
+    );
+    const racing = await prisma.printJob.create({
+      data: {
+        shopId: shop.id,
+        jobSequence: 4,
+        jobNumber: `CN-${stamp}-4`,
+        copies: 1,
+        totalPages: 16,
+        printMode: "BW",
+        printType: "SINGLE",
+        totalPrice: 10,
+        status: PrintStatus.PRINTING,
+        claimedAt: new Date(),
+        files: {
+          create: {
+            originalFileName: "sixteen.pdf",
+            storedFileName: storedRace,
+            fileExtension: "pdf",
+            fileSize: 20,
+            totalPages: 16,
+          },
+        },
       },
     });
-    assert.equal(midFile.allowContinue, true);
-    assert.match(midFile.detail, /5 page\(s\) were submitted/);
-    assert.match(midFile.detail, /11 page\(s\) remain/);
-    const remainingPages = pageList.slice(5);
-    assert.deepEqual(remainingPages, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
-    console.log("5 PASS 16-page interrupt → Continue resumes pages 6–16 only");
-
-    // Cancel path: unsafe / cancel-only UX (no Continue)
-    const unsafe = describeInterruptedProgress({
-      jobId: "job-legacy",
-      jobNumber: "PY-LEG",
-      printerName: "Test",
-      printedFiles: 0,
-      remainingFiles: 1,
-      savedAt: new Date().toISOString(),
-      canSafelyContinue: false,
-      unsafeReason:
-        "Some pages may already have printed. To avoid duplicate pages, this job cannot be automatically resumed.",
-    });
-    assert.equal(unsafe.allowContinue, false);
-    assert.match(unsafe.detail, /cannot be automatically resumed/);
-    assert.match(unsafe.detail, /cancel the remaining job/);
-    console.log("6 PASS unsafe multi-page → Cancel only (no Continue)");
-
-    // Multi-file: file-level continue still allowed without pageResume
-    const multiFile = describeInterruptedProgress({
-      jobId: "job-multi",
-      jobNumber: "PY-MF",
-      printerName: "Test",
-      printedFiles: 1,
-      remainingFiles: 2,
-      savedAt: new Date().toISOString(),
-      canSafelyContinue: true,
-    });
-    assert.equal(multiFile.allowContinue, true);
-    assert.match(multiFile.detail, /1 file\(s\) were printed/);
-    assert.match(multiFile.detail, /2 file\(s\) remain/);
-    console.log("7 PASS multi-file interrupt still offers Continue");
-
-    // Deleted/cancelled job never resumes: control already asserted above;
-    // Agent clears interrupt when control says cancelled/missing.
-    assert.match(jobService, /control\.reason === \"cancelled\"/);
-    assert.match(jobService, /clearInterruptedPrintJob/);
-    assert.match(
-      jobService,
-      /Skipping already printed file/,
+    await deleteShopJob(shop.id, racing.id);
+    const released = await releaseJobToPending(
+      shop.id,
+      racing.id,
+      "should not retry",
     );
-    // Restart: pageResume nextPageIndex prevents re-submitting earlier pages
-    assert.match(jobService, /startPageIndex/);
-    assert.match(jobService, /activePageResume\.fileId === file\.id/);
-    console.log("8 PASS deleted never resumes + restart uses pageResume");
+    assert.equal(released, null);
+    const afterRace = await prisma.printJob.findUnique({
+      where: { id: racing.id },
+    });
+    assert.equal(afterRace?.status, PrintStatus.CANCELLED);
+    const pendingList = await listPendingJobsForShop(shop.id);
+    assert.equal(
+      pendingList.some((job) => job.id === racing.id),
+      false,
+    );
+    const owned = await listOwnedPrintingJobs(shop.id);
+    assert.equal(
+      owned.some((job) => job.id === racing.id),
+      false,
+    );
+    console.log("8 PASS PRINTING delete is not released back to PENDING");
 
     console.log("\nphase10-job-cancel-interrupt-smoke: ALL PASS");
   } finally {

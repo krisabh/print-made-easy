@@ -28,6 +28,8 @@ function validManifest(overrides: Record<string, unknown> = {}) {
 async function main() {
   // A — Version comparison
   assert.equal(isRemoteNewer("1.4.0", "1.4.1"), true);
+  assert.equal(isRemoteNewer("1.5.2", "1.6.0"), true);
+  assert.equal(isRemoteNewer("1.6.0", "1.5.2"), false);
   assert.equal(isRemoteNewer("1.4.0", "1.5.0"), true);
   assert.equal(isRemoteNewer("1.4.0", "2.0.0"), true);
   assert.equal(isRemoteNewer("1.4.0", "1.4.0"), false);

@@ -28,32 +28,40 @@ async function main() {
   ) as { version: string };
 
   // 1 — Agent package version
-  assert.equal(agentPkg.version, "1.5.2");
-  console.log("1 PASS Agent package version is 1.5.2");
+  assert.equal(agentPkg.version, "1.6.0");
+  console.log("1 PASS Agent package version is 1.6.0");
 
   // 2 — Dashboard release metadata
-  assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.5.2");
-  assert.equal(WINDOWS_AGENT_RELEASE.version, "1.5.2");
-  console.log("2 PASS dashboard release metadata reports 1.5.2");
+  assert.equal(WINDOWS_AGENT_DOWNLOAD.version, "1.6.0");
+  assert.equal(WINDOWS_AGENT_RELEASE.version, "1.6.0");
+  console.log("2 PASS dashboard release metadata reports 1.6.0");
 
   // 3 — Installer filename
   assert.equal(
     WINDOWS_AGENT_DOWNLOAD.fileName,
-    "PrintYantra-Agent-Setup-1.5.2.exe",
+    "PrintYantra-Agent-Setup-1.6.0.exe",
   );
   assert.equal(
     WINDOWS_AGENT_RELEASE.fileName,
-    "PrintYantra-Agent-Setup-1.5.2.exe",
+    "PrintYantra-Agent-Setup-1.6.0.exe",
   );
-  console.log("3 PASS installer filename is PrintYantra-Agent-Setup-1.5.2.exe");
+  console.log("3 PASS installer filename is PrintYantra-Agent-Setup-1.6.0.exe");
 
   // 4 — Manifest shape
   const manifest = getPublicAgentUpdateManifest("");
-  assert.equal(manifest.version, "1.5.2");
+  assert.equal(manifest.version, "1.6.0");
   assert.equal(typeof manifest.url, "string");
   assert.equal(manifest.url.startsWith("https://"), true);
   assert.equal(manifest.url.includes("/api/agent/download"), true);
   assert.equal(manifest.sha256, null);
+  const approvedSha =
+    "014e6143911b9e658ae1d2c3d15ebdeedade1a78d060c9fa9392928d2df03aae";
+  const approved = getPublicAgentUpdateManifest(approvedSha);
+  assert.equal(approved.version, "1.6.0");
+  assert.equal(approved.fileName, "PrintYantra-Agent-Setup-1.6.0.exe");
+  assert.equal(approved.sha256, approvedSha);
+  assert.equal(approved.url.includes("/api/agent/download"), true);
+  assert.equal(getPublicAgentUpdateManifest("deadbeef").sha256, null);
   assert.equal(typeof manifest.notes, "string");
   assert.equal(manifest.notes.length > 0, true);
   assert.equal(manifest.fileName, WINDOWS_AGENT_RELEASE.fileName);
@@ -124,7 +132,7 @@ async function main() {
   const res = await getAgentUpdate(new Request("http://localhost/api/agent/update?path=/etc/passwd"));
   assert.equal(res.status, 200);
   const body = (await res.json()) as Record<string, unknown>;
-  assert.equal(body.version, "1.5.2");
+  assert.equal(body.version, "1.6.0");
   assert.equal(typeof body.url, "string");
   assert.equal(String(body.url).includes("/api/agent/download"), true);
   assert.equal("sha256" in body, true);

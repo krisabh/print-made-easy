@@ -489,6 +489,28 @@ export async function listPendingJobsForShop(
   });
 }
 
+/** PRINTING jobs this device still owns. Idle Agent must stop them, not resume. */
+export async function listOwnedPrintingJobs(
+  shopId: string,
+  options?: { agentDeviceId?: string | null },
+) {
+  const agentDeviceId = options?.agentDeviceId?.trim() || null;
+  return prisma.printJob.findMany({
+    where: agentDeviceId
+      ? {
+          shopId,
+          status: PrintStatus.PRINTING,
+          claimedByAgentDeviceId: agentDeviceId,
+        }
+      : {
+          shopId,
+          status: PrintStatus.PRINTING,
+        },
+    select: { id: true, jobNumber: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 /** Lightweight Agent poll: is this job still printable? */
 export async function getJobPrintControl(
   shopId: string,
@@ -554,6 +576,18 @@ export async function getJobPrintControl(
 
   const printed = job.files.filter((f) => f.printedAt).length;
   const remaining = job.files.filter((f) => !f.printedAt).length;
+
+  // Heartbeat while the owning Agent is still between pages, so a long
+  // multi-page job is not treated as a stale PRINTING row.
+  if (
+    job.status === PrintStatus.PRINTING &&
+    (!agentDeviceId || job.claimedByAgentDeviceId === agentDeviceId)
+  ) {
+    await prisma.printJob.update({
+      where: { id: job.id },
+      data: { claimedAt: new Date() },
+    });
+  }
 
   return {
     ok: true as const,
@@ -959,20 +993,22 @@ export async function cleanupExpiredDocuments() {
     });
   }
 
-  // Stuck PRINTING jobs (crash / failed report) → PENDING so Agent can retry
+  // PRINTING rows with no recent Agent check are not retried.
+  // Automatic resume after a crash, printer power loss, or Agent restart
+  // would reprint or continue a customer job nobody is waiting for.
   const printingCutoff = new Date(Date.now() - STALE_PRINTING_MS);
   await prisma.printJob.updateMany({
     where: {
       status: PrintStatus.PRINTING,
       updatedAt: { lt: printingCutoff },
-      // Only recover jobs that still have a document
-      files: { some: { fileDeletedAt: null } },
     },
     data: {
-      status: PrintStatus.PENDING,
+      status: PrintStatus.CANCELLED,
       claimedByAgentDeviceId: null,
       claimedAt: null,
-      lastError: "Recovered stale PRINTING job after Agent disconnect.",
+      printAttempts: MAX_PRINT_ATTEMPTS,
+      lastError:
+        "Printing stopped because the Agent or printer was interrupted. Remaining pages were not printed. Submit the pages you still need with a custom page range.",
     },
   });
 
