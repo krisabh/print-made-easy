@@ -14,7 +14,6 @@ contextBridge.exposeInMainWorld("printAgent", {
   setOpenAtLogin: (enabled: boolean) =>
     ipcRenderer.invoke("agent:set-open-at-login", enabled),
   openDashboard: () => ipcRenderer.invoke("agent:open-dashboard"),
-  openSupportEmail: () => ipcRenderer.invoke("agent:open-support-email"),
   openWhatsAppSupport: () => ipcRenderer.invoke("agent:open-whatsapp-support"),
   checkForUpdates: () => ipcRenderer.invoke("agent:check-for-updates"),
   dismissUpdate: () => ipcRenderer.invoke("agent:dismiss-update"),

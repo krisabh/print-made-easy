@@ -32,10 +32,7 @@ import {
   normalizeConfiguredPrinter,
   resolveConfiguredPrinterSelection,
 } from "./selected-printer";
-import {
-  AGENT_SUPPORT_EMAIL_HREF,
-  AGENT_WHATSAPP_SUPPORT_HREF,
-} from "./support-links";
+import { AGENT_WHATSAPP_SUPPORT_HREF } from "./support-links";
 import {
   PERIODIC_CLEANUP_INTERVAL_MS,
   cleanPeriodicStaleTempFiles,
@@ -719,10 +716,6 @@ function registerIpc() {
 
   ipcMain.handle("agent:open-dashboard", async () => {
     await openDashboardInBrowser();
-  });
-
-  ipcMain.handle("agent:open-support-email", async () => {
-    await shell.openExternal(AGENT_SUPPORT_EMAIL_HREF);
   });
 
   ipcMain.handle("agent:open-whatsapp-support", async () => {

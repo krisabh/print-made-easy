@@ -1169,9 +1169,14 @@ export function UploadForm({ shop }: UploadFormProps) {
               {stoppingPrint ? "Stopping print..." : statusHint(liveStatus)}
             </p>
             {liveStatus === "CANCELLED" ? (
-              <p className="mt-2 text-sm font-medium text-slate-800">
-                Job cancelled.
-              </p>
+              <>
+                <p className="mt-2 text-sm text-slate-600">
+                  Amount shown before cancellation is not the final amount.
+                </p>
+                <p className="mt-2 text-sm font-medium text-slate-800">
+                  Job cancelled.
+                </p>
+              </>
             ) : null}
             {isActive ? (
               <button
@@ -1196,12 +1201,14 @@ export function UploadForm({ shop }: UploadFormProps) {
             ) : null}
           </div>
 
-          <div className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-4">
-            <p className="text-sm text-slate-500">Total Amount</p>
-            <p className="mt-1 text-2xl font-semibold text-blue-600">
-              {formatCurrency(success.totalPrice)}
-            </p>
-          </div>
+          {liveStatus === "CANCELLED" ? null : (
+            <div className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-4">
+              <p className="text-sm text-slate-500">Total Amount</p>
+              <p className="mt-1 text-2xl font-semibold text-blue-600">
+                {formatCurrency(success.totalPrice)}
+              </p>
+            </div>
+          )}
 
           <p className="mt-5 text-sm text-slate-600">
             Please show your Job Number at the counter.

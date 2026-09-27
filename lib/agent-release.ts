@@ -19,15 +19,14 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 export const WINDOWS_AGENT_RELEASE_NOTES = [
   "Get notified when a new PrintYantra Agent update is available.",
   "See what's new before updating.",
-  "Contact PrintYantra Support directly from the Agent.",
   "Get help through WhatsApp Support.",
 ] as const;
 
 export const WINDOWS_AGENT_RELEASE = {
   productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.7.0",
-  fileName: "PrintYantra-Agent-Setup-1.7.0.exe",
+  version: "1.7.1",
+  fileName: "PrintYantra-Agent-Setup-1.7.1.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
   /** Single string kept for Agents that only read `notes`. */

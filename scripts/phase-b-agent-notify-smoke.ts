@@ -9,8 +9,6 @@ import path from "node:path";
 import { SITE } from "../lib/marketing";
 import { getPublicAgentUpdateManifest } from "../lib/agent-release";
 import {
-  AGENT_SUPPORT_EMAIL,
-  AGENT_SUPPORT_EMAIL_HREF,
   AGENT_WHATSAPP_E164,
   AGENT_WHATSAPP_MESSAGE,
   AGENT_WHATSAPP_SUPPORT_HREF,
@@ -24,8 +22,12 @@ function read(rel: string) {
 
 function main() {
   const manifest = getPublicAgentUpdateManifest("");
-  assert.equal(manifest.version, "1.7.0");
+  assert.equal(manifest.version, "1.7.1");
   assert.ok(manifest.releaseNotes.length >= 3);
+  assert.equal(
+    manifest.releaseNotes.some((line) => /contact support/i.test(line)),
+    false,
+  );
   assert.equal(manifest.notes, manifest.releaseNotes.join("\n"));
   assert.equal(manifest.sha256, null);
   console.log("1 PASS release metadata includes ordered notes; SHA still env-only");
@@ -37,6 +39,7 @@ function main() {
 
   assert.match(renderer, /What's New in PrintYantra Agent \$\{version\}/);
   assert.equal(renderer.includes("1.7.0"), false);
+  assert.equal(renderer.includes("1.7.1"), false);
   assert.equal(renderer.includes("1.8.0"), false);
   assert.match(renderer, /New update available/);
   assert.match(renderer, /Update details are currently unavailable/);
@@ -45,13 +48,16 @@ function main() {
   assert.match(html, /Update Now/);
   assert.match(html, /Later/);
   assert.match(html, /Need Help\?/);
-  assert.match(html, /Contact Support/);
-  assert.match(html, /WhatsApp Support/);
+  assert.equal(html.includes("Contact Support"), false);
+  assert.equal(html.includes("mailto:"), false);
+  assert.match(html, /aria-label="WhatsApp Support"/);
+  assert.match(html, /title="WhatsApp Support"/);
+  assert.match(html, /class="whatsapp-inline"/);
+  assert.equal(html.includes("position: fixed"), false);
+  assert.equal(renderer.includes("openSupportEmail"), false);
+  assert.equal(renderer.includes("Contact Support"), false);
   console.log("2 PASS What's New uses the server version, not a hardcoded release");
 
-  assert.equal(AGENT_SUPPORT_EMAIL, SITE.email);
-  assert.equal(AGENT_SUPPORT_EMAIL, "support@printyantra.com");
-  assert.equal(AGENT_SUPPORT_EMAIL_HREF, "mailto:support@printyantra.com");
   assert.equal(AGENT_WHATSAPP_E164, SITE.whatsappE164);
   assert.equal(AGENT_WHATSAPP_E164, "918618089513");
   assert.equal(
@@ -62,16 +68,15 @@ function main() {
     AGENT_WHATSAPP_SUPPORT_HREF,
     `https://wa.me/918618089513?text=${encodeURIComponent(AGENT_WHATSAPP_MESSAGE)}`,
   );
-  assert.match(mainSrc, /AGENT_SUPPORT_EMAIL_HREF/);
+  assert.equal(mainSrc.includes("AGENT_SUPPORT_EMAIL"), false);
+  assert.equal(mainSrc.includes("agent:open-support-email"), false);
   assert.match(mainSrc, /AGENT_WHATSAPP_SUPPORT_HREF/);
-  assert.match(mainSrc, /agent:open-support-email/);
   assert.match(mainSrc, /agent:open-whatsapp-support/);
   assert.equal(mainSrc.includes("openExternal(url"), false);
-  assert.match(preload, /openSupportEmail/);
+  assert.equal(preload.includes("openSupportEmail"), false);
   assert.match(preload, /openWhatsAppSupport/);
-  assert.match(renderer, /openSupportEmail/);
   assert.match(renderer, /openWhatsAppSupport/);
-  console.log("3 PASS support email and WhatsApp use the existing public contacts");
+  console.log("3 PASS WhatsApp stays inline and Contact Support is gone");
 
   assert.match(mainSrc, /startUpdateCheckLoops|UPDATE_CHECK_INTERVAL_MS/);
   assert.match(mainSrc, /manual: false/);

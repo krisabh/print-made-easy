@@ -199,6 +199,14 @@ async function main() {
     );
     assert.match(upload, /STOP PRINTING/);
     assert.match(upload, /Stopping print\.\.\./);
+    assert.match(
+      upload,
+      /Amount shown before cancellation is not the final amount\./,
+    );
+    assert.match(upload, /liveStatus === "CANCELLED" \? null :/);
+    assert.match(board, /Amount not finalized/);
+    assert.equal(upload.includes("partial refund"), false);
+    assert.equal(board.includes("partial refund"), false);
     assert.match(upload, /The remaining pages will not be printed\./);
     assert.match(upload, /Job cancelled\./);
     assert.equal(upload.includes("pages were printed"), false);

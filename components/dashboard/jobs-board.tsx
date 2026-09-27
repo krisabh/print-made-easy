@@ -57,6 +57,11 @@ type Summary = {
   todaysRevenue: number;
 };
 
+function formatJobAmount(job: { status: string; totalPrice: number }) {
+  if (job.status === PrintStatus.CANCELLED) return "Amount not finalized";
+  return formatCurrency(job.totalPrice);
+}
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -630,7 +635,7 @@ export function JobsBoard({
                           {job.printType === "SINGLE" ? "Single" : "Double"}
                         </td>
                         <td className="px-4 py-3.5 font-semibold text-slate-900">
-                          {formatCurrency(job.totalPrice)}
+                          {formatJobAmount(job)}
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="space-y-1">
@@ -695,7 +700,7 @@ export function JobsBoard({
                       <div className="shrink-0 text-right">
                         <StatusBadge status={job.status} />
                         <p className="mt-1.5 text-sm font-semibold text-slate-900">
-                          {formatCurrency(job.totalPrice)}
+                          {formatJobAmount(job)}
                         </p>
                       </div>
                     </div>
@@ -815,9 +820,13 @@ export function JobsBoard({
                   </dd>
                 </div>
                 <div className="col-span-2">
-                  <dt className="text-slate-500">Total Price</dt>
+                  <dt className="text-slate-500">
+                    {selected.status === PrintStatus.CANCELLED
+                      ? "Amount"
+                      : "Total Price"}
+                  </dt>
                   <dd className="mt-1 text-xl font-semibold text-slate-900">
-                    {formatCurrency(selected.totalPrice)}
+                    {formatJobAmount(selected)}
                   </dd>
                 </div>
               </dl>

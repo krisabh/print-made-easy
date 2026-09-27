@@ -31,7 +31,6 @@
   const updateProgressBar = document.getElementById("updateProgressBar");
   const updateProgressLabel = document.getElementById("updateProgressLabel");
   const checkUpdatesBtn = document.getElementById("checkUpdatesBtn");
-  const contactSupportBtn = document.getElementById("contactSupportBtn");
   const whatsappSupportBtn = document.getElementById("whatsappSupportBtn");
 
   const connectHint = document.getElementById("connectHint");
@@ -783,18 +782,6 @@
     whatsNewBtn.addEventListener("click", () => {
       whatsNewOpen = !whatsNewOpen;
       renderUpdateState(lastUpdateState);
-    });
-  }
-
-  if (contactSupportBtn) {
-    contactSupportBtn.addEventListener("click", async () => {
-      try {
-        if (window.printAgent && window.printAgent.openSupportEmail) {
-          await window.printAgent.openSupportEmail();
-        }
-      } catch {
-        // Opening the mail app must not affect printing.
-      }
     });
   }
 
