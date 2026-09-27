@@ -209,6 +209,26 @@
         gap: 8px;
         margin-top: 10px;
       }
+      .update-banner.compact {
+        padding: 8px 12px;
+      }
+      .update-notes {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--text);
+        line-height: 1.45;
+      }
+      .update-notes-title {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .update-notes ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .update-notes li + li {
+        margin-top: 2px;
+      }
       .update-progress-wrap {
         margin-top: 10px;
         display: none;
@@ -427,8 +447,12 @@
               </div>
               <div class="update-progress-label" id="updateProgressLabel"></div>
             </div>
+            <div id="updateNotes" class="update-notes" hidden></div>
             <div class="update-actions" id="updateActions" style="display: none">
               <button id="updateNowBtn" type="button">Update Now</button>
+              <button id="whatsNewBtn" class="secondary" type="button" style="display: none">
+                What's New
+              </button>
               <button id="updateLaterBtn" class="secondary" type="button">Later</button>
               <button id="updateCancelBtn" class="secondary" type="button" style="display: none">
                 Cancel
@@ -438,6 +462,18 @@
           <div class="actions" style="margin-top: 10px">
             <button id="checkUpdatesBtn" class="secondary" type="button">
               Check for Updates
+            </button>
+          </div>
+        </section>
+
+        <section class="card" id="supportCard">
+          <div class="label">Need Help?</div>
+          <div class="actions row">
+            <button id="contactSupportBtn" class="secondary" type="button">
+              Contact Support
+            </button>
+            <button id="whatsappSupportBtn" class="secondary" type="button">
+              WhatsApp Support
             </button>
           </div>
         </section>

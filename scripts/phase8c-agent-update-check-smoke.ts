@@ -30,6 +30,9 @@ async function main() {
   assert.equal(isRemoteNewer("1.4.0", "1.4.1"), true);
   assert.equal(isRemoteNewer("1.5.2", "1.6.0"), true);
   assert.equal(isRemoteNewer("1.6.0", "1.5.2"), false);
+  assert.equal(isRemoteNewer("1.6.0", "1.7.0"), true);
+  assert.equal(isRemoteNewer("1.7.0", "1.6.0"), false);
+  assert.equal(isRemoteNewer("1.7.0", "1.7.0"), false);
   assert.equal(isRemoteNewer("1.4.0", "1.5.0"), true);
   assert.equal(isRemoteNewer("1.4.0", "2.0.0"), true);
   assert.equal(isRemoteNewer("1.4.0", "1.4.0"), false);
@@ -203,6 +206,158 @@ async function main() {
     "GET",
   );
   console.log("K PASS sensitive-data check (no auth headers)");
+
+  // Release notes come from the manifest, including a future version string.
+  const withNotes = validateAgentUpdateManifest(
+    validManifest({
+      version: "1.8.0",
+      fileName: "PrintYantra-Agent-Setup-1.8.0.exe",
+      notes: "ignored when bullets exist",
+      releaseNotes: ["Faster job processing", "Better printer connection handling"],
+    }),
+    trusted,
+  );
+  assert.equal(withNotes.ok, true);
+  if (withNotes.ok) {
+    assert.deepEqual(withNotes.manifest.releaseNotes, [
+      "Faster job processing",
+      "Better printer connection handling",
+    ]);
+  }
+  const notesOnly = validateAgentUpdateManifest(
+    validManifest({ notes: "- One line\n- Two line" }),
+    trusted,
+  );
+  assert.equal(notesOnly.ok, true);
+  if (notesOnly.ok) {
+    assert.deepEqual(notesOnly.manifest.releaseNotes, ["One line", "Two line"]);
+  }
+  const badNotesField = validateAgentUpdateManifest(
+    validManifest({ releaseNotes: "not-an-array", notes: "Still usable" }),
+    trusted,
+  );
+  assert.equal(badNotesField.ok, true);
+  if (badNotesField.ok) {
+    assert.deepEqual(badNotesField.manifest.releaseNotes, ["Still usable"]);
+  }
+  console.log("L PASS release notes parsed from server metadata");
+
+  let remembered: string | null = "1.7.0";
+  let spawnCount = 0;
+  const dismissedChecker = createUpdateChecker({
+    getCurrentVersion: () => "1.6.0",
+    getApiUrl: () => "https://printyantra.com",
+    getDismissedUpdateVersion: () => remembered,
+    rememberDismissedUpdateVersion: (version) => {
+      remembered = version;
+    },
+    spawnInstaller: () => {
+      spawnCount += 1;
+      return { ok: true, pid: 1 };
+    },
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify(
+          validManifest({
+            version: "1.7.0",
+            fileName: "PrintYantra-Agent-Setup-1.7.0.exe",
+            sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            releaseNotes: ["Improved print reliability"],
+          }),
+        ),
+        { status: 200 },
+      ),
+  });
+  const detected = await dismissedChecker.runCheck({ manual: false });
+  assert.equal(detected.updateAvailable, true);
+  assert.equal(dismissedChecker.getPublicState().dismissed, true);
+  assert.equal(spawnCount, 0);
+  assert.deepEqual(dismissedChecker.getPublicState().releaseNotes, [
+    "Improved print reliability",
+  ]);
+  console.log("M PASS dismissed version stays quiet and check does not install");
+
+  remembered = null;
+  const fresh = createUpdateChecker({
+    getCurrentVersion: () => "1.6.0",
+    getApiUrl: () => "https://printyantra.com",
+    getDismissedUpdateVersion: () => remembered,
+    rememberDismissedUpdateVersion: (version) => {
+      remembered = version;
+    },
+    spawnInstaller: () => {
+      spawnCount += 1;
+      return { ok: true, pid: 1 };
+    },
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify(
+          validManifest({
+            version: "1.7.0",
+            fileName: "PrintYantra-Agent-Setup-1.7.0.exe",
+            sha256: null,
+            notes: "",
+            releaseNotes: [],
+          }),
+        ),
+        { status: 200 },
+      ),
+  });
+  await fresh.runCheck({ manual: false });
+  assert.equal(fresh.getPublicState().dismissed, false);
+  assert.equal(fresh.getPublicState().updateAvailable, true);
+  assert.deepEqual(fresh.getPublicState().releaseNotes, []);
+  fresh.dismissAvailable();
+  assert.equal(remembered, "1.7.0");
+  assert.equal(fresh.getPublicState().dismissed, true);
+  assert.equal(spawnCount, 0);
+  const blocked = await fresh.startUpdate();
+  assert.equal(blocked.accepted, false);
+  assert.equal(blocked.code, "SHA256_MISSING");
+  assert.equal(spawnCount, 0);
+  console.log("N PASS Later remembers version; missing SHA still blocks install");
+
+  const failingRecheck = createUpdateChecker({
+    getCurrentVersion: () => "1.6.0",
+    getApiUrl: () => "https://printyantra.com",
+    fetchImpl: async () => {
+      throw new Error("offline");
+    },
+  });
+  await failingRecheck.runCheck({ manual: false });
+  assert.equal(failingRecheck.getPublicState().userMessage, null);
+  assert.equal(failingRecheck.getPublicState().status, "error");
+
+  let calls = 0;
+  const preserve = createUpdateChecker({
+    getCurrentVersion: () => "1.6.0",
+    getApiUrl: () => "https://printyantra.com",
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify(
+            validManifest({
+              version: "1.7.0",
+              fileName: "PrintYantra-Agent-Setup-1.7.0.exe",
+              releaseNotes: ["Improved print reliability"],
+            }),
+          ),
+          { status: 200 },
+        );
+      }
+      throw new Error("timeout");
+    },
+  });
+  await preserve.runCheck({ manual: false });
+  const again = await preserve.runCheck({ manual: false });
+  assert.equal(again.updateAvailable, true);
+  assert.equal(preserve.getPublicState().status, "available");
+  assert.equal(preserve.getPublicState().userMessage, null);
+  assert.deepEqual(preserve.getPublicState().releaseNotes, [
+    "Improved print reliability",
+  ]);
+  console.log("O PASS background check failure stays non-blocking");
 
   console.log("\nPhase 8C agent update-check smoke: ALL PASS");
 }

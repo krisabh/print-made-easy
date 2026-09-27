@@ -134,15 +134,15 @@ async function suggestOrientationFromImage(
 function statusLabel(status: JobLiveStatus) {
   switch (status) {
     case "PENDING":
-      return "Pending";
+      return "Waiting to print";
     case "PRINTING":
       return "Printing";
     case "READY_FOR_PICKUP":
-      return "Ready for pickup";
+      return "Printing complete";
     case "DELIVERED":
       return "Delivered";
     case "CANCELLED":
-      return "Cancelled";
+      return "Print stopped";
     default:
       return status;
   }
@@ -151,15 +151,15 @@ function statusLabel(status: JobLiveStatus) {
 function statusHint(status: JobLiveStatus) {
   switch (status) {
     case "PENDING":
-      return "Waiting for the shop printer.";
+      return "Waiting to print your document.";
     case "PRINTING":
-      return "Your documents are printing now.";
+      return "Printing your document.";
     case "READY_FOR_PICKUP":
-      return "Ready at the counter — show your job number.";
+      return "Printing complete. Please show your job number at the counter.";
     case "DELIVERED":
       return "Marked as collected.";
     case "CANCELLED":
-      return "This job was cancelled. Ask the shop if you need help.";
+      return "The remaining pages will not be printed.";
     default:
       return "";
   }
@@ -414,6 +414,9 @@ export function UploadForm({ shop }: UploadFormProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [success, setSuccess] = useState<UploadSuccessData | null>(null);
   const [liveStatus, setLiveStatus] = useState<JobLiveStatus>("PENDING");
+  const [stoppingPrint, setStoppingPrint] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
+  const stoppingRef = useRef(false);
   const [isPending, startTransition] = useTransition();
 
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -458,7 +461,14 @@ export function UploadForm({ shop }: UploadFormProps) {
           data?: { status?: JobLiveStatus };
         };
         if (!cancelled && payload.success && payload.data?.status) {
-          setLiveStatus(payload.data.status);
+          const next = payload.data.status;
+          if (
+            stoppingRef.current &&
+            (next === "PENDING" || next === "PRINTING")
+          ) {
+            return;
+          }
+          setLiveStatus(next);
         }
       } catch {
         // Keep last known status on transient network errors
@@ -957,6 +967,8 @@ export function UploadForm({ shop }: UploadFormProps) {
           }
           setSuccess(result.data);
           setLiveStatus("PENDING");
+          setStopError(null);
+          setStoppingPrint(false);
         } catch {
           setFormError(
             "Connection problem while submitting. Please try again.",
@@ -1041,12 +1053,51 @@ export function UploadForm({ shop }: UploadFormProps) {
         }
         setSuccess(result.data);
         setLiveStatus("PENDING");
+        setStopError(null);
+        setStoppingPrint(false);
       } catch {
         setFormError("Connection problem while submitting. Please try again.");
       } finally {
         submitLockRef.current = false;
       }
     });
+  }
+
+  async function stopPrinting() {
+    if (!success?.jobId || stoppingRef.current) return;
+    if (liveStatus !== "PENDING" && liveStatus !== "PRINTING") return;
+
+    stoppingRef.current = true;
+    setStoppingPrint(true);
+    setStopError(null);
+    try {
+      const response = await fetch(
+        `/api/customer/jobs/${success.jobId}?shopCode=${encodeURIComponent(shop.shopCode)}`,
+        { method: "POST", cache: "no-store" },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: { status?: JobLiveStatus; cancelled?: boolean };
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.success || !payload.data?.status) {
+        setStopError(
+          "We could not confirm the print was stopped. Please try again.",
+        );
+        return;
+      }
+      setLiveStatus(payload.data.status);
+      if (!payload.data.cancelled) {
+        setStopError(null);
+      }
+    } catch {
+      setStopError(
+        "We could not confirm the print was stopped. Please try again.",
+      );
+    } finally {
+      stoppingRef.current = false;
+      setStoppingPrint(false);
+    }
   }
 
   if (success) {
@@ -1075,7 +1126,15 @@ export function UploadForm({ shop }: UploadFormProps) {
             )}
           </div>
           <h2 className="mt-4 text-xl font-semibold text-slate-900">
-            {isReady ? "Ready for pickup" : "Print Job Submitted"}
+            {liveStatus === "CANCELLED"
+              ? "Print stopped"
+              : isReady
+                ? "Printing complete"
+                : isActive
+                  ? liveStatus === "PRINTING"
+                    ? "Printing your document"
+                    : "Waiting to print your document"
+                  : "Print Job Submitted"}
           </h2>
 
           <div className="mt-6 w-full rounded-2xl bg-slate-50 px-4 py-5">
@@ -1106,7 +1165,30 @@ export function UploadForm({ shop }: UploadFormProps) {
                 {statusLabel(liveStatus)}
               </span>
             </div>
-            <p className="mt-2 text-sm text-slate-600">{statusHint(liveStatus)}</p>
+            <p className="mt-2 text-sm text-slate-600">
+              {stoppingPrint ? "Stopping print..." : statusHint(liveStatus)}
+            </p>
+            {liveStatus === "CANCELLED" ? (
+              <p className="mt-2 text-sm font-medium text-slate-800">
+                Job cancelled.
+              </p>
+            ) : null}
+            {isActive ? (
+              <button
+                type="button"
+                onClick={() => void stopPrinting()}
+                disabled={stoppingPrint}
+                aria-busy={stoppingPrint}
+                className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-base font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {stoppingPrint ? "Stopping..." : "STOP PRINTING"}
+              </button>
+            ) : null}
+            {stopError ? (
+              <p className="mt-3 text-sm text-red-600" role="alert">
+                {stopError}
+              </p>
+            ) : null}
             {isActive ? (
               <p className="mt-2 text-xs text-slate-400">
                 Updates automatically — keep this page open.

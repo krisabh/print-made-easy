@@ -261,6 +261,148 @@ export function serializeShopForDashboard(shop: AuthShop) {
   };
 }
 
+export const SHOPKEEPER_CANCEL_REASON = "Cancelled by shopkeeper.";
+export const CUSTOMER_CANCEL_REASON = "Cancelled by the customer.";
+
+type ActiveCancelOutcome =
+  | {
+      outcome: "cancelled";
+      job: {
+        id: string;
+        jobNumber: string;
+        status: PrintStatus;
+        totalPages: number;
+        updatedAt: Date;
+      };
+    }
+  | { outcome: "not_found" }
+  | {
+      outcome: "not_active";
+      job: {
+        id: string;
+        jobNumber: string;
+        status: PrintStatus;
+        totalPages: number;
+        updatedAt: Date;
+      };
+    };
+
+/**
+ * Soft-cancel a PENDING or PRINTING job.
+ * The status write is conditional, so a job that finishes first is left as-is.
+ * File cleanup runs only after that write succeeds.
+ */
+export async function cancelActiveShopJob(
+  shopId: string,
+  jobId: string,
+  lastError: string,
+): Promise<ActiveCancelOutcome> {
+  const jobSelect = {
+    id: true,
+    jobNumber: true,
+    status: true,
+    totalPages: true,
+    updatedAt: true,
+  } as const;
+
+  const updated = await prisma.printJob.updateMany({
+    where: {
+      id: jobId,
+      shopId,
+      status: { in: [PrintStatus.PENDING, PrintStatus.PRINTING] },
+    },
+    data: {
+      status: PrintStatus.CANCELLED,
+      claimedByAgentDeviceId: null,
+      claimedAt: null,
+      lastError,
+    },
+  });
+
+  if (updated.count === 0) {
+    const current = await prisma.printJob.findFirst({
+      where: { id: jobId, shopId },
+      select: jobSelect,
+    });
+    if (!current) return { outcome: "not_found" };
+    return { outcome: "not_active", job: current };
+  }
+
+  const files = await prisma.printJobFile.findMany({
+    where: { printJobId: jobId, fileDeletedAt: null },
+    select: { storedFileName: true },
+  });
+  for (const file of files) {
+    try {
+      await unlink(getStoredFilePath(file.storedFileName));
+    } catch {
+      // File may already be gone
+    }
+  }
+  await prisma.printJobFile.updateMany({
+    where: { printJobId: jobId, fileDeletedAt: null },
+    data: { fileDeletedAt: new Date() },
+  });
+
+  const job = await prisma.printJob.findFirst({
+    where: { id: jobId, shopId },
+    select: jobSelect,
+  });
+  if (!job) return { outcome: "not_found" };
+  return { outcome: "cancelled", job };
+}
+
+/**
+ * Customer stop for the job identified by the upload success screen.
+ * Ownership is the existing customer check: job id plus that shop's code.
+ * shopId is taken from the matched row, never from the browser.
+ */
+export async function cancelCustomerOwnedJob(shopCode: string, jobId: string) {
+  const job = await prisma.printJob.findFirst({
+    where: {
+      id: jobId,
+      shop: { shopCode, isActive: true },
+    },
+    select: {
+      id: true,
+      shopId: true,
+      jobNumber: true,
+      status: true,
+      totalPages: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!job) return { outcome: "not_found" as const };
+
+  if (job.status === PrintStatus.CANCELLED) {
+    return { outcome: "already_cancelled" as const, job };
+  }
+
+  if (
+    job.status !== PrintStatus.PENDING &&
+    job.status !== PrintStatus.PRINTING
+  ) {
+    return { outcome: "not_active" as const, job };
+  }
+
+  const cancelled = await cancelActiveShopJob(
+    job.shopId,
+    job.id,
+    CUSTOMER_CANCEL_REASON,
+  );
+  if (cancelled.outcome === "cancelled") {
+    return { outcome: "cancelled" as const, job: cancelled.job };
+  }
+  if (cancelled.outcome === "not_found") {
+    return { outcome: "not_found" as const };
+  }
+  if (cancelled.job.status === PrintStatus.CANCELLED) {
+    return { outcome: "already_cancelled" as const, job: cancelled.job };
+  }
+  return { outcome: "not_active" as const, job: cancelled.job };
+}
+
 /**
  * Delete a job for the shop.
  * PENDING/PRINTING → soft-cancel (CANCELLED) so the Agent can stop and cancel
@@ -284,6 +426,22 @@ export async function deleteShopJob(shopId: string, jobId: string) {
     return null;
   }
 
+  const isActive =
+    job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
+
+  if (isActive) {
+    const cancelled = await cancelActiveShopJob(
+      shopId,
+      job.id,
+      SHOPKEEPER_CANCEL_REASON,
+    );
+    if (cancelled.outcome === "not_found") return null;
+    if (cancelled.outcome === "not_active") {
+      return { ...job, status: cancelled.job.status, stopApplied: false as const };
+    }
+    return { ...job, status: PrintStatus.CANCELLED, stopApplied: true as const };
+  }
+
   for (const file of job.files) {
     if (file.fileDeletedAt) continue;
     try {
@@ -300,22 +458,6 @@ export async function deleteShopJob(shopId: string, jobId: string) {
     },
     data: { fileDeletedAt: new Date() },
   });
-
-  const isActive =
-    job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
-
-  if (isActive) {
-    await prisma.printJob.update({
-      where: { id: job.id },
-      data: {
-        status: PrintStatus.CANCELLED,
-        claimedByAgentDeviceId: null,
-        claimedAt: null,
-        lastError: "Cancelled by shopkeeper.",
-      },
-    });
-    return { ...job, status: PrintStatus.CANCELLED };
-  }
 
   await prisma.printJob.delete({
     where: { id: job.id },

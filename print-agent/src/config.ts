@@ -57,6 +57,11 @@ export type AgentConfig = {
   selectedPrinter: string | null;
   /** Start Agent when the Windows user logs in (enabled by default). */
   openAtLogin: boolean;
+  /**
+   * Available Agent version the user hid with Later.
+   * Local only. A different available version shows the notice again.
+   */
+  dismissedUpdateVersion: string | null;
 };
 
 /** Login-item display / Run-key name — keep stable for install/uninstall. */
@@ -159,6 +164,7 @@ export function tryMigrateLegacyAgentConfig(options?: {
             ? null
             : null,
       openAtLogin: resolveOpenAtLogin(parsed.openAtLogin),
+      dismissedUpdateVersion: null,
     };
 
     ensureDirs();
@@ -246,6 +252,7 @@ function getDefaultConfig(agentId: string): AgentConfig {
     authToken: null,
     selectedPrinter: null,
     openAtLogin: true,
+    dismissedUpdateVersion: null,
   };
 }
 
@@ -345,6 +352,12 @@ export function loadConfig(): AgentConfig {
       };
     }
 
+    const remembered = config.dismissedUpdateVersion;
+    config.dismissedUpdateVersion =
+      typeof remembered === "string" && /^\d+\.\d+\.\d+$/.test(remembered.trim())
+        ? remembered.trim()
+        : null;
+
     // Persist remapped production host / migrated openAtLogin without touching agentId.
     const apiRemapped =
       typeof parsed.apiUrl === "string" &&
@@ -410,6 +423,7 @@ export function clearShopSession(): AgentConfig {
     shopCode: "",
     shopName: null,
     selectedPrinter: null,
+    dismissedUpdateVersion: current.dismissedUpdateVersion ?? null,
   };
   saveConfig(next);
   return { ...next };

@@ -60,6 +60,12 @@ export type AdminShopDetail = {
   id: string;
   shopName: string;
   shopCode: string;
+  /** Shop profile phone, as stored. */
+  phone: string;
+  /** Shop profile email, as stored. Null when the shop row has none. */
+  email: string | null;
+  /** Shop profile address, as stored. */
+  address: string;
   isActive: boolean;
   createdAt: string;
   owner: {
@@ -477,6 +483,9 @@ export async function getAdminShopDetail(
       id: true,
       shopName: true,
       shopCode: true,
+      phone: true,
+      email: true,
+      address: true,
       isActive: true,
       createdAt: true,
       agentId: true,
@@ -581,6 +590,9 @@ export async function getAdminShopDetail(
     id: shop.id,
     shopName: shop.shopName,
     shopCode: shop.shopCode,
+    phone: shop.phone,
+    email: shop.email,
+    address: shop.address,
     isActive: shop.isActive,
     createdAt: shop.createdAt.toISOString(),
     owner: {

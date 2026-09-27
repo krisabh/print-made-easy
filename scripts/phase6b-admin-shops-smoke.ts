@@ -271,7 +271,12 @@ async function main() {
       assert.ok(detail);
       assert.equal(detail.shopName, shopA.shopName);
       assert.equal(detail.owner.email, ownerA.email);
-      console.log("F PASS admin can view shop details");
+      assert.equal(detail.phone, "9876543210");
+      assert.equal(detail.email, ownerA.email);
+      assert.equal(detail.address, "Addr A");
+      assert.equal(detail.phone, shopA.phone);
+      assert.equal(detail.address, shopA.address);
+      console.log("F PASS admin can view shop details including phone and address");
     }
 
     // G — Non-admin cannot list shops (gate)

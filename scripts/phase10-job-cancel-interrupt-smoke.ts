@@ -220,6 +220,18 @@ async function main() {
       false,
     );
     assert.match(serviceSrc, /automatic resume/i);
+    const jobsBoard = fs.readFileSync(
+      path.join(process.cwd(), "components/dashboard/jobs-board.tsx"),
+      "utf8",
+    );
+    assert.match(jobsBoard, /STOP JOB/);
+    assert.match(jobsBoard, /Stopping\.\.\./);
+    assert.match(jobsBoard, /Job stopped/);
+    assert.match(jobsBoard, /method: "DELETE"/);
+    assert.equal(
+      jobsBoard.includes("This cancels the job and tells the Agent to stop"),
+      false,
+    );
     console.log("4 PASS cancel plumbing kept; resume popup removed");
 
     // 16-page custom range still selects only those pages (no auto-resume)

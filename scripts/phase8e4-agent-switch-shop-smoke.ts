@@ -23,6 +23,7 @@ function applyClear(current: AgentConfig): AgentConfig {
     shopCode: "",
     shopName: null,
     selectedPrinter: null,
+    dismissedUpdateVersion: current.dismissedUpdateVersion,
   };
 }
 
@@ -38,6 +39,7 @@ function main() {
     authToken: "token-shop-a",
     selectedPrinter: "Canon LBP",
     openAtLogin: true,
+    dismissedUpdateVersion: null,
   };
 
   // 1 — Cancel leaves config unchanged (confirmation is UI-only)
@@ -113,6 +115,7 @@ function main() {
       shopCode: "PMEBZMR4Q",
       shopName: "RachnaEnterprises",
       selectedPrinter: "Epson",
+      dismissedUpdateVersion: null,
     };
     assert.equal(Boolean(shopB.authToken), true);
     assert.equal(shopB.shopCode, "PMEBZMR4Q");

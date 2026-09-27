@@ -12,15 +12,27 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
  * This module must stay free of Node `fs` so dashboard client components can
  * import WINDOWS_AGENT_DOWNLOAD / WINDOWS_AGENT_RELEASE safely.
  */
+/**
+ * Customer-facing notes for the release currently offered by the server.
+ * Ordered, short, and free of internal implementation detail.
+ */
+export const WINDOWS_AGENT_RELEASE_NOTES = [
+  "Get notified when a new PrintYantra Agent update is available.",
+  "See what's new before updating.",
+  "Contact PrintYantra Support directly from the Agent.",
+  "Get help through WhatsApp Support.",
+] as const;
+
 export const WINDOWS_AGENT_RELEASE = {
   productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.6.0",
-  fileName: "PrintYantra-Agent-Setup-1.6.0.exe",
+  version: "1.7.0",
+  fileName: "PrintYantra-Agent-Setup-1.7.0.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
-  notes:
-    "PrintYantra Agent 1.6.0: dashboard cancellation stops remaining pages, printer interruptions do not auto-resume, and only this job's Windows spooler entries are cancelled. Same app identity, ProgramData config, printer settings, and SHA-256 update check as previous releases.",
+  /** Single string kept for Agents that only read `notes`. */
+  notes: WINDOWS_AGENT_RELEASE_NOTES.join("\n"),
+  releaseNotes: WINDOWS_AGENT_RELEASE_NOTES,
 } as const;
 
 /**
@@ -36,7 +48,10 @@ export type AgentUpdateManifest = {
    * null when WINDOWS_AGENT_SHA256 is not configured yet (EXE not hashed).
    */
   sha256: string | null;
+  /** Backward-compatible single string (newline-separated notes). */
   notes: string;
+  /** Ordered customer-facing bullets. Empty when the server has no notes. */
+  releaseNotes: readonly string[];
   fileName: string;
 };
 
@@ -81,6 +96,7 @@ export function getPublicAgentUpdateManifest(
     url: getPublicAgentDownloadUrl(),
     sha256: resolveConfiguredAgentSha256(envSha256),
     notes: WINDOWS_AGENT_RELEASE.notes,
+    releaseNotes: WINDOWS_AGENT_RELEASE.releaseNotes,
     fileName: WINDOWS_AGENT_RELEASE.fileName,
   };
 }

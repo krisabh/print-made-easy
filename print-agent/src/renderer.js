@@ -23,12 +23,16 @@
   const updateMeta = document.getElementById("updateMeta");
   const updateActions = document.getElementById("updateActions");
   const updateNowBtn = document.getElementById("updateNowBtn");
+  const whatsNewBtn = document.getElementById("whatsNewBtn");
+  const updateNotes = document.getElementById("updateNotes");
   const updateLaterBtn = document.getElementById("updateLaterBtn");
   const updateCancelBtn = document.getElementById("updateCancelBtn");
   const updateProgressWrap = document.getElementById("updateProgressWrap");
   const updateProgressBar = document.getElementById("updateProgressBar");
   const updateProgressLabel = document.getElementById("updateProgressLabel");
   const checkUpdatesBtn = document.getElementById("checkUpdatesBtn");
+  const contactSupportBtn = document.getElementById("contactSupportBtn");
+  const whatsappSupportBtn = document.getElementById("whatsappSupportBtn");
 
   const connectHint = document.getElementById("connectHint");
   const loginPanel = document.getElementById("loginPanel");
@@ -47,6 +51,48 @@
   let colorBusy = false;
   let updateCheckBusy = false;
   let switchingShop = false;
+  let whatsNewOpen = false;
+  let lastUpdateState = null;
+
+  function releaseNoteList(state) {
+    if (Array.isArray(state.releaseNotes)) {
+      return state.releaseNotes
+        .filter((item) => typeof item === "string" && item.trim())
+        .map((item) => item.trim());
+    }
+    if (typeof state.notes === "string" && state.notes.trim()) {
+      return state.notes
+        .split(/\r?\n/)
+        .map((line) => line.trim().replace(/^[-•*]\s*/, ""))
+        .filter(Boolean);
+    }
+    return [];
+  }
+
+  function fillReleaseNotes(version, notes) {
+    if (!updateNotes) return;
+    updateNotes.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "update-notes-title";
+    title.textContent = version
+      ? `What's New in PrintYantra Agent ${version}`
+      : "What's New";
+    updateNotes.appendChild(title);
+    if (!notes.length) {
+      const empty = document.createElement("p");
+      empty.className = "meta";
+      empty.textContent = "Update details are currently unavailable.";
+      updateNotes.appendChild(empty);
+      return;
+    }
+    const list = document.createElement("ul");
+    for (const item of notes) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    updateNotes.appendChild(list);
+  }
 
   function setMessage(text, ok = true) {
     message.textContent = text;
@@ -65,42 +111,56 @@
 
   function renderUpdateState(update) {
     if (!updateBanner || !updateTitle || !updateMeta || !updateActions) return;
-    const state = update || {};
+    lastUpdateState = update || {};
+    const state = lastUpdateState;
     const status = state.status || "idle";
     const current = state.currentVersion || "";
     const latest = state.latestVersion || "";
-    const notes = state.notes || "";
+    const notes = releaseNoteList(state);
     const dismissed = Boolean(state.dismissed);
-    const showAvailable =
-      status === "available" && state.updateAvailable && !dismissed;
+    const updatePending = status === "available" && Boolean(state.updateAvailable);
+    const expanded = updatePending && !dismissed;
+    const compact = updatePending && dismissed;
     const showDownloadBusy =
       status === "downloading" || status === "verifying";
     const showReady =
       status === "readyToInstall" || status === "waitingForIdle";
     const showInstalling = status === "installing";
     const showUnavailable = status === "verificationUnavailable";
+    if (!(updatePending || showReady)) whatsNewOpen = false;
 
-    updateBanner.classList.toggle("available", showAvailable || showReady);
+    updateBanner.classList.toggle("available", expanded || compact || showReady);
+    updateBanner.classList.toggle("compact", compact);
     updateBanner.classList.toggle("downloading", status === "downloading");
     updateBanner.classList.toggle("verifying", status === "verifying");
     updateBanner.classList.toggle("ready", showReady || showInstalling);
     updateBanner.classList.toggle("unavailable", showUnavailable);
 
+    if (updateNotes) {
+      const showPanel = whatsNewOpen && (updatePending || showReady);
+      updateNotes.hidden = !showPanel;
+      if (showPanel) fillReleaseNotes(latest, notes);
+    }
+
     if (updateNowBtn) {
       updateNowBtn.style.display =
-        showAvailable || showReady ? "" : "none";
+        expanded || compact || showReady ? "" : "none";
       updateNowBtn.disabled = showDownloadBusy || showInstalling;
-      updateNowBtn.textContent = showReady ? "Update Now" : "Update Now";
+      updateNowBtn.textContent = "Update Now";
+    }
+    if (whatsNewBtn) {
+      whatsNewBtn.style.display = updatePending || showReady ? "" : "none";
     }
     if (updateLaterBtn) {
-      updateLaterBtn.style.display = showAvailable ? "" : "none";
+      updateLaterBtn.style.display = expanded ? "" : "none";
     }
     if (updateCancelBtn) {
       updateCancelBtn.style.display = showDownloadBusy ? "" : "none";
       updateCancelBtn.disabled = false;
     }
 
-    const showActions = showAvailable || showDownloadBusy || showReady;
+    const showActions =
+      expanded || compact || showDownloadBusy || showReady;
     updateActions.style.display = showActions ? "flex" : "none";
 
     if (updateProgressWrap && updateProgressBar && updateProgressLabel) {
@@ -191,18 +251,36 @@
       return;
     }
 
-    if (showAvailable) {
-      updateTitle.textContent = "New version available";
-      const lines = [`Version ${latest}`];
-      if (current) lines.push(`Current version: ${current}`);
-      if (notes) lines.push(notes);
+    if (expanded) {
+      updateTitle.textContent = "New update available";
+      const lines = [];
+      if (latest) lines.push(`Available: ${latest}`);
+      if (current) lines.push(`Installed: ${current}`);
+      if (notes.length) {
+        lines.push(notes.slice(0, 2).map((item) => `• ${item}`).join("\n"));
+      } else {
+        lines.push("Update details are currently unavailable.");
+      }
       updateMeta.textContent = lines.join("\n");
       return;
     }
 
-    if (status === "error" && state.userMessage) {
-      updateTitle.textContent = state.userMessage;
-      updateMeta.textContent = current ? `Current version: ${current}` : "";
+    if (compact) {
+      updateTitle.textContent = "Update available";
+      updateMeta.textContent = latest
+        ? `Available: ${latest}`
+        : current
+          ? `Installed: ${current}`
+          : "";
+      return;
+    }
+
+    if (status === "error") {
+      updateTitle.textContent =
+        state.userMessage ||
+        (current ? `Current version: ${current}` : "Updates");
+      updateMeta.textContent =
+        state.userMessage && current ? `Current version: ${current}` : "";
       return;
     }
 
@@ -686,6 +764,7 @@
           currentVersion: "",
           latestVersion: null,
           notes: null,
+          releaseNotes: [],
           fileName: null,
           updateAvailable: false,
           dismissed: false,
@@ -696,6 +775,37 @@
       } finally {
         updateCheckBusy = false;
         checkUpdatesBtn.disabled = false;
+      }
+    });
+  }
+
+  if (whatsNewBtn) {
+    whatsNewBtn.addEventListener("click", () => {
+      whatsNewOpen = !whatsNewOpen;
+      renderUpdateState(lastUpdateState);
+    });
+  }
+
+  if (contactSupportBtn) {
+    contactSupportBtn.addEventListener("click", async () => {
+      try {
+        if (window.printAgent && window.printAgent.openSupportEmail) {
+          await window.printAgent.openSupportEmail();
+        }
+      } catch {
+        // Opening the mail app must not affect printing.
+      }
+    });
+  }
+
+  if (whatsappSupportBtn) {
+    whatsappSupportBtn.addEventListener("click", async () => {
+      try {
+        if (window.printAgent && window.printAgent.openWhatsAppSupport) {
+          await window.printAgent.openWhatsAppSupport();
+        }
+      } catch {
+        // Opening WhatsApp must not affect printing.
       }
     });
   }

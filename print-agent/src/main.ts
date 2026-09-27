@@ -33,6 +33,10 @@ import {
   resolveConfiguredPrinterSelection,
 } from "./selected-printer";
 import {
+  AGENT_SUPPORT_EMAIL_HREF,
+  AGENT_WHATSAPP_SUPPORT_HREF,
+} from "./support-links";
+import {
   PERIODIC_CLEANUP_INTERVAL_MS,
   cleanPeriodicStaleTempFiles,
   cleanStartupOrphanTempFiles,
@@ -139,6 +143,11 @@ const updateChecker = createUpdateChecker({
     if (cleanupTimer) clearInterval(cleanupTimer);
     if (updateCheckTimer) clearInterval(updateCheckTimer);
     app.quit();
+  },
+  getDismissedUpdateVersion: () =>
+    loadConfig().dismissedUpdateVersion ?? null,
+  rememberDismissedUpdateVersion: (version) => {
+    updateConfig({ dismissedUpdateVersion: version });
   },
   onStateChange: () => {
     pushUpdateState();
@@ -710,6 +719,14 @@ function registerIpc() {
 
   ipcMain.handle("agent:open-dashboard", async () => {
     await openDashboardInBrowser();
+  });
+
+  ipcMain.handle("agent:open-support-email", async () => {
+    await shell.openExternal(AGENT_SUPPORT_EMAIL_HREF);
+  });
+
+  ipcMain.handle("agent:open-whatsapp-support", async () => {
+    await shell.openExternal(AGENT_WHATSAPP_SUPPORT_HREF);
   });
 
   ipcMain.handle(

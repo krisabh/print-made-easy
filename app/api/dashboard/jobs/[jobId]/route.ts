@@ -21,6 +21,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
       return Response.json({ error: "Job not found." }, { status: 404 });
     }
 
+    if ("stopApplied" in deleted && deleted.stopApplied === false) {
+      return Response.json(
+        { error: "This job already finished." },
+        { status: 409 },
+      );
+    }
+
     return Response.json({
       ok: true,
       jobNumber: deleted.jobNumber,

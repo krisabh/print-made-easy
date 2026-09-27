@@ -37,14 +37,19 @@ export function AdminShopDetailView({
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Shop name" value={shop.shopName} />
           <Field label="Shop code" value={shop.shopCode} mono />
-          <Field label="Owner name" value={shop.owner.name || "—"} />
-          <Field label="Owner email" value={shop.owner.email || "—"} />
+          <Field label="Owner" value={shop.owner.name || "—"} />
+          <Field label="Phone" value={shop.phone || "—"} />
+          <Field
+            label="Email"
+            value={shop.email || shop.owner.email || "—"}
+          />
+          <Field label="Address" value={shop.address || "—"} wide />
           <Field
             label="Created"
             value={formatAdminCreatedDate(shop.createdAt)}
           />
           <Field
-            label="Shop status"
+            label="Status"
             value={shop.isActive ? "Active" : "Deactivated"}
           />
         </dl>
@@ -201,16 +206,18 @@ function Field({
   label,
   value,
   mono = false,
+  wide = false,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  wide?: boolean;
 }) {
   return (
-    <div>
+    <div className={wide ? "sm:col-span-2" : undefined}>
       <dt className="text-xs font-medium text-slate-500">{label}</dt>
       <dd
-        className={`mt-1 text-sm text-slate-900 ${mono ? "font-mono" : "font-medium"}`}
+        className={`mt-1 text-sm break-words whitespace-pre-wrap text-slate-900 ${mono ? "font-mono" : "font-medium"}`}
       >
         {value}
       </dd>

@@ -138,6 +138,8 @@ export function JobsBoard({
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [stoppedIds, setStoppedIds] = useState<Set<string>>(() => new Set());
   const [isRefreshing, startRefresh] = useTransition();
 
   // initialSummary remains part of the public props contract for dashboard pages.
@@ -200,17 +202,62 @@ export function JobsBoard({
     });
   }, [query, periodQuery, selected, status]);
 
+  function isActivePrintJob(job: JobItem) {
+    return (
+      job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING
+    );
+  }
+
+  async function handleStopJob(job: JobItem) {
+    if (printingLocked) {
+      setError("Subscription required to manage print jobs.");
+      return;
+    }
+    if (!isActivePrintJob(job) || stoppingId) return;
+
+    setStoppingId(job.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dashboard/jobs/${job.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Unable to stop job.");
+        return;
+      }
+      const markStopped = (item: JobItem) =>
+        item.id === job.id
+          ? { ...item, status: PrintStatus.CANCELLED }
+          : item;
+      setJobs((current) => current.map(markStopped));
+      setPeriodJobs((current) => current.map(markStopped));
+      setSelected((current) =>
+        current?.id === job.id ? markStopped(current) : current,
+      );
+      setStoppedIds((current) => {
+        const next = new Set(current);
+        next.add(job.id);
+        return next;
+      });
+    } catch {
+      setError("Unable to stop job.");
+    } finally {
+      setStoppingId(null);
+    }
+  }
+
   async function handleDeleteJob(job: JobItem) {
     if (printingLocked) {
       setError("Subscription required to manage print jobs.");
       return;
     }
-    const isActive =
-      job.status === PrintStatus.PENDING || job.status === PrintStatus.PRINTING;
+    if (isActivePrintJob(job)) {
+      await handleStopJob(job);
+      return;
+    }
     const confirmed = window.confirm(
-      isActive
-        ? `Delete job ${job.jobNumber}?\n\nThis cancels the job and tells the Agent to stop. Queued Windows print work for this job is cancelled when possible. A page already leaving the printer may still finish.`
-        : `Delete job ${job.jobNumber}?\n\nThis permanently removes the job from the dashboard.`,
+      `Delete job ${job.jobNumber}?\n\nThis permanently removes the job from the dashboard.`,
     );
     if (!confirmed) return;
 
@@ -237,6 +284,64 @@ export function JobsBoard({
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function renderJobControl(job: JobItem, prominent = false) {
+    if (stoppedIds.has(job.id)) {
+      return (
+        <p className="text-sm font-semibold text-red-700" role="status">
+          Job stopped
+        </p>
+      );
+    }
+
+    if (isActivePrintJob(job)) {
+      const stopping = stoppingId === job.id;
+      return (
+        <Button
+          type="button"
+          size="sm"
+          className={
+            prominent
+              ? "h-11 min-w-36 bg-red-600 px-4 text-sm font-semibold tracking-wide text-white hover:bg-red-700"
+              : "h-10 bg-red-600 px-3 text-sm font-semibold tracking-wide text-white hover:bg-red-700"
+          }
+          disabled={stopping || printingLocked}
+          aria-busy={stopping}
+          aria-label={
+            stopping
+              ? `Stopping job ${job.jobNumber}`
+              : `Stop job ${job.jobNumber}`
+          }
+          title={printingLocked ? "Subscribe to manage jobs" : "Stop job"}
+          onClick={() => void handleStopJob(job)}
+        >
+          {stopping ? "Stopping..." : "STOP JOB"}
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size={prominent ? "sm" : "icon-sm"}
+        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+        disabled={deletingId === job.id || printingLocked}
+        aria-label={`Delete job ${job.jobNumber}`}
+        title={printingLocked ? "Subscribe to manage jobs" : "Delete job"}
+        onClick={() => void handleDeleteJob(job)}
+      >
+        <Trash2 className="size-3.5" />
+        {prominent
+          ? printingLocked
+            ? "Subscribe to manage"
+            : deletingId === job.id
+              ? "Deleting…"
+              : "Delete Job"
+          : null}
+      </Button>
+    );
   }
 
   useEffect(() => {
@@ -548,22 +653,7 @@ export function JobsBoard({
                               <Eye className="size-3.5" />
                               View
                             </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                              disabled={deletingId === job.id || printingLocked}
-                              aria-label={`Delete job ${job.jobNumber}`}
-                              title={
-                                printingLocked
-                                  ? "Subscribe to manage jobs"
-                                  : "Delete job"
-                              }
-                              onClick={() => void handleDeleteJob(job)}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
+                            {renderJobControl(job)}
                           </div>
                         </td>
                       </tr>
@@ -626,7 +716,7 @@ export function JobsBoard({
                     {job.lastError ? (
                       <p className="mt-2 text-xs text-red-600">{job.lastError}</p>
                     ) : null}
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -636,22 +726,7 @@ export function JobsBoard({
                         <Eye className="size-3.5" />
                         View
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                        disabled={deletingId === job.id || printingLocked}
-                        aria-label={`Delete job ${job.jobNumber}`}
-                        title={
-                          printingLocked
-                            ? "Subscribe to manage jobs"
-                            : "Delete job"
-                        }
-                        onClick={() => void handleDeleteJob(job)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      {renderJobControl(job)}
                     </div>
                   </li>
                 );
@@ -698,21 +773,7 @@ export function JobsBoard({
 
             <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                  disabled={deletingId === selected.id || printingLocked}
-                  onClick={() => void handleDeleteJob(selected)}
-                >
-                  <Trash2 className="size-3.5" />
-                  {printingLocked
-                    ? "Subscribe to manage"
-                    : deletingId === selected.id
-                      ? "Deleting…"
-                      : "Delete Job"}
-                </Button>
+                {renderJobControl(selected, true)}
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>

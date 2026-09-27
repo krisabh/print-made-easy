@@ -18,6 +18,8 @@ export type AgentUpdateManifest = {
   url: string;
   sha256: string | null;
   notes: string;
+  /** Ordered bullets from the server. May be empty. */
+  releaseNotes: string[];
   fileName: string;
 };
 
@@ -40,6 +42,8 @@ export type UpdatePublicState = {
   currentVersion: string;
   latestVersion: string | null;
   notes: string | null;
+  /** Server-provided bullets for the available version. Never version-hardcoded. */
+  releaseNotes: string[];
   fileName: string | null;
   updateAvailable: boolean;
   /** User dismissed the banner via Later (until next successful newer check). */
@@ -68,11 +72,40 @@ const DOWNLOAD_PATH = "/api/agent/download";
 export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 export const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 const NOTES_DISPLAY_MAX = 280;
+const RELEASE_NOTE_MAX_ITEMS = 12;
+const RELEASE_NOTE_MAX_LEN = 180;
 
 export function truncateNotes(notes: string, max = NOTES_DISPLAY_MAX): string {
   const trimmed = notes.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max - 1)}…`;
+}
+
+function cleanReleaseNote(value: string): string {
+  return value.trim().replace(/^[-•*]\s*/, "").slice(0, RELEASE_NOTE_MAX_LEN);
+}
+
+/**
+ * Prefer a server `releaseNotes` array. Fall back to newline-separated `notes`.
+ * Invalid extra fields never reject an otherwise valid manifest.
+ */
+export function normalizeReleaseNotes(
+  rawReleaseNotes: unknown,
+  notesFallback: string,
+): string[] {
+  if (Array.isArray(rawReleaseNotes)) {
+    const items = rawReleaseNotes
+      .filter((item): item is string => typeof item === "string")
+      .map(cleanReleaseNote)
+      .filter(Boolean)
+      .slice(0, RELEASE_NOTE_MAX_ITEMS);
+    if (items.length > 0) return items;
+  }
+  return notesFallback
+    .split(/\r?\n/)
+    .map(cleanReleaseNote)
+    .filter(Boolean)
+    .slice(0, RELEASE_NOTE_MAX_ITEMS);
 }
 
 export function isSha256HexOrNull(value: unknown): value is string | null {
@@ -162,6 +195,8 @@ export function validateAgentUpdateManifest(
     return { ok: false, reason: "fileName_version_mismatch" };
   }
 
+  const releaseNotes = normalizeReleaseNotes(obj.releaseNotes, obj.notes);
+
   return {
     ok: true,
     manifest: {
@@ -169,6 +204,7 @@ export function validateAgentUpdateManifest(
       url: downloadUrl.toString(),
       sha256: obj.sha256,
       notes: obj.notes,
+      releaseNotes,
       fileName: obj.fileName,
     },
   };
@@ -188,6 +224,12 @@ export type UpdateCheckDeps = {
    * Injected so unit tests never trigger Electron process exit.
    */
   requestAgentExitForUpdate?: () => void;
+  /**
+   * Version the user already dismissed with Later.
+   * Same available version must not reopen the notice after restart.
+   */
+  getDismissedUpdateVersion?: () => string | null;
+  rememberDismissedUpdateVersion?: (version: string) => void;
   /** Injectable spawn for tests. */
   spawnInstaller?: typeof spawnDetachedInstaller;
   /** Injectable hash for tests. */
@@ -232,6 +274,7 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
     currentVersion: deps.getCurrentVersion(),
     latestVersion: null,
     notes: null,
+    releaseNotes: [],
     fileName: null,
     updateAvailable: false,
     dismissed: false,
@@ -259,8 +302,17 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
     emitChange();
   }
 
+  function isDismissedFor(version: string): boolean {
+    if (publicState.latestVersion === version && publicState.dismissed) {
+      return true;
+    }
+    const remembered = deps.getDismissedUpdateVersion?.() ?? null;
+    return remembered === version;
+  }
+
   function dismissAvailable() {
-    if (publicState.status === "available") {
+    if (publicState.status === "available" && publicState.latestVersion) {
+      deps.rememberDismissedUpdateVersion?.(publicState.latestVersion);
       setState({ dismissed: true, userMessage: null });
     }
   }
@@ -350,6 +402,7 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
             updateAvailable: false,
             latestVersion: manifest.version,
             notes: null,
+            releaseNotes: [],
             fileName: null,
             dismissed: false,
             userMessage: manual ? "You're up to date." : null,
@@ -367,7 +420,6 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
           };
         }
 
-        const previousLatest = publicState.latestVersion;
         lastManifest = manifest;
         verifiedInstallerPath = null;
         setState({
@@ -375,9 +427,9 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
           updateAvailable: true,
           latestVersion: manifest.version,
           notes: truncateNotes(manifest.notes),
+          releaseNotes: manifest.releaseNotes,
           fileName: manifest.fileName,
-          dismissed:
-            previousLatest === manifest.version ? publicState.dismissed : false,
+          dismissed: isDismissedFor(manifest.version),
           userMessage: manual ? "New version available." : null,
           updateNowReady: false,
           progressPercent: null,
@@ -395,6 +447,28 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
         const code =
           error instanceof Error ? error.message : "update_check_failed";
         console.warn("Update check failed:", code);
+        // A failed recheck must not hide an update the Agent already found,
+        // and must not interrupt printing.
+        if (!manual && lastManifest && publicState.updateAvailable) {
+          setState({
+            status: "available",
+            updateAvailable: true,
+            latestVersion: lastManifest.version,
+            notes: truncateNotes(lastManifest.notes),
+            releaseNotes: lastManifest.releaseNotes,
+            fileName: lastManifest.fileName,
+            dismissed: isDismissedFor(lastManifest.version),
+            userMessage: null,
+            updateNowReady: false,
+          });
+          return {
+            updateAvailable: true,
+            currentVersion,
+            latestVersion: lastManifest.version,
+            manifest: lastManifest,
+            error: code,
+          };
+        }
         setState({
           status: "error",
           updateAvailable: false,
@@ -782,6 +856,7 @@ export function createUpdateChecker(deps: UpdateCheckDeps) {
       latestVersion: options.manifest.version,
       fileName: options.manifest.fileName,
       notes: options.manifest.notes,
+      releaseNotes: options.manifest.releaseNotes,
       dismissed: false,
       userMessage: "Update ready",
       progressPercent: 100,
