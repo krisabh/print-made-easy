@@ -26,7 +26,11 @@ import {
 } from "./config";
 import { connectWithPairingUrl, PairingError } from "./pairing";
 import { processPendingJobs, runTestPrint, isPrintOperationBusy } from "./job-service";
-import { detectPrinters } from "./printer-service";
+import {
+  detectPrinters,
+  readPrintersForLightRefresh,
+  type DetectCaller,
+} from "./printer-service";
 import {
   applyFirstRunPrinterIfNeeded,
   normalizeConfiguredPrinter,
@@ -387,11 +391,11 @@ async function ensureRegistered(selectedPrinter: string | null, printerStatus: s
   return true;
 }
 
-async function syncWithCloud() {
+async function syncWithCloud(caller: DetectCaller = "heartbeat") {
   if (syncInFlight) return syncInFlight;
 
   syncInFlight = (async () => {
-    const printers = await detectPrinters().catch(() => []);
+    const printers = await detectPrinters({ caller }).catch(() => []);
     const config = loadConfig();
 
     // Preserve configured default. Never auto-pick Windows default / first printer
@@ -489,8 +493,11 @@ function registerIpc() {
       let connection = lastConnection;
 
       try {
-        // Cached/single-flight — avoids stacking PowerShell with heartbeat/job loops.
-        printers = await detectPrinters();
+        // Light refresh displays the last scan. It does not start CIM while a
+        // result exists. Manual refresh still uses detectPrinters().
+        printers = light
+          ? await readPrintersForLightRefresh()
+          : await detectPrinters({ caller: "window-refresh" });
       } catch (error) {
         console.error("detectPrinters failed:", error);
       }
@@ -517,7 +524,7 @@ function registerIpc() {
 
       if (shouldSyncCloud) {
         try {
-          await syncWithCloud();
+          await syncWithCloud("other");
           connection = lastConnection;
         } catch (error) {
           console.error("Agent registration/connection failed:", error);
@@ -571,7 +578,7 @@ function registerIpc() {
       throw new Error("Invalid printer selection.");
     }
 
-    const printers = await detectPrinters({ force: true });
+    const printers = await detectPrinters({ force: true, caller: "other" });
     if (!printers.some((printer) => printer.name === printerName)) {
       throw new Error("Selected printer is not available.");
     }
@@ -616,7 +623,7 @@ function registerIpc() {
         throw new Error("Connect the Agent to your shop before configuring color.");
       }
 
-      const printers = await detectPrinters().catch(() => []);
+      const printers = await detectPrinters({ caller: "other" }).catch(() => []);
       const config = loadConfig();
       const selected =
         normalizeConfiguredPrinter(config.selectedPrinter) ?? null;
@@ -737,7 +744,7 @@ function registerIpc() {
         });
 
         try {
-          await syncWithCloud();
+          await syncWithCloud("other");
         } catch (error) {
           console.error("Post-pairing sync failed:", error);
         }
@@ -782,7 +789,7 @@ function registerIpc() {
         });
 
         try {
-          await syncWithCloud();
+          await syncWithCloud("other");
         } catch (error) {
           console.error("Post-login sync failed:", error);
         }

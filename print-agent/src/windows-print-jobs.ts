@@ -8,6 +8,8 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 
+import { notePrintTraceSpoolFailure } from "./print-perf-trace";
+
 const execFileAsync = promisify(execFile);
 
 export type WindowsSpoolJob = {
@@ -74,6 +76,7 @@ if ($list.Count -eq 0) { '[]' } else { $list | ConvertTo-Json -Compress }
   } catch (error) {
     const message = error instanceof Error ? error.message : "list failed";
     console.warn("Windows spool list failed:", message);
+    notePrintTraceSpoolFailure(message);
     return [];
   }
 }

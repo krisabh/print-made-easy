@@ -18,7 +18,43 @@ import {
 } from "./image-to-printable-pdf";
 import { countPdfPages, resolvePrintPageList } from "./pdf-page-list";
 import { planJobPrint } from "./print-settings";
-import { detectPrinters, printPdfFile } from "./printer-service";
+import {
+  abortPrintObservation,
+  beginPrintObservation,
+  closePrintTraceIfOpen,
+  commitPrintTrace,
+  finishPrintTrace,
+  noteClaimStart,
+  noteClaimSuccess,
+  noteDownloadStart,
+  noteDownloadSuccess,
+  notePagePreparationEnd,
+  notePagePreparationStart,
+  notePreparationEnd,
+  notePreparationStart,
+  notePrinterCheckResult,
+  notePrinterCheckStart,
+  notePrinterDetectEnd,
+  notePrinterDetectStart,
+  notePrintTraceFailure,
+  noteSpoolerEnd,
+  noteSpoolerStart,
+  setPrintTraceCimCapture,
+  tracePrintEvent,
+} from "./print-perf-trace";
+import {
+  clearPrintPerf,
+  detectPrinters,
+  getDetectPrintersStats,
+  logPrintPageSummary,
+  logPrintPerf,
+  notePrintClaim,
+  notePrintDownload,
+  notePrintPathStart,
+  notePrintPrepare,
+  peekPrinterDetectCache,
+  printPdfFile,
+} from "./printer-service";
 import {
   deleteFileSafe,
   getTempFilePath,
@@ -186,7 +222,11 @@ async function submitPdfPage(input: {
   pages: string;
   paperSize: string | undefined;
 }) {
+  notePagePreparationStart(input.pages);
+  const spoolBeforeStarted = Date.now();
   const before = await snapshotSpoolJobIds();
+  const spoolBeforeMs = Date.now() - spoolBeforeStarted;
+  notePagePreparationEnd(input.pages);
   await printPdfFile(input.printablePath, input.printerName, {
     copies: input.copies,
     printMode: input.printMode,
@@ -196,11 +236,31 @@ async function submitPdfPage(input: {
     pages: input.pages,
     paperSize: input.paperSize,
   });
+  noteSpoolerStart(input.pages);
+  const spoolAfterStarted = Date.now();
   const after = await listWindowsPrintJobs();
+  const t7 = Date.now();
+  logPrintPerf("T7", t7, {
+    page: input.pages,
+    phase: "spool-after",
+    spoolDetectMs: t7 - spoolAfterStarted,
+    spoolBeforeMs,
+  });
+  logPrintPageSummary({
+    page: input.pages,
+    t7,
+    spoolDetectMs: t7 - spoolAfterStarted,
+    spoolBeforeMs,
+  });
   const created = after
     .filter((job) => !before.has(job.jobId))
     .map((job) => job.jobId);
   rememberSpoolIds(input.jobNumber, created);
+  noteSpoolerEnd(input.pages, {
+    newJobs: created.length,
+    windowsJobIds: created.length > 0 ? created.join(",") : "none",
+    spoolBeforeMs,
+  });
   if (created.length > 0) {
     console.log(
       `[spool] ${input.jobNumber} page ${input.pages} windowsJobIds=${created.join(",")}`,
@@ -226,10 +286,24 @@ async function printPdfFilePageByPage(input: {
   paperSize: string | undefined;
   plannedPageRange: string | undefined;
 }) {
-  const totalPages = await countPdfPages(input.printablePath);
+  const pageCountStarted = Date.now();
+  let totalPages: number;
+  try {
+    totalPages = await countPdfPages(input.printablePath);
+  } catch (error) {
+    notePrintTraceFailure("pdf-preparation-failure", error);
+    throw error;
+  }
+  notePreparationEnd(totalPages);
+  logPrintPerf("page-count", Date.now(), {
+    pageCountMs: Date.now() - pageCountStarted,
+    totalPages,
+  });
   const pageList = resolvePrintPageList(input.plannedPageRange, totalPages);
   if (pageList.length === 0) {
-    throw new Error("No printable pages in this PDF.");
+    const error = new Error("No printable pages in this PDF.");
+    notePrintTraceFailure("pdf-preparation-failure", error);
+    throw error;
   }
 
   for (let i = 0; i < pageList.length; i++) {
@@ -262,7 +336,16 @@ async function printCloudJob(job: PendingJob, printerName: string) {
   try {
     await assertJobStillPrintable(job.id, job.jobNumber);
 
-    const claim = await claimJob(job.id);
+    noteClaimStart();
+    const claimStarted = Date.now();
+    let claim: Awaited<ReturnType<typeof claimJob>>;
+    try {
+      claim = await claimJob(job.id);
+    } catch (error) {
+      notePrintTraceFailure("claim-failure", error);
+      throw error;
+    }
+    const claimEnded = Date.now();
     const claimedJob = claim.job as
       | (PendingJob & {
           files?: Array<{
@@ -277,9 +360,18 @@ async function printCloudJob(job: PendingJob, printerName: string) {
     if (!claimedJob) {
       await assertJobStillPrintable(job.id, job.jobNumber);
       console.warn(`Job ${job.jobNumber} was not claimed; it stays pending.`);
+      notePrintTraceFailure("claim-failure", "Job was not claimed");
+      finishPrintTrace("claim-failure");
+      clearPrintPerf();
       return;
     }
     claimed = true;
+    noteClaimSuccess();
+    notePrintClaim(claimEnded - claimStarted, claimEnded);
+    logPrintPerf("T3", claimEnded, {
+      phase: "claim-done",
+      claimMs: claimEnded - claimStarted,
+    });
 
     await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
@@ -314,19 +406,51 @@ async function printCloudJob(job: PendingJob, printerName: string) {
 
       const localName = `PrintYantra-${claimedJob.jobNumber}-${file.id}.${file.fileExtension}`;
       const localPath = getTempFilePath(localName);
-      await downloadJobFile(job.id, file.id, localPath);
+      noteDownloadStart();
+      const downloadStarted = Date.now();
+      try {
+        await downloadJobFile(job.id, file.id, localPath);
+      } catch (error) {
+        notePrintTraceFailure("download-failure", error);
+        throw error;
+      }
+      const downloadEnded = Date.now();
+      let downloadedBytes = file.fileSize;
+      try {
+        downloadedBytes = (await fs.stat(localPath)).size;
+      } catch {
+        downloadedBytes = file.fileSize;
+      }
+      noteDownloadSuccess(downloadedBytes);
+      notePrintDownload(downloadEnded - downloadStarted, downloadEnded);
+      logPrintPerf("T4", downloadEnded, {
+        phase: "download-done",
+        downloadMs: downloadEnded - downloadStarted,
+      });
       trackLocalFile(localFiles, localPath);
 
       await assertJobStillPrintable(claimedJob.id, claimedJob.jobNumber);
 
-      const printablePath = await ensurePrintablePdf(
-        localPath,
-        file.fileExtension,
-        claimedJob.jobNumber,
-        file.id,
-        plan.imageOrientation,
-        plan.imageMarginPt,
-      );
+      notePreparationStart();
+      const prepareStarted = Date.now();
+      let printablePath: string;
+      try {
+        printablePath = await ensurePrintablePdf(
+          localPath,
+          file.fileExtension,
+          claimedJob.jobNumber,
+          file.id,
+          plan.imageOrientation,
+          plan.imageMarginPt,
+        );
+      } catch (error) {
+        notePrintTraceFailure("pdf-preparation-failure", error);
+        throw error;
+      }
+      notePrintPrepare(Date.now() - prepareStarted);
+      logPrintPerf("prepare", Date.now(), {
+        prepareMs: Date.now() - prepareStarted,
+      });
       if (printablePath !== localPath) {
         trackLocalFile(localFiles, printablePath);
       }
@@ -353,6 +477,7 @@ async function printCloudJob(job: PendingJob, printerName: string) {
           plannedPageRange: plan.pages,
         });
       } else {
+        notePreparationEnd(1);
         await submitPdfPage({
           jobNumber: claimedJob.jobNumber,
           printablePath,
@@ -375,11 +500,18 @@ async function printCloudJob(job: PendingJob, printerName: string) {
     }
 
     await reportJobReady(job.id);
+    tracePrintEvent("status-ready");
     clearInterruptedPrintJob(claimedJob.id);
     spoolIdsByJobNumber.delete(job.jobNumber);
+    tracePrintEvent("cleanup", { status: "ready" });
+    finishPrintTrace("ready");
+    clearPrintPerf();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown print failure";
+    const kind =
+      error instanceof JobCancelledError ? "cancellation" : "stopped";
+    notePrintTraceFailure(kind, error);
 
     await cancelSpoolForJob(job.jobNumber, printerName);
     clearInterruptedPrintJob(job.id);
@@ -392,6 +524,9 @@ async function printCloudJob(job: PendingJob, printerName: string) {
     }
 
     console.warn(`Stopped job ${job.jobNumber}: ${message}`);
+    tracePrintEvent("cleanup", { status: kind });
+    finishPrintTrace(kind);
+    clearPrintPerf();
     return;
   } finally {
     for (const localPath of localFiles) {
@@ -450,28 +585,90 @@ export async function processPendingJobs() {
       return { processed: 0, skipped: false };
     }
 
-    const printers = await detectPrinters().catch(() => []);
+    const printable = queue.jobs.filter((job) => job.files?.length > 0);
+    const willTrace = printable.length > 0;
+    if (willTrace) beginPrintObservation();
+
+    const printerCache = peekPrinterDetectCache();
+    const inFlightBefore = getDetectPrintersStats().inFlight;
+    const printerMode =
+      printerCache === "hit" ? "hit" : inFlightBefore ? "joined" : "miss";
+    const detectStarted = Date.now();
+    if (willTrace) {
+      notePrinterCheckStart(printerMode);
+      notePrinterDetectStart();
+      setPrintTraceCimCapture(true);
+    }
+    const printers = await detectPrinters({ caller: "job-poll" }).catch(
+      (error) => {
+        if (willTrace) notePrintTraceFailure("printer-detection-failure", error);
+        return [];
+      },
+    );
+    setPrintTraceCimCapture(false);
+    const detectEnded = Date.now();
+    if (willTrace) notePrinterDetectEnd();
     const selected = printers.find(
       (printer) => printer.name === config.selectedPrinter,
     );
     if (!selected || selected.status !== "Online") {
+      if (willTrace) {
+        notePrinterCheckResult({
+          selectedPrinter: config.selectedPrinter,
+          detected: selected ? "detected" : "not-detected",
+          status: selected?.status ?? "Unknown",
+        });
+        commitPrintTrace(printable[0].jobNumber);
+        notePrintTraceFailure(
+          "printer-not-ready",
+          `Printer not ready (${selected?.status ?? "missing"})`,
+        );
+        finishPrintTrace("printer-not-ready");
+      }
       console.warn(
         `Printer not ready (status: ${selected?.status ?? "missing"}) - skipping jobs.`,
       );
       return { processed: 0, skipped: true };
     }
 
-    const printable = queue.jobs.filter((job) => job.files?.length > 0);
     if (printable.length === 0) {
+      abortPrintObservation();
       return { processed: 0, skipped: false };
     }
 
     const job = printable[0];
+    notePrinterCheckResult({
+      selectedPrinter: config.selectedPrinter,
+      detected: "detected",
+      status: selected.status,
+    });
+    commitPrintTrace(job.jobNumber);
+    tracePrintEvent("job-selected");
+    const jobStarted = Date.now();
+    notePrintPathStart({
+      jobNumber: job.jobNumber,
+      t0: jobStarted,
+      t1: detectStarted,
+      t2: detectEnded,
+      printerCache,
+    });
+    logPrintPerf("T1", detectStarted, {
+      phase: "printer-detect-start",
+      printerCache,
+    });
+    logPrintPerf("T2", detectEnded, {
+      phase: "printer-detect-done",
+      printerCache,
+      printerDetectMs: detectEnded - detectStarted,
+    });
+    logPrintPerf("T0", jobStarted, { phase: "job-start" });
     console.log(`Processing job ${job.jobNumber}`);
     await printCloudJob(job, config.selectedPrinter);
     console.log(`Completed job ${job.jobNumber}`);
     return { processed: 1, skipped: false };
   } finally {
+    setPrintTraceCimCapture(false);
+    closePrintTraceIfOpen("interrupted");
     processing = false;
   }
 }
