@@ -30,6 +30,7 @@ import {
   type PrintScaleV1,
 } from "@/lib/print-settings";
 import {
+  buildAdjustedPrintablePdf,
   createAdjustedImagePrintablePdf,
   needsArtifactAdjustment,
   transformPdfWithAdjustments,
@@ -616,21 +617,19 @@ async function saveUploadFilesWithPrintAdjustments(
         "pdf_adjust_start",
         `inBytes=${buffer.byteLength} brightness=${options.brightness} contentScale=${options.contentScale} mime=application/pdf ext=pdf`,
       );
-      const pdfBytes = await transformPdfWithAdjustments(buffer, {
+      const adjusted = await buildAdjustedPrintablePdf(buffer, {
         brightness: options.brightness,
         contentScale: options.contentScale,
       });
-      const { PDFDocument } = await import("pdf-lib");
-      const loaded = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
       logInfo(
         "pdf_adjust_done",
-        `inBytes=${buffer.byteLength} outBytes=${pdfBytes.byteLength} outPages=${loaded.getPageCount()} brightness=${options.brightness} contentScale=${options.contentScale} mime=application/pdf ext=pdf`,
+        `inBytes=${buffer.byteLength} outBytes=${adjusted.pdfBytes.byteLength} outPages=${adjusted.pageCount} brightness=${options.brightness} contentScale=${options.contentScale} mime=application/pdf ext=pdf`,
       );
       saved.push(
         await saveGeneratedPdfFile({
-          pdfBytes,
+          pdfBytes: adjusted.pdfBytes,
           originalFileName: file.name,
-          totalPages: loaded.getPageCount(),
+          totalPages: adjusted.pageCount,
         }),
       );
       continue;

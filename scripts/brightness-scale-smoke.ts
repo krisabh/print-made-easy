@@ -17,6 +17,7 @@ import {
   scaleDrawInBox,
 } from "../lib/print-adjustments";
 import {
+  buildAdjustedPrintablePdf,
   createAdjustedImagePrintablePdf,
   needsArtifactAdjustment,
   transformPdfWithAdjustments,
@@ -303,14 +304,18 @@ async function main() {
     options: { brightness: number; contentScale: number },
     expectedPages: number,
   ) {
-    const out = await transformPdfWithAdjustments(bytes, options);
-    assertPdfFile(out);
-    const doc = await PDFDocument.load(out);
+    // Same function the upload action uses before storing the file.
+    const adjusted = await buildAdjustedPrintablePdf(bytes, options);
+    assertPdfFile(adjusted.pdfBytes);
+    assert.equal(adjusted.pageCount, expectedPages, label);
+    const doc = await PDFDocument.load(adjusted.pdfBytes, {
+      ignoreEncryption: true,
+    });
     assert.equal(doc.getPageCount(), expectedPages, label);
     if (options.brightness === 100 && options.contentScale === 100) {
-      assert.deepEqual(Buffer.from(out), Buffer.from(bytes), label);
+      assert.deepEqual(Buffer.from(adjusted.pdfBytes), Buffer.from(bytes), label);
     }
-    return out;
+    return adjusted.pdfBytes;
   }
 
   const one = await PDFDocument.create();
@@ -371,6 +376,87 @@ async function main() {
   assert.ok(saved.fileSize > 0);
   await deleteStoredUploadFile(saved.storedFileName);
   console.log("PASS multi-page blank-page brightness/scale submit PDF");
+
+  // pdf-lib can recover this file (direct submit / scale). Brightness must too.
+  const recovered = Buffer.from(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << >> >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>
+endobj
+5 0 obj
+<< /Length 8 >>
+stream
+q
+Q
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+9999999999 00000 n 
+9999999999 00000 n 
+9999999999 00000 n 
+9999999999 00000 n 
+9999999999 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+0
+%%EOF
+`);
+  const recoveredBright = await assertSubmitPdf(
+    "recovered bright",
+    recovered,
+    { brightness: 80, contentScale: 100 },
+    2,
+  );
+  assert.equal(Math.round((await PDFDocument.load(recoveredBright)).getPage(0).getWidth()), 612);
+  await assertSubmitPdf(
+    "recovered both",
+    recovered,
+    { brightness: 70, contentScale: 110 },
+    2,
+  );
+  console.log("PASS pdf-lib-recovered multi-page brightness submit");
+
+  // pdf-lib's JPEG parser reads byte 0 of the underlying buffer, ignoring
+  // byteOffset. A pooled view must be copied before embed or reload fails.
+  const tinyJpeg = await sharp({
+    create: {
+      width: 24,
+      height: 24,
+      channels: 3,
+      background: { r: 240, g: 240, b: 240 },
+    },
+  })
+    .jpeg({ quality: 70 })
+    .toBuffer();
+  const host = Buffer.alloc(tinyJpeg.byteLength + 64);
+  host.set(tinyJpeg, 32);
+  const view = host.subarray(32, 32 + tinyJpeg.byteLength);
+  assert.notEqual(view.byteOffset, 0);
+  const offsetDoc = await PDFDocument.create();
+  await assert.rejects(() => offsetDoc.embedJpg(view));
+  const copied = new Uint8Array(view.byteLength);
+  copied.set(view);
+  const embedded = await offsetDoc.embedJpg(copied);
+  offsetDoc.addPage([50, 50]).drawImage(embedded, {
+    x: 0,
+    y: 0,
+    width: 50,
+    height: 50,
+  });
+  const offsetPdf = await offsetDoc.save();
+  assert.equal((await PDFDocument.load(offsetPdf)).getPageCount(), 1);
+  console.log("PASS JPEG byteOffset copy before embed");
 
   console.log("\nbrightness-scale-smoke: ALL PASS");
 }
