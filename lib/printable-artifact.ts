@@ -4,17 +4,15 @@
  *
  * Strategy:
  * - contentScale alone → vector pdf-lib page copy (preserves PDF quality)
- * - brightness ≠ 100 → page-by-page raster at controlled DPI via pdfjs + canvas,
- *   then JPEG embed (one page at a time to bound memory)
+ * - brightness ≠ 100 → pdf-lib page copy, then PDFium raster + sharp brightness.
+ *   pdfjs is not used: it rejects customer PDFs the direct and scale paths accept.
  * - images → sharp brightness + A4 composition with contentScale
  *
  * Server-only module — do not import from Client Components.
  */
 
-import { existsSync } from "node:fs";
-import path from "node:path";
-
 import { PDFDocument } from "pdf-lib";
+import type { PDFiumLibrary } from "@hyzyla/pdfium";
 import sharp from "sharp";
 
 import { logInfo } from "@/lib/log";
@@ -43,21 +41,16 @@ export const PDF_BRIGHTNESS_RASTER_DPI = 150;
  */
 const MAX_BRIGHTNESS_RENDER_PX = 4096;
 
-function pdfjsAssetDir(kind: "standard_fonts" | "cmaps" | "wasm"): string {
-  // Resolve from disk. createRequire() is rewritten to void 0 by the Next
-  // server bundle, which would throw before pdfjs ever opens the PDF.
-  const relative = path.join("node_modules", "pdfjs-dist", kind);
-  const candidates: string[] = [];
-  let dir = process.cwd();
-  for (let i = 0; i < 5; i++) {
-    candidates.push(path.join(dir, relative));
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  const found = candidates.find((candidate) => existsSync(candidate));
-  // pdfjs requires a trailing "/" even on Windows. fs.readFile accepts it.
-  return (found ?? candidates[0]).replace(/\\/g, "/") + "/";
+let pdfiumLibraryPromise: Promise<PDFiumLibrary> | null = null;
+
+function getPdfiumLibrary() {
+  pdfiumLibraryPromise ??= import("@hyzyla/pdfium")
+    .then(({ PDFiumLibrary }) => PDFiumLibrary.init())
+    .catch((error) => {
+      pdfiumLibraryPromise = null;
+      throw error;
+    });
+  return pdfiumLibraryPromise;
 }
 
 /** pdf-lib reads JPEG markers from byte 0 of the underlying buffer. */
@@ -199,10 +192,8 @@ async function scalePdfVector(
 }
 
 /**
- * Rebuild every page with pdf-lib before rasterizing.
- * Scale-only already does this. Brightness must too: pdfjs rejects some
- * customer PDFs that pdf-lib accepts, which is the submit error after a
- * brightness change. Content scale is applied here so the raster step draws
+ * Rebuild every page with the same pdf-lib copy the working scale path uses,
+ * including blank pages. Content scale is applied here so the raster draws
  * each page at 100% of the already-scaled page.
  */
 async function normalizePdfForBrightness(
@@ -242,64 +233,40 @@ async function rasterizePdfWithBrightness(
     sourceBytes,
     contentScalePercent,
   );
-  const { createCanvas } = await import("@napi-rs/canvas");
-  // Use legacy build for Node (no DOM / worker assumptions).
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const library = await getPdfiumLibrary();
   const pdfBytes = new Uint8Array(normalized.byteLength);
   pdfBytes.set(normalized);
-
-  const loadingTask = pdfjs.getDocument({
-    data: pdfBytes,
-    useSystemFonts: true,
-    standardFontDataUrl: pdfjsAssetDir("standard_fonts"),
-    cMapUrl: pdfjsAssetDir("cmaps"),
-    cMapPacked: true,
-    wasmUrl: pdfjsAssetDir("wasm"),
-  });
-  const pdf = await loadingTask.promise;
+  const document = await library.loadDocument(pdfBytes);
   const out = await PDFDocument.create();
   const brightFactor = brightnessPercent / 100;
-  const pageCount = pdf.numPages;
-  const annotationMode = pdfjs.AnnotationMode?.DISABLE ?? 0;
+  const pageCount = document.getPageCount();
 
   try {
-    for (let i = 1; i <= pageCount; i++) {
-      const page = await pdf.getPage(i);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const pageSize = positivePageSize(baseViewport.width, baseViewport.height);
+    for (let i = 0; i < pageCount; i++) {
+      const page = document.getPage(i);
+      const base = page.getOriginalSize();
+      const pageSize = positivePageSize(base.originalWidth, base.originalHeight);
       let renderScale = dpi / 72;
       const longSide = Math.max(pageSize.width, pageSize.height) * renderScale;
       if (longSide > MAX_BRIGHTNESS_RENDER_PX) {
         renderScale *= MAX_BRIGHTNESS_RENDER_PX / longSide;
       }
-      const viewport = page.getViewport({ scale: renderScale });
-      const canvas = createCanvas(
-        Math.max(1, Math.ceil(viewport.width)),
-        Math.max(1, Math.ceil(viewport.height)),
-      );
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // canvas must be null so pdfjs uses this Node context. Passing the
-      // napi canvas makes pdfjs ignore the context and call getContext itself.
-      await page.render({
-        canvas: null,
-        canvasContext: ctx as unknown as CanvasRenderingContext2D,
-        viewport,
-        intent: "print",
-        annotationMode,
-      }).promise;
-
-      const png = canvas.toBuffer("image/png");
-      canvas.width = 0;
-      canvas.height = 0;
-
-      const jpeg = await sharp(png)
-        .linear(brightFactor, 0)
-        .jpeg({ quality: 88, mozjpeg: true })
-        .toBuffer();
-      const embedded = await out.embedJpg(jpegBytesForEmbed(jpeg));
+      const rendered = await page.render({
+        scale: renderScale,
+        render: async (options) =>
+          sharp(options.data, {
+            raw: {
+              width: options.width,
+              height: options.height,
+              channels: 4,
+            },
+          })
+            .flatten({ background: "#ffffff" })
+            .linear(brightFactor, 0)
+            .jpeg({ quality: 88, mozjpeg: true })
+            .toBuffer(),
+      });
+      const embedded = await out.embedJpg(jpegBytesForEmbed(rendered.data));
       const newPage = out.addPage([pageSize.width, pageSize.height]);
       newPage.drawImage(embedded, {
         x: 0,
@@ -309,15 +276,7 @@ async function rasterizePdfWithBrightness(
       });
     }
   } finally {
-    try {
-      await loadingTask.destroy();
-    } catch {
-      try {
-        await pdf.cleanup();
-      } catch {
-        // ignore cleanup errors
-      }
-    }
+    document.destroy();
   }
 
   const saved = await out.save({ useObjectStreams: false });

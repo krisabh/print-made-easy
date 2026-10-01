@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 import sharp from "sharp";
 
 import {
@@ -45,6 +45,27 @@ async function makeTestJpeg(shade: number) {
   })
     .jpeg()
     .toBuffer();
+}
+
+async function meanPageLuma(pdfBytes: Uint8Array) {
+  const { PDFiumLibrary } = await import("@hyzyla/pdfium");
+  const library = await PDFiumLibrary.init();
+  const doc = await library.loadDocument(pdfBytes);
+  try {
+    const image = await doc.getPage(0).render({
+      scale: 0.25,
+      render: async (options) => options.data,
+    });
+    let sum = 0;
+    const pixels = image.width * image.height;
+    for (let i = 0; i < image.data.length; i += 4) {
+      sum += 0.299 * image.data[i] + 0.587 * image.data[i + 1] + 0.114 * image.data[i + 2];
+    }
+    return sum / pixels;
+  } finally {
+    doc.destroy();
+    library.destroy();
+  }
 }
 
 async function meanLuma(buf: Buffer) {
@@ -376,6 +397,82 @@ async function main() {
   assert.ok(saved.fileSize > 0);
   await deleteStoredUploadFile(saved.storedFileName);
   console.log("PASS multi-page blank-page brightness/scale submit PDF");
+
+  const customer = await PDFDocument.create();
+  const customerFont = await customer.embedFont(StandardFonts.TimesRoman);
+  const customerImage = await customer.embedJpg(await makeTestJpeg(180));
+  const customerPage = customer.addPage([595.28, 841.89]);
+  customerPage.drawText("Shop invoice", {
+    x: 72,
+    y: 760,
+    size: 18,
+    font: customerFont,
+  });
+  customerPage.drawImage(customerImage, { x: 72, y: 500, width: 180, height: 120 });
+  customer.addPage([595.28, 841.89]);
+  customer.addPage([595.28, 841.89]).drawText("Closing page", {
+    x: 72,
+    y: 700,
+    size: 12,
+    font: customerFont,
+  });
+  const customerBytes = await customer.save();
+  await assertSubmitPdf(
+    "customer none",
+    customerBytes,
+    { brightness: 100, contentScale: 100 },
+    3,
+  );
+  const customerBright = await assertSubmitPdf(
+    "customer bright",
+    customerBytes,
+    { brightness: 80, contentScale: 100 },
+    3,
+  );
+  const customerBrighter = await assertSubmitPdf(
+    "customer brighter",
+    customerBytes,
+    { brightness: 150, contentScale: 100 },
+    3,
+  );
+  await assertSubmitPdf(
+    "customer scale",
+    customerBytes,
+    { brightness: 100, contentScale: 90 },
+    3,
+  );
+  await assertSubmitPdf(
+    "customer both",
+    customerBytes,
+    { brightness: 70, contentScale: 110 },
+    3,
+  );
+  const customerBrightDoc = await PDFDocument.load(customerBright);
+  assert.equal(Math.round(customerBrightDoc.getPage(0).getWidth()), 595);
+  assert.equal(Math.round(customerBrightDoc.getPage(0).getHeight()), 842);
+  const darker = await meanPageLuma(customerBright);
+  const lighter = await meanPageLuma(customerBrighter);
+  assert.ok(darker < lighter, `brightness 80 luma ${darker} vs 150 luma ${lighter}`);
+
+  const rotated = await PDFDocument.create();
+  const rotatedPage = rotated.addPage([200, 400]);
+  rotatedPage.setRotation(degrees(90));
+  rotatedPage.drawText("Sideways", {
+    x: 20,
+    y: 20,
+    size: 18,
+    font: await rotated.embedFont(StandardFonts.Helvetica),
+  });
+  const rotatedOut = await assertSubmitPdf(
+    "rotated bright",
+    await rotated.save(),
+    { brightness: 80, contentScale: 100 },
+    1,
+  );
+  const rotatedLoaded = await PDFDocument.load(rotatedOut);
+  assert.equal(Math.round(rotatedLoaded.getPage(0).getWidth()), 400);
+  assert.equal(Math.round(rotatedLoaded.getPage(0).getHeight()), 200);
+  console.log("PASS customer-style multi-page brightness submit PDF");
 
   // pdf-lib can recover this file (direct submit / scale). Brightness must too.
   const recovered = Buffer.from(`%PDF-1.4

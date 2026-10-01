@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
     },
   },
   // Native / Node-only packages used when baking brightness into PDFs.
-  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "@hyzyla/pdfium"],
   // Hostinger production installs often omit devDependencies.
   eslint: {
     ignoreDuringBuilds: true,
