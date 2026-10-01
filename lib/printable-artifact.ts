@@ -3,7 +3,7 @@
  * Agent prints the resulting PDF with existing Sumatra settings (no Agent change).
  *
  * Strategy:
- * - contentScale alone → vector pdf-lib page embedding (preserves PDF quality)
+ * - contentScale alone → vector pdf-lib page copy (preserves PDF quality)
  * - brightness ≠ 100 → page-by-page raster at controlled DPI via pdfjs + canvas,
  *   then JPEG embed (one page at a time to bound memory)
  * - images → sharp brightness + A4 composition with contentScale
@@ -13,6 +13,8 @@
 
 import { PDFDocument } from "pdf-lib";
 import sharp from "sharp";
+
+import { logInfo } from "@/lib/log";
 
 import {
   applyBrightnessToImageBytes,
@@ -123,25 +125,31 @@ async function scalePdfVector(
   const src = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
   const out = await PDFDocument.create();
   const pageCount = src.getPageCount();
+  if (pageCount === 0) {
+    return sourceBytes;
+  }
   const pageIndices = Array.from({ length: pageCount }, (_, i) => i);
-  // Explicit indices — some pdf-lib builds only embed page 0 when omitted.
-  const embeddedPages = await out.embedPdf(src, pageIndices);
+  // copyPages preserves every page, including blank pages that have no
+  // Contents entry. embedPdf throws on those pages and also re-decodes
+  // content streams, which can reject PDFs the direct-submit path accepts.
+  const copiedPages = await out.copyPages(src, pageIndices);
 
-  for (let i = 0; i < embeddedPages.length; i++) {
-    const { width, height } = src.getPage(i).getSize();
-    const embedded = embeddedPages[i];
-    const drawW = width * scaleFactor;
-    const drawH = height * scaleFactor;
-    const newPage = out.addPage([width, height]);
-    newPage.drawPage(embedded, {
-      x: (width - drawW) / 2,
-      y: (height - drawH) / 2,
-      width: drawW,
-      height: drawH,
-    });
+  for (const page of copiedPages) {
+    const { width, height } = page.getSize();
+    out.addPage(page);
+    page.scaleContent(scaleFactor, scaleFactor);
+    page.translateContent(
+      ((1 - scaleFactor) * width) / 2,
+      ((1 - scaleFactor) * height) / 2,
+    );
   }
 
-  return out.save();
+  const saved = await out.save();
+  logInfo(
+    "pdf_adjust",
+    `inBytes=${sourceBytes.byteLength} outBytes=${saved.byteLength} pages=${pageCount} brightness=100 contentScale=${contentScalePercent} mime=application/pdf ext=pdf`,
+  );
+  return saved;
 }
 
 async function rasterizePdfWithBrightness(
@@ -163,9 +171,10 @@ async function rasterizePdfWithBrightness(
   const scaleFactor = contentScalePercent / 100;
   const brightFactor = brightnessPercent / 100;
   const renderScale = dpi / 72;
+  const pageCount = pdf.numPages;
 
   try {
-    for (let i = 1; i <= pdf.numPages; i++) {
+    for (let i = 1; i <= pageCount; i++) {
       const page = await pdf.getPage(i);
       const baseViewport = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: renderScale });
@@ -215,7 +224,12 @@ async function rasterizePdfWithBrightness(
     }
   }
 
-  return out.save();
+  const saved = await out.save();
+  logInfo(
+    "pdf_adjust",
+    `inBytes=${sourceBytes.byteLength} outBytes=${saved.byteLength} pages=${pageCount} brightness=${brightnessPercent} contentScale=${contentScalePercent} mime=application/pdf ext=pdf`,
+  );
+  return saved;
 }
 
 /**

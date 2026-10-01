@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import sharp from "sharp";
 
 import {
@@ -18,8 +18,14 @@ import {
 } from "../lib/print-adjustments";
 import {
   createAdjustedImagePrintablePdf,
+  needsArtifactAdjustment,
   transformPdfWithAdjustments,
 } from "../lib/printable-artifact";
+import { getContentType } from "../lib/storage";
+import {
+  deleteStoredUploadFile,
+  saveGeneratedPdfFile,
+} from "../lib/upload-service";
 import {
   buildPrintSettingsV1,
   normalizeBrightnessPercent,
@@ -270,6 +276,101 @@ async function main() {
   const adjustedDoc = await PDFDocument.load(adjusted16);
   assert.equal(adjustedDoc.getPageCount(), 16);
   console.log("PASS 1-page + 16-page client preview pages; submit bake keeps 16 pages");
+
+  // Neutral 100/100 is the pre-feature path: original bytes, no bake.
+  assert.equal(needsArtifactAdjustment(100, 100), false);
+  assert.equal(needsArtifactAdjustment(undefined, undefined), false);
+  assert.equal(needsArtifactAdjustment(80, 100), true);
+  assert.equal(needsArtifactAdjustment(100, 90), true);
+  const neutral = await transformPdfWithAdjustments(srcBytes, {
+    brightness: 100,
+    contentScale: 100,
+  });
+  assert.deepEqual(Buffer.from(neutral), Buffer.from(srcBytes));
+  console.log("PASS default 100/100 preserves original PDF bytes");
+
+  function assertPdfFile(bytes: Uint8Array) {
+    assert.ok(bytes.byteLength > 0);
+    assert.equal(bytes[0], 0x25);
+    assert.equal(bytes[1], 0x50);
+    assert.equal(bytes[2], 0x44);
+    assert.equal(bytes[3], 0x46);
+  }
+
+  async function assertSubmitPdf(
+    label: string,
+    bytes: Uint8Array,
+    options: { brightness: number; contentScale: number },
+    expectedPages: number,
+  ) {
+    const out = await transformPdfWithAdjustments(bytes, options);
+    assertPdfFile(out);
+    const doc = await PDFDocument.load(out);
+    assert.equal(doc.getPageCount(), expectedPages, label);
+    if (options.brightness === 100 && options.contentScale === 100) {
+      assert.deepEqual(Buffer.from(out), Buffer.from(bytes), label);
+    }
+    return out;
+  }
+
+  const one = await PDFDocument.create();
+  const onlyPage = one.addPage([595, 842]);
+  onlyPage.drawText("Only", {
+    x: 72,
+    y: 760,
+    size: 18,
+    font: await one.embedFont(StandardFonts.Helvetica),
+  });
+  const oneBytes = await one.save();
+
+  const multi = await PDFDocument.create();
+  const font = await multi.embedFont(StandardFonts.Helvetica);
+  multi.addPage([595, 842]).drawText("Page 1", {
+    x: 72,
+    y: 760,
+    size: 18,
+    font,
+  });
+  multi.addPage([595, 842]);
+  multi.addPage([420, 595]).drawRectangle({
+    x: 20,
+    y: 20,
+    width: 80,
+    height: 40,
+    color: rgb(0.05, 0.05, 0.05),
+  });
+  const multiBytes = await multi.save();
+  assert.equal((await PDFDocument.load(multiBytes)).getPageCount(), 3);
+
+  await assertSubmitPdf("1 none", oneBytes, { brightness: 100, contentScale: 100 }, 1);
+  await assertSubmitPdf("1 bright", oneBytes, { brightness: 80, contentScale: 100 }, 1);
+  await assertSubmitPdf("1 scale", oneBytes, { brightness: 100, contentScale: 90 }, 1);
+  await assertSubmitPdf("3 none", multiBytes, { brightness: 100, contentScale: 100 }, 3);
+  await assertSubmitPdf("3 bright", multiBytes, { brightness: 70, contentScale: 100 }, 3);
+  const scaledMulti = await assertSubmitPdf(
+    "3 scale",
+    multiBytes,
+    { brightness: 100, contentScale: 85 },
+    3,
+  );
+  assert.equal(Math.round((await PDFDocument.load(scaledMulti)).getPage(0).getWidth()), 595);
+  const both = await assertSubmitPdf(
+    "3 both",
+    multiBytes,
+    { brightness: 60, contentScale: 110 },
+    3,
+  );
+  const saved = await saveGeneratedPdfFile({
+    pdfBytes: both,
+    originalFileName: "multi.pdf",
+    totalPages: 3,
+  });
+  assert.equal(saved.fileExtension, "pdf");
+  assert.equal(getContentType(saved.fileExtension), "application/pdf");
+  assert.equal(saved.fileSize, both.byteLength);
+  assert.ok(saved.fileSize > 0);
+  await deleteStoredUploadFile(saved.storedFileName);
+  console.log("PASS multi-page blank-page brightness/scale submit PDF");
 
   console.log("\nbrightness-scale-smoke: ALL PASS");
 }

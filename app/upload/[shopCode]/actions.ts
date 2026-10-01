@@ -612,12 +612,20 @@ async function saveUploadFilesWithPrintAdjustments(
     }
 
     if (ext === "pdf") {
+      logInfo(
+        "pdf_adjust_start",
+        `inBytes=${buffer.byteLength} brightness=${options.brightness} contentScale=${options.contentScale} mime=application/pdf ext=pdf`,
+      );
       const pdfBytes = await transformPdfWithAdjustments(buffer, {
         brightness: options.brightness,
         contentScale: options.contentScale,
       });
       const { PDFDocument } = await import("pdf-lib");
       const loaded = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      logInfo(
+        "pdf_adjust_done",
+        `inBytes=${buffer.byteLength} outBytes=${pdfBytes.byteLength} outPages=${loaded.getPageCount()} brightness=${options.brightness} contentScale=${options.contentScale} mime=application/pdf ext=pdf`,
+      );
       saved.push(
         await saveGeneratedPdfFile({
           pdfBytes,
