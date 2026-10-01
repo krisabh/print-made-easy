@@ -13,6 +13,7 @@ import {
   WifiOff,
 } from "lucide-react";
 
+import { HeroPrintFlow } from "@/components/marketing/hero-print-flow";
 import { PREMIUM_PLAN } from "@/lib/cashfree";
 import { MARKETING_CORE_FEATURES } from "@/lib/marketing-features";
 import {
@@ -41,7 +42,7 @@ export function HeroSection({
   return (
     <section className="relative overflow-hidden border-b border-slate-200 bg-[#f5f7fb]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.08),_transparent_55%)]" />
-      <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-20">
+      <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center lg:gap-10 lg:py-20">
         <div>
           <p className="text-xs font-semibold tracking-[0.14em] text-blue-700 uppercase">
             Built for modern print shops
@@ -80,119 +81,9 @@ export function HeroSection({
           </p>
         </div>
 
-        <ProductPreview />
+        <HeroPrintFlow />
       </div>
     </section>
-  );
-}
-
-function ProductPreview() {
-  return (
-    <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/60 sm:p-4">
-        <div className="rounded-xl border border-slate-200 bg-[#f8fafc] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-blue-600 uppercase">
-                PrintYantra
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">
-                Clauras Print Hub
-              </p>
-              <p className="text-xs text-slate-500">Shop Code: PME001</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <StatusChip tone="ok" label="Agent Connected" />
-              <StatusChip tone="ok" label="Printer Connected" detail="Canon LBP6030" />
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              ["Today's Jobs", "18"],
-              ["Pending", "4"],
-              ["Printing", "1"],
-              ["Ready", "3"],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-3"
-              >
-                <p className="text-[10px] font-medium tracking-wide text-slate-500 uppercase">
-                  {label}
-                </p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-3 py-2.5">
-              <p className="text-sm font-semibold text-slate-900">Print Jobs</p>
-            </div>
-            <ul className="divide-y divide-slate-100 text-sm">
-              {[
-                ["PME-000124", "Pending", "amber"],
-                ["PME-000123", "Printing", "blue"],
-                ["PME-000122", "Ready", "green"],
-              ].map(([job, status, tone]) => (
-                <li
-                  key={job}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5"
-                >
-                  <span className="font-medium text-slate-800">{job}</span>
-                  <span
-                    className={
-                      tone === "green"
-                        ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-                        : tone === "blue"
-                          ? "rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
-                          : "rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-                    }
-                  >
-                    {status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusChip({
-  tone,
-  label,
-  detail,
-}: {
-  tone: "ok" | "warn";
-  label: string;
-  detail?: string;
-}) {
-  return (
-    <div
-      className={`max-w-[11rem] rounded-xl px-2.5 py-1.5 text-[11px] font-medium ring-1 ${
-        tone === "ok"
-          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-          : "bg-amber-50 text-amber-700 ring-amber-200"
-      }`}
-    >
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className={`size-1.5 rounded-full ${
-            tone === "ok" ? "bg-emerald-500" : "bg-amber-500"
-          }`}
-        />
-        {label}
-      </span>
-      {detail ? (
-        <span className="mt-0.5 block truncate font-normal opacity-80">
-          {detail}
-        </span>
-      ) : null}
-    </div>
   );
 }
 
