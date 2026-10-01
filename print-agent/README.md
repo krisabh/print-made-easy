@@ -45,7 +45,7 @@ npm run release:hash
 
 Output:
 
-- `release/PrintYantra-Agent-Setup-1.7.1.exe`
+- `release/PrintYantra-Agent-Setup-1.7.2.exe`
 - `release/agent-release.meta.json` (local only; not committed)
 - Printed `WINDOWS_AGENT_FILE_PATH` / `WINDOWS_AGENT_SHA256` lines for Hostinger (copy manually)
 

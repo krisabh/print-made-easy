@@ -30,6 +30,8 @@ import {
   noteDownloadSuccess,
   notePagePreparationEnd,
   notePagePreparationStart,
+  notePostDelayEnd,
+  notePostDelayStart,
   notePreparationEnd,
   notePreparationStart,
   notePrinterCheckResult,
@@ -206,6 +208,53 @@ async function stopInterruptedJobOnServer(jobId: string) {
   }
 }
 
+/** Upper bound for the post-Sumatra spool-id retry. Not an unconditional sleep. */
+export const SPOOL_JOB_OBSERVATION_MAX_WAIT_MS = 3000;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * List new Windows spool JobIds immediately after Sumatra exits.
+ * One further list is allowed only when the first list sees nothing.
+ * Sleep time across that retry never exceeds maxWaitMs.
+ */
+export async function observeNewSpoolJobIds(input: {
+  beforeIds: ReadonlySet<number>;
+  listJobs: () => Promise<Array<{ jobId: number }>>;
+  sleep: (ms: number) => Promise<void>;
+  now?: () => number;
+  maxWaitMs?: number;
+}): Promise<{ created: number[]; waitedMs: number; listings: number }> {
+  const maxWaitMs = input.maxWaitMs ?? SPOOL_JOB_OBSERVATION_MAX_WAIT_MS;
+  const now = input.now ?? Date.now;
+  const started = now();
+  let listings = 0;
+  let waitedMs = 0;
+
+  const readNewIds = async () => {
+    listings += 1;
+    const jobs = await input.listJobs();
+    return jobs
+      .map((job) => job.jobId)
+      .filter((jobId) => !input.beforeIds.has(jobId));
+  };
+
+  let created = await readNewIds();
+  if (created.length > 0) {
+    return { created, waitedMs, listings };
+  }
+
+  const remaining = Math.max(0, maxWaitMs - (now() - started));
+  if (remaining > 0) {
+    waitedMs = remaining;
+    await input.sleep(remaining);
+  }
+  created = await readNewIds();
+  return { created, waitedMs, listings };
+}
+
 /**
  * Submit one PDF page and remember any new Windows spool JobIds.
  * Caller must already have confirmed the server job is still printable.
@@ -235,10 +284,25 @@ async function submitPdfPage(input: {
     scale: input.scale,
     pages: input.pages,
     paperSize: input.paperSize,
+    holdForSpoolerRead: false,
   });
   noteSpoolerStart(input.pages);
   const spoolAfterStarted = Date.now();
-  const after = await listWindowsPrintJobs();
+  const observed = await observeNewSpoolJobIds({
+    beforeIds: before,
+    listJobs: listWindowsPrintJobs,
+    maxWaitMs: SPOOL_JOB_OBSERVATION_MAX_WAIT_MS,
+    sleep: async (ms) => {
+      notePostDelayStart(input.pages);
+      const delayStarted = Date.now();
+      await delay(ms);
+      notePostDelayEnd(input.pages);
+      logPrintPerf("fixed-delay", Date.now(), {
+        page: input.pages,
+        fixedDelayMs: Date.now() - delayStarted,
+      });
+    },
+  });
   const t7 = Date.now();
   logPrintPerf("T7", t7, {
     page: input.pages,
@@ -252,9 +316,7 @@ async function submitPdfPage(input: {
     spoolDetectMs: t7 - spoolAfterStarted,
     spoolBeforeMs,
   });
-  const created = after
-    .filter((job) => !before.has(job.jobId))
-    .map((job) => job.jobId);
+  const created = observed.created;
   rememberSpoolIds(input.jobNumber, created);
   noteSpoolerEnd(input.pages, {
     newJobs: created.length,

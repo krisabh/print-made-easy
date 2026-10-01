@@ -17,16 +17,16 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
  * Ordered, short, and free of internal implementation detail.
  */
 export const WINDOWS_AGENT_RELEASE_NOTES = [
-  "Get notified when a new PrintYantra Agent update is available.",
-  "See what's new before updating.",
-  "Get help through WhatsApp Support.",
+  "Reduced unnecessary waiting between PDF pages.",
+  "Spooler detection now happens immediately after Sumatra exits.",
+  "A bounded retry remains when the spool job is not immediately visible.",
 ] as const;
 
 export const WINDOWS_AGENT_RELEASE = {
   productName: "PrintYantra Agent",
   platform: "Windows",
-  version: "1.7.1",
-  fileName: "PrintYantra-Agent-Setup-1.7.1.exe",
+  version: "1.7.2",
+  fileName: "PrintYantra-Agent-Setup-1.7.2.exe",
   /** Relative path served by the existing allowlisted download route. */
   downloadPath: "/api/agent/download",
   /** Single string kept for Agents that only read `notes`. */

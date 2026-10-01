@@ -488,6 +488,12 @@ export type PrintPdfFileOptions = {
   scale?: "fit" | "noscale";
   pages?: string;
   paperSize?: string;
+  /**
+   * When false, return as soon as Sumatra exits so the caller can list the
+   * spooler immediately. Omitted or true keeps the fixed 3000ms hold for
+   * callers that delete the PDF as soon as this function returns.
+   */
+  holdForSpoolerRead?: boolean;
 };
 
 /**
@@ -581,12 +587,14 @@ export async function printPdfFile(
     phase: "sumatra-exit",
     sumatraStartToExitMs: t6 - t5,
   });
-  const delayStarted = Date.now();
-  notePostDelayStart(page);
-  await delay(3000);
-  notePostDelayEnd(page);
-  logPrintPerf("fixed-delay", Date.now(), {
-    page,
-    fixedDelayMs: Date.now() - delayStarted,
-  });
+  if (options?.holdForSpoolerRead !== false) {
+    const delayStarted = Date.now();
+    notePostDelayStart(page);
+    await delay(3000);
+    notePostDelayEnd(page);
+    logPrintPerf("fixed-delay", Date.now(), {
+      page,
+      fixedDelayMs: Date.now() - delayStarted,
+    });
+  }
 }

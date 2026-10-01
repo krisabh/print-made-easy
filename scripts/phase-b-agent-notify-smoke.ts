@@ -22,7 +22,7 @@ function read(rel: string) {
 
 function main() {
   const manifest = getPublicAgentUpdateManifest("");
-  assert.equal(manifest.version, "1.7.1");
+  assert.equal(manifest.version, "1.7.2");
   assert.ok(manifest.releaseNotes.length >= 3);
   assert.equal(
     manifest.releaseNotes.some((line) => /contact support/i.test(line)),
@@ -40,6 +40,7 @@ function main() {
   assert.match(renderer, /What's New in PrintYantra Agent \$\{version\}/);
   assert.equal(renderer.includes("1.7.0"), false);
   assert.equal(renderer.includes("1.7.1"), false);
+  assert.equal(renderer.includes("1.7.2"), false);
   assert.equal(renderer.includes("1.8.0"), false);
   assert.match(renderer, /New update available/);
   assert.match(renderer, /Update details are currently unavailable/);
